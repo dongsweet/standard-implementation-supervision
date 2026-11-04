@@ -6,8 +6,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "egg-bin dev",
-    "start": "egg-scripts start --framework=egg",
-    "stop": "egg-scripts stop",
+    "start": "eggctl start",
+    "stop": "eggctl stop",
     "test": "node --test test/**/*.test.js",
     "db:migrate": "node-pg-migrate -m db/migrations up",
     "db:rollback": "node-pg-migrate -m db/migrations down",
@@ -24,7 +24,7 @@
     "bootstrap": "^5.3.8",
     "bcryptjs": "^3.0.2",
     "egg": "^4.2.0",
-    "egg-scripts": "^3.0.0",
+    "@eggjs/scripts": "^5.1.0",
     "egg-view-ejs": "^3.0.0",
     "node-pg-migrate": "^9.0.0",
     "pg": "^8.23.1"
