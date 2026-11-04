@@ -1,0 +1,34 @@
+{
+  "name": "standard-implementation-supervision",
+  "version": "0.1.0",
+  "private": true,
+  "description": "安全规范落实与持续监管系统",
+  "main": "server.js",
+  "scripts": {
+    "dev": "egg-bin dev",
+    "start": "egg-scripts start --daemon",
+    "stop": "egg-scripts stop",
+    "test": "node --test test/**/*.test.js",
+    "db:migrate": "node-pg-migrate -m db/migrations up",
+    "db:rollback": "node-pg-migrate -m db/migrations down",
+    "lint": "eslint app config db test"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@eggjs/view": "^4.1.0",
+    "admin-lte": "^4.10.0",
+    "bootstrap": "^5.3.8",
+    "bcryptjs": "^3.0.2",
+    "egg": "^4.2.0",
+    "egg-scripts": "^3.0.0",
+    "egg-view-ejs": "^3.0.0",
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "egg-bin": "^6.13.0",
+    "eslint": "^9.0.0"
+  }
+}

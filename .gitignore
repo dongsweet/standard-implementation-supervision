@@ -10,3 +10,9 @@ reference-docs/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Runtime data
+storage/
+logs/
+coverage/
+node_modules/
