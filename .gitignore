@@ -4,6 +4,7 @@ reference-docs/
 # Local environment files
 .env
 .env.*
+!.env.example
 
 # IDE and OS files
 .vscode/

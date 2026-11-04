@@ -28,7 +28,8 @@
               <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary mb-1" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="aiReview(this)">AI 分析</button><br>
                 <button class="btn btn-sm btn-danger mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">确认重复，保留 A</button><br>
                 <button class="btn btn-sm btn-outline-secondary mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','similar_but_distinct')">相似但不归并</button><br>
-                <button class="btn btn-sm btn-outline-secondary" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button></td>
+                <button class="btn btn-sm btn-outline-secondary" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button><br>
+                <button class="btn btn-sm btn-outline-secondary mt-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','uncertain')">待进一步确认</button></td>
             </tr>
           <% }) %>
           <% if (!candidates.length) { %><tr><td colspan="6" class="text-center text-secondary p-4">暂无候选。维护监督定义后，规则层会生成去重候选。</td></tr><% } %>

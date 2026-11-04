@@ -58,6 +58,12 @@ class DedupeService extends Service {
   }
 
   async review({ leftId, rightId, decision, canonicalId, reviewerId, notes, confirmConflicts = false }) {
+    if (!leftId || !rightId || leftId === rightId) this.ctx.throw(400, '请提供两条不同的监督定义');
+    const candidate = await this.ctx.app.db.query(`
+      SELECT 1 FROM supervision_definition_candidates
+      WHERE (id = $1 AND candidate_id = $2) OR (id = $2 AND candidate_id = $1)
+      LIMIT 1`, [ leftId, rightId ]);
+    if (!candidate.rowCount) this.ctx.throw(400, '仅可复核规则层生成的候选定义');
     const client = await this.ctx.app.db.connect();
     try {
       await client.query('BEGIN');
