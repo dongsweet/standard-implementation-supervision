@@ -10,8 +10,9 @@ class AiProvider {
   }
 
   async classifyPair(left, right) {
-    if (!this.enabled) return { relation: 'uncertain', confidence: 0, differences: [], reason: 'AI 服务未配置' };
+    if (!this.enabled) return { result: { relation: 'uncertain', confidence: 0, differences: [], reason: 'AI 服务未配置', recommendedCanonicalId: null }, providerStatus: null, durationMs: 0 };
     const controller = new AbortController();
+    const startedAt = Date.now();
     const timer = setTimeout(() => controller.abort(), this.config.timeoutMs);
     try {
       const response = await fetch(`${this.config.baseUrl.replace(/\/$/, '')}/chat/completions`, {
@@ -28,9 +29,16 @@ class AiProvider {
           ],
         }),
       });
-      if (!response.ok) throw new Error(`AI HTTP ${response.status}`);
+      if (!response.ok) {
+        const error = new Error(`AI HTTP ${response.status}`);
+        error.providerStatus = response.status;
+        throw error;
+      }
       const body = await response.json();
-      return parseAiResult(body.choices?.[0]?.message?.content);
+      return { result: parseAiResult(body.choices?.[0]?.message?.content), providerStatus: response.status, durationMs: Date.now() - startedAt };
+    } catch (error) {
+      error.durationMs = Date.now() - startedAt;
+      throw error;
     } finally {
       clearTimeout(timer);
     }

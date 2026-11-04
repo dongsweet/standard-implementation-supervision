@@ -1,3 +1,67 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><%= title %></title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0/dist/css/adminlte.min.css"></head>
-<body class="layout-fixed bg-body-tertiary"><div class="app-wrapper"><nav class="app-header navbar navbar-expand bg-body"><div class="container-fluid"><a class="navbar-brand" href="/">安全规范落实与持续监管系统</a></div></nav><main class="app-main"><div class="app-content p-4"><div class="container-fluid"><div class="d-flex justify-content-between align-items-center mb-3"><h1>监督定义去重候选</h1><span class="text-secondary">规则筛选 → AI 判断 → 人工确认</span></div><div class="card"><div class="card-body"><table class="table table-striped"><thead><tr><th>左定义</th><th>右定义</th><th>候选类型</th><th>相似度</th><th>状态</th><th>操作</th></tr></thead><tbody><% candidates.forEach(item => { %><tr><td><%= item.object_name || '-' %><br><small><%= item.description || '' %></small></td><td><%= item.candidate_id || '-' %></td><td><%= item.candidate_type %></td><td><%= item.similarity_score == null ? '-' : Number(item.similarity_score).toFixed(3) %></td><td><%= item.status || '待复核' %></td><td><button class="btn btn-sm btn-outline-primary" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="reviewWithAi(this)">AI 分析</button></td></tr><% }) %><% if (!candidates.length) { %><tr><td colspan="6" class="text-center text-secondary">暂无候选。导入监督定义后运行候选分析。</td></tr><% } %></tbody></table></div></div></div></div></main></div><script>async function reviewWithAi(button) { button.disabled = true; button.textContent = '分析中'; try { const response = await fetch('/api/dedupe/ai-review', { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' }, body: JSON.stringify({ leftId: button.dataset.left, rightId: button.dataset.right }) }); const data = await response.json(); if (!response.ok) throw new Error(data.message || 'AI 分析失败'); alert(JSON.stringify(data.data.result || data.data, null, 2)); } catch (error) { alert(error.message); } finally { button.disabled = false; button.textContent = 'AI 分析'; } }</script></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %></title><link rel="stylesheet" href="/public/vendor/adminlte/css/adminlte.min.css">
+</head>
+<body class="layout-fixed bg-body-tertiary">
+  <div class="app-wrapper">
+    <nav class="app-header navbar navbar-expand bg-body"><div class="container-fluid">
+      <a class="navbar-brand" href="/">安全规范落实与持续监管系统</a>
+      <div class="ms-auto d-flex align-items-center gap-3"><a href="/">工作台</a><span><%= user.display_name %></span>
+        <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline-secondary btn-sm">退出</button></form>
+      </div>
+    </div></nav>
+    <main class="app-main"><div class="app-content p-4"><div class="container-fluid">
+      <div class="d-flex justify-content-between align-items-center mb-3"><div><h1>监督定义候选复核</h1><p class="text-secondary mb-0">规则筛选 → AI 判断 → 人工确认；AI 不会自动归并定义。</p></div></div>
+      <% if (message) { %><div class="alert alert-info"><%= message %></div><% } %>
+      <div class="card"><div class="table-responsive"><table class="table table-striped align-middle mb-0">
+        <thead><tr><th>定义 A</th><th>定义 B</th><th>候选</th><th>匹配标准项</th><th>历史执行</th><th>操作</th></tr></thead>
+        <tbody>
+          <% candidates.forEach(item => { %>
+            <tr>
+              <td><strong><%= item.object_name %></strong><div class="small text-secondary"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %></div><div class="mt-1"><b>方法：</b><%= item.check_method %></div><div><b>描述：</b><%= item.description %></div><div><b>步骤：</b><%= item.steps || '-' %></div><div><b>频率/方式：</b><%= item.frequency || '-' %> / <%= item.access_mode || '-' %></div></td>
+              <td><strong><%= item.candidate_object_name %></strong><div class="small text-secondary"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %></div><div class="mt-1"><b>方法：</b><%= item.candidate_check_method %></div><div><b>描述：</b><%= item.candidate_description %></div><div><b>步骤：</b><%= item.candidate_steps || '-' %></div><div><b>频率/方式：</b><%= item.candidate_frequency || '-' %> / <%= item.candidate_access_mode || '-' %></div></td>
+              <td><span class="badge <%= item.candidate_type === 'exact_duplicate_candidate' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= item.candidate_type === 'exact_duplicate_candidate' ? '完全重复候选' : '相似候选' %></span><div class="small mt-1">相似度 <%= Number(item.similarity_score || 0).toFixed(3) %></div></td>
+              <td><div>A: <%= (item.standard_item_codes || []).join(', ') || '无' %></div><div>B: <%= (item.candidate_standard_item_codes || []).join(', ') || '无' %></div></td>
+              <td><div>A: <%= item.execution_count || 0 %></div><div>B: <%= item.candidate_execution_count || 0 %></div></td>
+              <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary mb-1" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="aiReview(this)">AI 分析</button><br>
+                <button class="btn btn-sm btn-danger mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">确认重复，保留 A</button><br>
+                <button class="btn btn-sm btn-outline-secondary mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','similar_but_distinct')">相似但不归并</button><br>
+                <button class="btn btn-sm btn-outline-secondary" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button></td>
+            </tr>
+          <% }) %>
+          <% if (!candidates.length) { %><tr><td colspan="6" class="text-center text-secondary p-4">暂无候选。维护监督定义后，规则层会生成去重候选。</td></tr><% } %>
+        </tbody>
+      </table></div></div>
+    </div></div></main>
+  </div>
+  <script>
+    const csrfToken = '<%= csrf %>';
+    async function send(path, body) {
+      const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken }, body: JSON.stringify(body) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || '请求失败');
+      return data.data;
+    }
+    async function aiReview(button) {
+      button.disabled = true;
+      try { const job = await send('/api/dedupe/ai-review', { leftId: button.dataset.left, rightId: button.dataset.right }); alert(JSON.stringify(job.result || job, null, 2)); }
+      catch (error) { alert(error.message); }
+      finally { button.disabled = false; }
+    }
+    async function humanReview(leftId, rightId, decision, canonicalId) {
+      const body = { leftId, rightId, decision, canonicalId, confirmConflicts: false };
+      try { await send('/api/dedupe/reviews', body); window.location.reload(); }
+      catch (error) {
+        if (decision === 'duplicate' && error.message.includes('字段冲突') && window.confirm(`${error.message}。仍要归并并保留所选主定义吗？`)) {
+          try { body.confirmConflicts = true; await send('/api/dedupe/reviews', body); window.location.reload(); }
+          catch (retryError) { alert(retryError.message); }
+          return;
+        }
+        alert(error.message);
+      }
+    }
+  </script>
+</body>
+</html>

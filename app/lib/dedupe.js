@@ -8,6 +8,7 @@ function normalizeText(value) {
     .toLowerCase()
     .replace(/[\u0000-\u001f]/g, ' ')
     .replace(/[，。；：、（）【】《》“”‘’]/g, ' ')
+    .replace(/\p{P}+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }

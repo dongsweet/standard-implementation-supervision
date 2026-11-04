@@ -5,6 +5,10 @@ exports.view = {
   package: '@eggjs/view',
 };
 
+exports.static = {
+  enable: true,
+};
+
 exports.ejs = {
   enable: true,
   package: 'egg-view-ejs',

@@ -11,6 +11,8 @@
     "test": "node --test test/**/*.test.js",
     "db:migrate": "node-pg-migrate -m db/migrations up",
     "db:rollback": "node-pg-migrate -m db/migrations down",
+    "copy:assets": "node scripts/copy-assets.js",
+    "admin:create": "node scripts/create-admin.js",
     "lint": "eslint app config db test"
   },
   "engines": {
