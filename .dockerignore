@@ -1,0 +1,6 @@
+reference-docs/
+node_modules/
+storage/
+logs/
+.git/
+.env

@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "egg-bin dev",
-    "start": "egg-scripts start --daemon",
+    "start": "egg-scripts start",
     "stop": "egg-scripts stop",
     "test": "node --test test/**/*.test.js",
     "db:migrate": "node-pg-migrate -m db/migrations up",

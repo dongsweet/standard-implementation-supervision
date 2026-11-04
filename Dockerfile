@@ -3,5 +3,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
+RUN chmod +x docker/entrypoint.sh
 EXPOSE 7001
-CMD ["npm", "run", "start"]
+CMD ["./docker/entrypoint.sh"]

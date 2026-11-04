@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "7001:7001"
+      - "17005:7001"
     env_file: .env
     depends_on:
       db:
