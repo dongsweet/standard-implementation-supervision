@@ -6,11 +6,6 @@ module.exports = appInfo => {
   const config = exports;
   config.keys = process.env.EGG_KEYS || `${appInfo.name}_local_development_key`;
   config.cluster = { listen: { port: Number(process.env.PORT || 7001) } };
-  config.view = {
-    root: path.join(appInfo.baseDir, 'app/view'),
-    defaultViewEngine: 'ejs',
-    defaultExtension: '.ejs',
-  };
   config.bodyParser = { enable: true, jsonLimit: '2mb', formLimit: '2mb' };
   config.security = { csrf: { enable: true } };
   config.middleware = [ 'auth' ];
