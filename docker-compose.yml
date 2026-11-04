@@ -7,8 +7,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
-        condition: service_started
+    volumes:
+      - app-storage:/app/storage
   db:
     image: postgres:16-alpine
     environment:
@@ -25,6 +25,7 @@ services:
       timeout: 5s
       retries: 10
   minio:
+    profiles: ["storage"]
     image: quay.io/minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
@@ -38,3 +39,4 @@ services:
 volumes:
   postgres-data:
   minio-data:
+  app-storage:
