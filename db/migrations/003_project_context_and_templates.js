@@ -12,6 +12,12 @@ exports.up = pgm => {
   pgm.addConstraint('users', 'users_last_project_fk', {
     foreignKeys: { columns: 'last_project_id', references: 'projects(id)', onDelete: 'SET NULL' },
   });
+  pgm.sql(`
+    INSERT INTO user_roles (user_id, role_id, project_id)
+    SELECT p.project_manager_id, r.id, p.id
+    FROM projects p CROSS JOIN roles r
+    WHERE p.project_manager_id IS NOT NULL AND r.code = 'project_admin'
+    ON CONFLICT DO NOTHING`);
   pgm.createIndex('projects', [ 'is_template', 'status' ], { name: 'projects_template_status_idx' });
 };
 
