@@ -7,7 +7,7 @@ class StandardCatalogRepository {
 
   async listCatalog() {
     const result = await this.pool.query(`
-      SELECT s.id, s.code, s.name, s.description, s.created_at,
+      SELECT s.id, s.code, s.name, s.description,
              COALESCE(json_agg(json_build_object(
                'id', sv.id, 'version', sv.version, 'status', sv.status,
                'publishedAt', sv.published_at, 'createdAt', sv.created_at,
