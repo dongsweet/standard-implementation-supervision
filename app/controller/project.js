@@ -1,7 +1,7 @@
 'use strict';
 
 const Controller = require('egg').Controller;
-const { requireGlobalWrite, requireProject } = require('../lib/authorization');
+const { requireGlobalWrite, requireProject, requireProjectAdmin } = require('../lib/authorization');
 
 class ProjectController extends Controller {
   async index() {
@@ -11,6 +11,7 @@ class ProjectController extends Controller {
       projects,
       templates: projects.filter(project => project.is_template),
       versions: await this.ctx.service.project.listPublishedVersions(),
+      activeUsers: await this.ctx.service.project.listActiveUsers(),
       csrf: this.ctx.csrf,
     });
   }
@@ -45,13 +46,42 @@ class ProjectController extends Controller {
   }
 
   async manage() {
-    requireProject(this.ctx, this.ctx.params.projectId);
-    const detail = await this.ctx.service.project.getProjectDetail(this.ctx.params.projectId);
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    const detail = await this.ctx.service.project.getProjectManageDetail(this.ctx.params.projectId);
     await this.ctx.render('projects/manage', {
       title: `项目管理 · ${detail.project.code}`,
       ...detail,
       csrf: this.ctx.csrf,
     });
+  }
+
+  async addMember() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.setProjectMember(this.ctx.params.projectId, this.ctx.request.body || {});
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage`);
+  }
+
+  async removeMember() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.removeProjectMember(this.ctx.params.projectId, this.ctx.params.userId);
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage`);
+  }
+
+  async setManager() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.setProjectManager(this.ctx.params.projectId, this.ctx.request.body.userId);
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage`);
+  }
+
+  async saveChapterResponsibilities() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.replaceChapterResponsibilities(
+      this.ctx.params.projectId,
+      this.ctx.params.chapterId,
+      this.ctx.request.body.userIds,
+      this.ctx.session.userId,
+    );
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage`);
   }
 
   async switchProject() {

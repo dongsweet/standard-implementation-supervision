@@ -40,6 +40,13 @@ class ProjectRepository {
     return result.rows;
   }
 
+  async listActiveUsers() {
+    const result = await this.pool.query(`
+      SELECT id, username, display_name FROM users
+      WHERE is_active = true ORDER BY display_name, username`);
+    return result.rows;
+  }
+
   async createProject({ code, name, projectManagerId, sourceProjectId, isTemplate }) {
     const client = await this.pool.connect();
     try {
@@ -165,6 +172,122 @@ class ProjectRepository {
       WHERE psi.project_id = $1
       ORDER BY psi.chapter_code_snapshot, psi.item_code_snapshot`, [ projectId ]);
     return { project: projectResult.rows[0], versions: versions.rows, items: items.rows };
+  }
+
+  async getProjectManageDetail(projectId) {
+    const detail = await this.getProjectDetail(projectId);
+    if (!detail) return null;
+    const members = await this.pool.query(`
+      SELECT u.id, u.username, u.display_name, u.is_active,
+             COALESCE(json_agg(json_build_object('code', r.code, 'name', r.name) ORDER BY r.code)
+               FILTER (WHERE r.code IS NOT NULL), '[]'::json) AS roles,
+             bool_or(r.code = 'project_admin') AS is_project_admin
+      FROM users u
+      JOIN user_roles ur ON ur.user_id = u.id AND ur.project_id = $1
+      JOIN roles r ON r.id = ur.role_id AND r.scope = 'project'
+      GROUP BY u.id
+      ORDER BY u.is_active DESC, u.display_name, u.username`, [ projectId ]);
+    const availableUsers = await this.pool.query(`
+      SELECT id, username, display_name
+      FROM users WHERE is_active = true ORDER BY display_name, username`);
+    const chapters = await this.pool.query(`
+      SELECT sc.id, sc.code, sc.name, sc.sort_order,
+             COALESCE(json_agg(json_build_object('id', u.id, 'username', u.username, 'displayName', u.display_name)
+               ORDER BY u.display_name, u.username) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS responsibles
+      FROM standard_chapters sc
+      JOIN standard_items si ON si.chapter_id = sc.id
+      JOIN project_standard_items psi ON psi.standard_item_id = si.id AND psi.project_id = $1
+      LEFT JOIN chapter_responsibilities cr ON cr.project_id = $1 AND cr.chapter_id = sc.id
+      LEFT JOIN users u ON u.id = cr.user_id
+      GROUP BY sc.id
+      ORDER BY sc.sort_order, sc.code`, [ projectId ]);
+    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, chapters: chapters.rows };
+  }
+
+  async setProjectMember({ projectId, userId, roleCode }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const project = await client.query('SELECT id FROM projects WHERE id = $1', [ projectId ]);
+      const user = await client.query('SELECT id FROM users WHERE id = $1 AND is_active = true', [ userId ]);
+      if (!project.rowCount || !user.rowCount) {
+        const error = new Error('项目或用户不存在/已停用');
+        error.code = 'INVALID_MEMBER';
+        throw error;
+      }
+      if (![ 'project_admin', 'operator' ].includes(roleCode)) {
+        const error = new Error('无效的项目角色');
+        error.code = 'INVALID_ROLE';
+        throw error;
+      }
+      await client.query(`
+        DELETE FROM user_roles ur USING roles r
+        WHERE ur.user_id = $1 AND ur.project_id = $2 AND ur.role_id = r.id AND r.scope = 'project'`, [ userId, projectId ]);
+      await client.query(`
+        INSERT INTO user_roles (user_id, role_id, project_id)
+        SELECT $1, id, $2 FROM roles WHERE code = $3 AND scope = 'project'
+        ON CONFLICT DO NOTHING`, [ userId, projectId, roleCode ]);
+      if (roleCode === 'project_admin') {
+        await client.query('UPDATE projects SET project_manager_id = COALESCE(project_manager_id, $2), updated_at = now() WHERE id = $1', [ projectId, userId ]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async removeProjectMember(projectId, userId) {
+    await this.pool.query(`
+      DELETE FROM user_roles ur USING roles r
+      WHERE ur.user_id = $1 AND ur.project_id = $2 AND ur.role_id = r.id AND r.scope = 'project'`, [ userId, projectId ]);
+    await this.pool.query('DELETE FROM chapter_responsibilities WHERE project_id = $1 AND user_id = $2', [ projectId, userId ]);
+  }
+
+  async setProjectManager(projectId, userId) {
+    const result = await this.pool.query(`
+      UPDATE projects SET project_manager_id = $2, updated_at = now() WHERE id = $1 RETURNING id`, [ projectId, userId || null ]);
+    if (!result.rowCount) return null;
+    if (userId) {
+      await this.pool.query(`
+        INSERT INTO user_roles (user_id, role_id, project_id)
+        SELECT $2, id, $1 FROM roles WHERE code = 'project_admin'
+        ON CONFLICT DO NOTHING`, [ projectId, userId ]);
+    }
+    return result.rows[0];
+  }
+
+  async replaceChapterResponsibilities({ projectId, chapterId, userIds, assignedBy }) {
+    const chapter = await this.pool.query(`
+      SELECT sc.id FROM standard_chapters sc
+      JOIN standard_items si ON si.chapter_id = sc.id
+      JOIN project_standard_items psi ON psi.standard_item_id = si.id AND psi.project_id = $1
+      WHERE sc.id = $2 LIMIT 1`, [ projectId, chapterId ]);
+    if (!chapter.rowCount) {
+      const error = new Error('该章节不属于当前项目基线');
+      error.code = 'INVALID_CHAPTER';
+      throw error;
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM chapter_responsibilities WHERE project_id = $1 AND chapter_id = $2', [ projectId, chapterId ]);
+      for (const userId of userIds) {
+        await client.query(`
+          INSERT INTO chapter_responsibilities (project_id, chapter_id, user_id, assigned_by)
+          SELECT $1, $2, u.id, $4 FROM users u
+          WHERE u.id = $3 AND u.is_active = true
+          ON CONFLICT DO NOTHING`, [ projectId, chapterId, userId, assignedBy ]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async saveAnswer({ projectId, standardItemId, status, measureDescription, problemDescription, ownerUserId }) {

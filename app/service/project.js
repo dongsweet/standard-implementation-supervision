@@ -18,6 +18,10 @@ class ProjectService extends Service {
     return this.repository.listPublishedVersions();
   }
 
+  async listActiveUsers() {
+    return this.repository.listActiveUsers();
+  }
+
   async createProject(payload) {
     const code = String(payload.code || '').trim();
     const name = String(payload.name || '').trim();
@@ -41,6 +45,50 @@ class ProjectService extends Service {
     const result = await this.repository.getProjectDetail(projectId);
     if (!result) this.ctx.throw(404, '项目不存在');
     return result;
+  }
+
+  async getProjectManageDetail(projectId) {
+    const result = await this.repository.getProjectManageDetail(projectId);
+    if (!result) this.ctx.throw(404, '项目不存在');
+    return result;
+  }
+
+  async setProjectMember(projectId, payload) {
+    const userId = String(payload.userId || '').trim();
+    const roleCode = String(payload.roleCode || '').trim();
+    if (!userId) this.ctx.throw(400, '请选择用户');
+    try {
+      return await this.repository.setProjectMember({ projectId, userId, roleCode });
+    } catch (error) {
+      if ([ 'INVALID_MEMBER', 'INVALID_ROLE' ].includes(error.code)) this.ctx.throw(400, error.message);
+      throw error;
+    }
+  }
+
+  async removeProjectMember(projectId, userId) {
+    if (String(userId) === String(this.ctx.session.userId)) this.ctx.throw(400, '不能移除当前登录账号的项目角色');
+    await this.repository.removeProjectMember(projectId, userId);
+  }
+
+  async setProjectManager(projectId, userId) {
+    const managerId = String(userId || '').trim();
+    if (!managerId) this.ctx.throw(400, '请选择项目管理员');
+    await this.repository.setProjectManager(projectId, managerId);
+  }
+
+  async replaceChapterResponsibilities(projectId, chapterId, value, assignedBy) {
+    const values = Array.isArray(value) ? value : [ value ];
+    try {
+      return await this.repository.replaceChapterResponsibilities({
+        projectId,
+        chapterId,
+        userIds: [ ...new Set(values.map(item => String(item || '').trim()).filter(Boolean)) ],
+        assignedBy,
+      });
+    } catch (error) {
+      if (error.code === 'INVALID_CHAPTER') this.ctx.throw(400, error.message);
+      throw error;
+    }
   }
 
   async saveAnswer(projectId, standardItemId, payload, ownerUserId) {

@@ -23,6 +23,15 @@ module.exports = app => {
   router.get('/projects/:projectId/manage', controller.project.manage);
   router.get('/projects/:projectId', controller.project.detail);
   router.post('/projects/:projectId/answers/:standardItemId', controller.project.saveAnswer);
+  router.post('/projects/:projectId/members', controller.project.addMember);
+  router.post('/projects/:projectId/members/:userId/delete', controller.project.removeMember);
+  router.post('/projects/:projectId/manager', controller.project.setManager);
+  router.post('/projects/:projectId/chapters/:chapterId/responsibilities', controller.project.saveChapterResponsibilities);
+  router.get('/users', controller.user.index);
+  router.post('/users', controller.user.create);
+  router.post('/users/:userId/active', controller.user.toggleActive);
+  router.post('/users/:userId/password', controller.user.resetPassword);
+  router.post('/users/:userId/roles', controller.user.replaceRoles);
   router.get('/api/dedupe/candidates', controller.dedupe.candidates);
   router.post('/api/dedupe/ai-review', controller.dedupe.aiReview);
   router.post('/api/dedupe/reviews', controller.dedupe.review);
