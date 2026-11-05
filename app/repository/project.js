@@ -174,6 +174,15 @@ class ProjectRepository {
     return { project: projectResult.rows[0], versions: versions.rows, items: items.rows };
   }
 
+  async updateProjectName(projectId, name) {
+    const result = await this.pool.query(`
+      UPDATE projects SET name = $2, updated_at = now()
+      WHERE id = $1
+      RETURNING id, code, name, status, is_template, source_project_id, project_manager_id, updated_at`,
+    [ projectId, name ]);
+    return result.rows[0] || null;
+  }
+
   async getProjectManageDetail(projectId) {
     const detail = await this.getProjectDetail(projectId);
     if (!detail) return null;

@@ -53,6 +53,15 @@ class ProjectService extends Service {
     return result;
   }
 
+  async updateProjectName(projectId, payload) {
+    const name = String(payload.name || '').trim();
+    if (!name) this.ctx.throw(400, '项目名称不能为空');
+    if (name.length > 200) this.ctx.throw(400, '项目名称不能超过 200 个字符');
+    const result = await this.repository.updateProjectName(projectId, name);
+    if (!result) this.ctx.throw(404, '项目不存在');
+    return result;
+  }
+
   async setProjectMember(projectId, payload) {
     const userId = String(payload.userId || '').trim();
     const roleCode = String(payload.roleCode || '').trim();

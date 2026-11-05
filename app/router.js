@@ -22,6 +22,7 @@ module.exports = app => {
   router.post('/projects', controller.project.create);
   router.get('/projects/:projectId/manage', controller.project.manage);
   router.get('/projects/:projectId', controller.project.detail);
+  router.post('/projects/:projectId', controller.project.update);
   router.post('/projects/:projectId/answers/:standardItemId', controller.project.saveAnswer);
   router.post('/projects/:projectId/members', controller.project.addMember);
   router.post('/projects/:projectId/members/:userId/delete', controller.project.removeMember);

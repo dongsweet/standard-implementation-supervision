@@ -55,6 +55,12 @@ class ProjectController extends Controller {
     });
   }
 
+  async update() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.updateProjectName(this.ctx.params.projectId, this.ctx.request.body || {});
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage`);
+  }
+
   async addMember() {
     requireProjectAdmin(this.ctx, this.ctx.params.projectId);
     await this.ctx.service.project.setProjectMember(this.ctx.params.projectId, this.ctx.request.body || {});
