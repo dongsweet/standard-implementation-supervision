@@ -167,33 +167,6 @@ class ProjectRepository {
     return { project: projectResult.rows[0], versions: versions.rows, items: items.rows };
   }
 
-  async attachVersion(projectId, versionId) {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const version = await client.query(`SELECT id FROM standard_versions WHERE id = $1 AND status = 'published'`, [ versionId ]);
-      if (!version.rowCount) {
-        const error = new Error('只能关联已发布规范版本');
-        error.code = 'VERSION_NOT_PUBLISHED';
-        throw error;
-      }
-      await client.query(`INSERT INTO project_standard_versions (project_id, standard_version_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ projectId, versionId ]);
-      const inserted = await client.query(`
-        INSERT INTO project_standard_items (project_id, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot)
-        SELECT $1, si.id, si.item_code, si.content, sc.code
-        FROM standard_items si JOIN standard_chapters sc ON sc.id = si.chapter_id
-        WHERE si.standard_version_id = $2
-        ON CONFLICT DO NOTHING`, [ projectId, versionId ]);
-      await client.query('COMMIT');
-      return inserted.rowCount;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
   async saveAnswer({ projectId, standardItemId, status, measureDescription, problemDescription, ownerUserId }) {
     const result = await this.pool.query(`
       INSERT INTO project_standard_answers

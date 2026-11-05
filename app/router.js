@@ -9,6 +9,7 @@ module.exports = app => {
   router.get('/', controller.home.index);
   router.get('/health', controller.home.health);
   router.get('/dedupe', controller.dedupe.index);
+  router.get('/project-overview', controller.project.overview);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);
   router.post('/standards/:standardId/versions', controller.standardCatalog.createVersion);
@@ -19,8 +20,8 @@ module.exports = app => {
   router.post('/standards/chapters/:chapterId/import', controller.standardCatalog.importItems);
   router.get('/projects', controller.project.index);
   router.post('/projects', controller.project.create);
+  router.get('/projects/:projectId/manage', controller.project.manage);
   router.get('/projects/:projectId', controller.project.detail);
-  router.post('/projects/:projectId/versions', controller.project.attachVersion);
   router.post('/projects/:projectId/answers/:standardItemId', controller.project.saveAnswer);
   router.get('/api/dedupe/candidates', controller.dedupe.candidates);
   router.post('/api/dedupe/ai-review', controller.dedupe.aiReview);

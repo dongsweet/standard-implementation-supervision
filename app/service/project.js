@@ -43,15 +43,6 @@ class ProjectService extends Service {
     return result;
   }
 
-  async attachVersion(projectId, versionId) {
-    try {
-      return await this.repository.attachVersion(projectId, versionId);
-    } catch (error) {
-      if (error.code === 'VERSION_NOT_PUBLISHED') this.ctx.throw(409, error.message);
-      throw error;
-    }
-  }
-
   async saveAnswer(projectId, standardItemId, payload, ownerUserId) {
     const status = String(payload.status || 'unassessed');
     if (!ANSWER_STATUSES.has(status)) this.ctx.throw(400, '无效的应答状态');

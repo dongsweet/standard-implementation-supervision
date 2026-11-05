@@ -1,0 +1,10 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3"><div class="text-secondary">项目编号：<strong><%= project.code %></strong>　项目名称：<strong><%= project.name %></strong></div><a class="btn btn-sm btn-outline-primary ms-auto" href="/project-overview">打开项目总览</a></div>
+<div class="row g-3">
+  <div class="col-12 col-xl-6">
+    <div class="card h-100"><div class="card-header"><h3 class="card-title">项目基本信息</h3></div><div class="card-body"><dl class="row mb-0"><dt class="col-sm-4">项目状态</dt><dd class="col-sm-8"><span class="badge text-bg-secondary"><%= project.status %></span></dd><dt class="col-sm-4">项目类型</dt><dd class="col-sm-8"><%= project.is_template ? '基线项目' : '业务项目' %></dd><dt class="col-sm-4">来源基线</dt><dd class="col-sm-8"><%= project.source_project_id ? '由基线项目派生' : '无' %></dd><dt class="col-sm-4">项目管理员</dt><dd class="col-sm-8"><%= project.project_manager_name || '尚未指定' %></dd></dl></div></div>
+  </div>
+  <div class="col-12 col-xl-6">
+    <div class="card h-100"><div class="card-header"><h3 class="card-title">项目人员与权限</h3></div><div class="card-body"><p class="text-secondary">项目管理员、章节负责人和操作员都应在项目范围内授权。人员权限维护页面将在此处展开。</p><span class="badge text-bg-secondary">权限配置模块建设中</span></div></div>
+  </div>
+</div>
+<div class="card mt-3"><div class="card-header"><h3 class="card-title">项目固定基线</h3></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>规范</th><th>版本</th><th>快照时间</th><th>标准项数</th></tr></thead><tbody><% (versions || []).forEach(version => { %><tr><td><%= version.standard_code %> · <%= version.standard_name %></td><td><%= version.version %></td><td><%= new Date(version.snapshot_at).toLocaleString('zh-CN') %></td><td><%= version.item_count %></td></tr><% }) %><% if (!(versions || []).length) { %><tr><td colspan="4" class="text-center text-secondary py-4">该项目尚未配置基线。业务项目应在创建时选择基线项目。</td></tr><% } %></tbody></table></div></div></div>

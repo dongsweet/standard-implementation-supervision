@@ -7,11 +7,28 @@ class ProjectController extends Controller {
   async index() {
     const projects = await this.ctx.service.project.listProjects();
     await this.ctx.render('projects/index', {
-      title: '项目与标准基线',
+      title: '项目管理',
       projects,
       templates: projects.filter(project => project.is_template),
       versions: await this.ctx.service.project.listPublishedVersions(),
       csrf: this.ctx.csrf,
+    });
+  }
+
+  async overview() {
+    const currentProject = this.ctx.state.currentProject;
+    if (!currentProject) {
+      await this.ctx.render('projects/overview-empty', { title: '项目总览', csrf: this.ctx.csrf });
+      return;
+    }
+    requireProject(this.ctx, currentProject.id);
+    const detail = await this.ctx.service.project.getProjectDetail(currentProject.id);
+    await this.ctx.render('projects/detail', {
+      title: `${detail.project.code} · ${detail.project.name}`,
+      ...detail,
+      versionsInProject: detail.versions,
+      csrf: this.ctx.csrf,
+      isOverview: true,
     });
   }
 
@@ -24,20 +41,23 @@ class ProjectController extends Controller {
   async detail() {
     requireProject(this.ctx, this.ctx.params.projectId);
     const detail = await this.ctx.service.project.getProjectDetail(this.ctx.params.projectId);
-    const versions = await this.ctx.service.project.listPublishedVersions();
-    await this.ctx.render('projects/detail', { title: `${detail.project.code} · ${detail.project.name}`, ...detail, versions, versionsInProject: detail.versions, csrf: this.ctx.csrf });
+    await this.ctx.render('projects/detail', { title: `${detail.project.code} · ${detail.project.name}`, ...detail, versionsInProject: detail.versions, csrf: this.ctx.csrf });
+  }
+
+  async manage() {
+    requireProject(this.ctx, this.ctx.params.projectId);
+    const detail = await this.ctx.service.project.getProjectDetail(this.ctx.params.projectId);
+    await this.ctx.render('projects/manage', {
+      title: `项目管理 · ${detail.project.code}`,
+      ...detail,
+      csrf: this.ctx.csrf,
+    });
   }
 
   async switchProject() {
     await this.ctx.service.project.switchProject(String(this.ctx.request.body.projectId || ''));
     const returnTo = String(this.ctx.request.body.returnTo || '/').trim();
     this.ctx.redirect(returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/');
-  }
-
-  async attachVersion() {
-    requireProject(this.ctx, this.ctx.params.projectId, true);
-    await this.ctx.service.project.attachVersion(this.ctx.params.projectId, this.ctx.request.body.versionId);
-    this.ctx.redirect(`/projects/${this.ctx.params.projectId}`);
   }
 
   async saveAnswer() {

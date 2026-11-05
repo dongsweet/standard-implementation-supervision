@@ -28,7 +28,7 @@
           <li class="nav-item me-2">
             <form method="post" action="/current-project" class="d-flex align-items-center gap-2">
               <input type="hidden" name="_csrf" value="<%= csrf %>">
-              <input type="hidden" name="returnTo" value="<%= currentPath %>">
+              <input type="hidden" name="returnTo" value="/project-overview">
               <label class="small text-secondary text-nowrap" for="currentProjectSelect">当前项目</label>
               <select id="currentProjectSelect" name="projectId" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="切换当前项目" style="max-width:260px">
                 <option value="">未选择</option>
@@ -61,7 +61,8 @@
             </li>
 
             <li class="sidebar-section">项目协同</li>
-            <li class="nav-item"><a href="/projects" class="nav-link <%= currentPath.startsWith('/projects') ? 'active' : '' %>"><span class="nav-icon">▦</span><p>项目与标准基线</p></a></li>
+            <li class="nav-item"><a href="/project-overview" class="nav-link <%= currentPath.startsWith('/project-overview') ? 'active' : '' %>"><span class="nav-icon">⌂</span><p>项目总览</p></a></li>
+            <li class="nav-item"><a href="/projects" class="nav-link <%= currentPath.startsWith('/projects') ? 'active' : '' %>"><span class="nav-icon">▦</span><p>项目管理</p></a></li>
             <li class="nav-item"><span class="nav-link disabled-item"><span class="nav-icon">▧</span><p>云中心管理<span class="badge text-bg-secondary ms-auto">建设中</span></p></span></li>
 
             <li class="sidebar-section">规范应答</li>
