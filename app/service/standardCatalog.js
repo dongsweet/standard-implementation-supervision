@@ -74,6 +74,9 @@ class StandardCatalogService extends Service {
         level: payload.level,
         isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
         metadata: {},
+        providerNames: this.parseProviders(payload.providerNames),
+        unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
+        implementationEvidence: String(payload.implementationEvidence || '').trim() || null,
       });
     } catch (error) {
       if (error.code === '23505') this.ctx.throw(409, '该版本下标准项编号已存在');
@@ -87,12 +90,22 @@ class StandardCatalogService extends Service {
     const rows = lines.map((line, index) => {
       const parts = line.includes('\t') ? line.split('\t') : line.split(',');
       if (index === 0 && /标准项编号|item.?code/i.test(parts[0])) return null;
-      const [ itemCode, title, content, level, isKey ] = parts.map(item => String(item || '').trim());
+      const [ itemCode, title, content, level, isKey, providers, unifiedRequirement, implementationEvidence ] = parts.map(item => String(item || '').trim());
       if (!itemCode || !content) this.ctx.throw(400, `第${index + 1}行缺少标准项编号或标准内容`);
-      return { itemCode, title, content, level, isKey: [ '1', 'true', '是', '是关键项' ].includes(isKey.toLowerCase()) };
+      return {
+        itemCode, title, content, level,
+        isKey: [ '1', 'true', '是', '是关键项' ].includes(isKey.toLowerCase()),
+        providerNames: this.parseProviders(providers),
+        unifiedRequirement: unifiedRequirement || null,
+        implementationEvidence: implementationEvidence || null,
+      };
     }).filter(Boolean);
     if (!rows.length) this.ctx.throw(400, '没有可导入的标准项');
     return rows;
+  }
+
+  parseProviders(value) {
+    return String(value || '').split(/[,，、;；|\n]/).map(item => item.trim()).filter(Boolean).slice(0, 30);
   }
 
   async importItems(chapterId, text) {

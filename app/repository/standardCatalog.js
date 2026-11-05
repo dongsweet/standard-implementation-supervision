@@ -60,7 +60,9 @@ class StandardCatalogRepository {
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'itemCode', si.item_code, 'title', si.title,
                'content', si.content, 'level', si.level, 'isKey', si.is_key,
-               'metadata', si.metadata
+               'metadata', si.metadata,
+               'providers', COALESCE((SELECT json_agg(spa.provider_name ORDER BY spa.provider_name) FROM standard_provider_assignments spa WHERE spa.standard_item_id = si.id), '[]'::json),
+               'requirements', COALESCE((SELECT json_agg(json_build_object('requirement', sir.unified_requirement, 'evidence', sir.implementation_evidence) ORDER BY sir.sort_order, sir.id) FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '[]'::json)
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
       LEFT JOIN standard_items si ON si.chapter_id = sc.id
@@ -87,13 +89,30 @@ class StandardCatalogRepository {
     return result.rows[0] || null;
   }
 
-  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata }) {
-    const result = await this.pool.query(`
+  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata, providerNames = [], unifiedRequirement, implementationEvidence }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(`
       INSERT INTO standard_items
         (standard_version_id, chapter_id, item_code, title, content, level, is_key, metadata)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
       RETURNING *`, [ versionId, chapterId, itemCode, title || null, content, level || null, isKey === true, JSON.stringify(metadata || {}) ]);
-    return result.rows[0];
+      const itemId = result.rows[0].id;
+      for (const provider of providerNames) {
+        await client.query('INSERT INTO standard_provider_assignments (standard_item_id, provider_name) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ itemId, provider ]);
+      }
+      if (unifiedRequirement) {
+        await client.query(`INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, implementation_evidence) VALUES ($1, $2, $3)`, [ itemId, unifiedRequirement, implementationEvidence || null ]);
+      }
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async upsertItems({ versionId, chapterId, rows }) {
@@ -110,6 +129,15 @@ class StandardCatalogRepository {
             chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
             level = EXCLUDED.level, is_key = EXCLUDED.is_key, metadata = EXCLUDED.metadata`,
         [ versionId, chapterId, row.itemCode, row.title || null, row.content, row.level || null, row.isKey === true, JSON.stringify(row.metadata || {}) ]);
+        const itemResult = await client.query('SELECT id FROM standard_items WHERE standard_version_id = $1 AND item_code = $2', [ versionId, row.itemCode ]);
+        const itemId = itemResult.rows[0].id;
+        for (const provider of row.providerNames || []) {
+          await client.query('INSERT INTO standard_provider_assignments (standard_item_id, provider_name) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ itemId, provider ]);
+        }
+        if (row.unifiedRequirement) {
+          await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = $1', [ itemId ]);
+          await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, implementation_evidence) VALUES ($1, $2, $3)', [ itemId, row.unifiedRequirement, row.implementationEvidence || null ]);
+        }
         count += 1;
       }
       await client.query('COMMIT');
