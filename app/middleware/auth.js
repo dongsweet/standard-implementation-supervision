@@ -40,8 +40,9 @@ module.exports = () => {
       ) OR p.project_manager_id = $1
       ORDER BY p.name, p.code`, [ userId ]);
     ctx.state.projects = projects.rows;
+    const sessionProject = projects.rows.find(project => project.id === ctx.session.currentProjectId);
     const rememberedProject = projects.rows.find(project => project.id === result.rows[0].last_project_id);
-    const selectedProject = rememberedProject || projects.rows[0] || null;
+    const selectedProject = sessionProject || rememberedProject || projects.rows[0] || null;
     if (selectedProject) {
       ctx.session.currentProjectId = selectedProject.id;
       ctx.state.currentProject = selectedProject;
