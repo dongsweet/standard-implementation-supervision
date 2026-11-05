@@ -5,17 +5,26 @@ class ProjectRepository {
     this.pool = pool;
   }
 
-  async listProjects() {
+  async listProjects(userId) {
     const result = await this.pool.query(`
-      SELECT p.id, p.code, p.name, p.status, p.project_manager_id, u.display_name AS project_manager_name,
+      SELECT p.id, p.code, p.name, p.status, p.is_template, p.source_project_id, p.project_manager_id, u.display_name AS project_manager_name,
              count(DISTINCT psv.standard_version_id)::integer AS standard_version_count,
              count(DISTINCT pcc.cloud_center_id)::integer AS cloud_center_count
       FROM projects p
       LEFT JOIN users u ON u.id = p.project_manager_id
       LEFT JOIN project_standard_versions psv ON psv.project_id = p.id
       LEFT JOIN project_cloud_centers pcc ON pcc.project_id = p.id
+      WHERE EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1 AND ur.project_id IS NULL
+          AND r.code IN ('system_admin', 'audit_admin', 'security_admin')
+      ) OR EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1 AND ur.project_id = p.id
+          AND r.code IN ('project_admin', 'operator')
+      ) OR p.project_manager_id = $1
       GROUP BY p.id, u.display_name
-      ORDER BY p.created_at DESC`);
+      ORDER BY p.is_template DESC, p.created_at DESC`, [ userId ]);
     return result.rows;
   }
 
@@ -31,10 +40,100 @@ class ProjectRepository {
     return result.rows;
   }
 
-  async createProject({ code, name, projectManagerId }) {
-    const result = await this.pool.query(`
-      INSERT INTO projects (code, name, project_manager_id) VALUES ($1, $2, $3) RETURNING *`, [ code, name, projectManagerId || null ]);
-    return result.rows[0];
+  async createProject({ code, name, projectManagerId, sourceProjectId, isTemplate }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      let source = null;
+      if (sourceProjectId) {
+        const sourceResult = await client.query(`SELECT * FROM projects WHERE id = $1 AND is_template = true`, [ sourceProjectId ]);
+        if (!sourceResult.rowCount) {
+          const error = new Error('只能从已标记为模板的项目派生');
+          error.code = 'INVALID_TEMPLATE';
+          throw error;
+        }
+        source = sourceResult.rows[0];
+      }
+      const created = await client.query(`
+        INSERT INTO projects (code, name, project_manager_id, is_template, source_project_id)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [ code, name, projectManagerId || null, isTemplate === true, sourceProjectId || null ]);
+      const project = created.rows[0];
+      if (source) await this.cloneProjectContents(client, source.id, project.id);
+      if (projectManagerId) {
+        await client.query(`
+          INSERT INTO user_roles (user_id, role_id, project_id)
+          SELECT $1, id, $2 FROM roles WHERE code = 'project_admin'
+          ON CONFLICT DO NOTHING`, [ projectManagerId, project.id ]);
+      }
+      await client.query('COMMIT');
+      return project;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async cloneProjectContents(client, sourceProjectId, targetProjectId) {
+    await client.query(`
+      INSERT INTO project_standard_versions (project_id, standard_version_id, snapshot_at)
+      SELECT $2, standard_version_id, snapshot_at FROM project_standard_versions
+      WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
+    await client.query(`
+      INSERT INTO project_standard_items (project_id, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at)
+      SELECT $2, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at
+      FROM project_standard_items WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
+    await client.query(`
+      INSERT INTO project_cloud_centers (project_id, cloud_center_id, owner_user_id)
+      SELECT $2, cloud_center_id, owner_user_id FROM project_cloud_centers
+      WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
+    await client.query(`
+      INSERT INTO chapter_responsibilities (project_id, chapter_id, user_id, assigned_by, created_at)
+      SELECT $2, chapter_id, user_id, assigned_by, created_at FROM chapter_responsibilities
+      WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
+    await client.query(`
+      INSERT INTO user_roles (user_id, role_id, project_id, created_at)
+      SELECT user_id, role_id, $2, created_at FROM user_roles
+      WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
+
+    const answers = await client.query(`
+      SELECT id, standard_item_id, cloud_center_id, status, measure_description,
+             problem_description, owner_user_id, updated_at
+      FROM project_standard_answers WHERE project_id = $1`, [ sourceProjectId ]);
+    const answerMap = new Map();
+    for (const answer of answers.rows) {
+      const inserted = await client.query(`
+        INSERT INTO project_standard_answers
+          (project_id, standard_item_id, cloud_center_id, status, measure_description, problem_description, owner_user_id, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT DO NOTHING RETURNING id`,
+      [ targetProjectId, answer.standard_item_id, answer.cloud_center_id, answer.status, answer.measure_description, answer.problem_description, answer.owner_user_id, answer.updated_at ]);
+      if (inserted.rowCount) answerMap.set(answer.id, inserted.rows[0].id);
+    }
+
+    const evidences = await client.query(`
+      SELECT id, code, name, storage_key, source_url, content_hash, metadata, created_by, created_at
+      FROM evidence_materials WHERE project_id = $1`, [ sourceProjectId ]);
+    const evidenceMap = new Map();
+    for (const evidence of evidences.rows) {
+      const inserted = await client.query(`
+        INSERT INTO evidence_materials
+          (project_id, code, name, storage_key, source_url, content_hash, metadata, created_by, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [ targetProjectId, evidence.code, evidence.name, evidence.storage_key, evidence.source_url, evidence.content_hash, evidence.metadata, evidence.created_by, evidence.created_at ]);
+      evidenceMap.set(evidence.id, inserted.rows[0].id);
+    }
+    const links = await client.query(`
+      SELECT ae.answer_id, ae.evidence_id
+      FROM answer_evidence ae JOIN project_standard_answers a ON a.id = ae.answer_id
+      WHERE a.project_id = $1`, [ sourceProjectId ]);
+    for (const link of links.rows) {
+      if (answerMap.has(link.answer_id) && evidenceMap.has(link.evidence_id)) {
+        await client.query('INSERT INTO answer_evidence (answer_id, evidence_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ answerMap.get(link.answer_id), evidenceMap.get(link.evidence_id) ]);
+      }
+    }
   }
 
   async getProjectDetail(projectId) {

@@ -10,7 +10,7 @@ module.exports = () => {
       return;
     }
     const result = await ctx.app.db.query(`
-      SELECT u.id, u.username, u.display_name,
+      SELECT u.id, u.username, u.display_name, u.last_project_id,
              COALESCE(json_agg(json_build_object('code', r.code, 'scope', r.scope, 'projectId', ur.project_id))
                FILTER (WHERE r.code IS NOT NULL), '[]'::json) AS roles
       FROM users u
@@ -26,6 +26,29 @@ module.exports = () => {
     }
     ctx.state.user = result.rows[0];
     ctx.state.roles = result.rows[0].roles || [];
+    const projects = await ctx.app.db.query(`
+      SELECT DISTINCT p.id, p.code, p.name, p.status, p.is_template, p.source_project_id
+      FROM projects p
+      WHERE EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1 AND ur.project_id IS NULL
+          AND r.code IN ('system_admin', 'audit_admin', 'security_admin')
+      ) OR EXISTS (
+        SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+        WHERE ur.user_id = $1 AND ur.project_id = p.id
+          AND r.code IN ('project_admin', 'operator')
+      ) OR p.project_manager_id = $1
+      ORDER BY p.name, p.code`, [ userId ]);
+    ctx.state.projects = projects.rows;
+    const rememberedProject = projects.rows.find(project => project.id === result.rows[0].last_project_id);
+    const selectedProject = rememberedProject || projects.rows[0] || null;
+    if (selectedProject) {
+      ctx.session.currentProjectId = selectedProject.id;
+      ctx.state.currentProject = selectedProject;
+    } else {
+      delete ctx.session.currentProjectId;
+      ctx.state.currentProject = null;
+    }
     await next();
   };
 };
