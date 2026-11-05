@@ -7,6 +7,11 @@
   <strong>权限边界：</strong>系统管理员管理用户、角色和项目；审计管理员全局只读；安全管理员维护规范与安全业务；项目管理员和操作员只在被授权项目内生效。
 </div>
 
+<div class="card mb-4">
+  <div class="card-header"><h3 class="card-title">固定角色矩阵</h3></div>
+  <div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>角色</th><th>作用范围</th><th>职责说明</th></tr></thead><tbody><% roles.forEach(role => { %><tr><td><span class="badge <%= role.scope === 'global' ? 'text-bg-primary' : 'text-bg-light' %>"><%= role.name %></span></td><td><%= role.scope === 'global' ? '全局' : '项目' %></td><td><%= role.description %></td></tr><% }) %></tbody></table></div>
+</div>
+
 <div class="collapse mb-4" id="newUserForm">
   <div class="card card-primary card-outline">
     <form method="post" action="/users">
