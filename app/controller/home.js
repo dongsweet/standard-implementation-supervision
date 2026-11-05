@@ -4,7 +4,7 @@ const Controller = require('egg').Controller;
 
 class HomeController extends Controller {
   async index() {
-    await this.ctx.render('home/index', { title: '安全规范落实与持续监管系统', user: this.ctx.state.user, csrf: this.ctx.csrf });
+    await this.ctx.render('home/index', { title: '系统工作台', user: this.ctx.state.user, csrf: this.ctx.csrf });
   }
 
   async health() {

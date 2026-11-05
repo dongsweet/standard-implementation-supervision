@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 
 class AuthController extends Controller {
   async show() {
-    await this.ctx.render('auth/login', { title: '登录 - 安全规范落实与持续监管系统', csrf: this.ctx.csrf });
+    await this.ctx.render('auth/login', { title: '登录 - 安全规范落实与持续监管系统', csrf: this.ctx.csrf }, { layout: false });
   }
 
   async login() {

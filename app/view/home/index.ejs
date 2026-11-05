@@ -1,4 +1,34 @@
-<!doctype html>
-<html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><%= title %></title><link rel="stylesheet" href="/public/vendor/adminlte/css/adminlte.min.css"></head>
-<body class="layout-fixed sidebar-expand-lg bg-body-tertiary"><div class="app-wrapper"><nav class="app-header navbar navbar-expand bg-body"><div class="container-fluid"><span class="navbar-brand">安全规范落实与持续监管系统</span><div class="ms-auto d-flex align-items-center gap-3"><span><%= user.display_name %></span><form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-outline-secondary btn-sm">退出</button></form></div></div></nav><main class="app-main"><div class="app-content p-4"><div class="container-fluid"><h1 class="mb-4">系统工作台</h1><div class="row"><div class="col-lg-4"><div class="card"><div class="card-body"><h3>规范与项目</h3><p>建立项目、规范版本、章节应答、云中心和证据材料。</p><span class="badge text-bg-secondary">业务模块接入中</span></div></div></div><div class="col-lg-4"><div class="card"><div class="card-body"><h3>持续监督</h3><p>监督定义与标准项采用多对多关系，一次检查可覆盖多个标准项。</p><span class="badge text-bg-secondary">数据模型已建立</span></div></div></div><div class="col-lg-4"><div class="card"><div class="card-body"><h3>监督定义去重复核</h3><p>规则候选、AI 判断、人工确认分层执行，人工复核是归并的唯一入口。</p><a class="btn btn-primary" href="/dedupe">打开候选复核</a></div></div></div></div></div></div></main></div></body></html>
+<div class="callout callout-info mb-4">
+  <h5>按项目组织规范落实与持续监督</h5>
+  <p class="mb-0">在同一工作区维护规范应答、云中心落实情况、证据材料和持续监督记录。一次监督执行可以关联多个标准项，并逐项记录检查结论。</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">项目协同与规范应答</h3></div>
+      <div class="card-body">
+        <p>按项目固定规范版本，分配章节负责人，记录章节应答、云中心落实情况与支撑证据。</p>
+        <span class="badge text-bg-secondary">模块建设中</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">持续监督与检查记录</h3></div>
+      <div class="card-body">
+        <p>监督定义可关联多个标准项；执行时保存一条检查记录，并在其下分别记录标准项结论。</p>
+        <span class="badge text-bg-secondary">模块建设中</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-xl-4">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">监督定义去重复核</h3></div>
+      <div class="card-body">
+        <p>规则筛选和 AI 分析用于提供候选及差异说明；只有人工确认才会建立逻辑归并。</p>
+        <a class="btn btn-primary" href="/dedupe">打开候选复核</a>
+      </div>
+    </div>
+  </div>
+</div>
