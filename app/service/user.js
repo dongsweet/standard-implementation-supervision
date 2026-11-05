@@ -66,7 +66,11 @@ class UserService extends Service {
   async replaceGlobalRoles(userId, roleCodes) {
     const result = await this.ctx.app.db.query('SELECT id FROM users WHERE id = $1', [ userId ]);
     if (!result.rowCount) this.ctx.throw(404, '用户不存在');
-    await this.repository.replaceGlobalRoles(userId, this.normalizeRoleCodes(roleCodes));
+    const normalizedRoles = this.normalizeRoleCodes(roleCodes);
+    if (String(userId) === String(this.ctx.session.userId) && !normalizedRoles.includes('system_admin')) {
+      this.ctx.throw(400, '不能移除当前登录账号的系统管理员角色');
+    }
+    await this.repository.replaceGlobalRoles(userId, normalizedRoles);
   }
 }
 
