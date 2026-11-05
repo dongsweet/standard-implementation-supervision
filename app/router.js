@@ -16,6 +16,11 @@ module.exports = app => {
   router.post('/standards/versions/:versionId/chapters', controller.standardCatalog.createChapter);
   router.post('/standards/chapters/:chapterId/items', controller.standardCatalog.createItem);
   router.post('/standards/chapters/:chapterId/import', controller.standardCatalog.importItems);
+  router.get('/projects', controller.project.index);
+  router.post('/projects', controller.project.create);
+  router.get('/projects/:projectId', controller.project.detail);
+  router.post('/projects/:projectId/versions', controller.project.attachVersion);
+  router.post('/projects/:projectId/answers/:standardItemId', controller.project.saveAnswer);
   router.get('/api/dedupe/candidates', controller.dedupe.candidates);
   router.post('/api/dedupe/ai-review', controller.dedupe.aiReview);
   router.post('/api/dedupe/reviews', controller.dedupe.review);
