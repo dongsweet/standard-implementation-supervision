@@ -1,0 +1,133 @@
+'use strict';
+
+class StandardCatalogRepository {
+  constructor(pool) {
+    this.pool = pool;
+  }
+
+  async listCatalog() {
+    const result = await this.pool.query(`
+      SELECT s.id, s.code, s.name, s.description, s.created_at,
+             COALESCE(json_agg(json_build_object(
+               'id', sv.id, 'version', sv.version, 'status', sv.status,
+               'publishedAt', sv.published_at, 'createdAt', sv.created_at,
+               'chapterCount', (SELECT count(*) FROM standard_chapters sc WHERE sc.standard_version_id = sv.id),
+               'itemCount', (SELECT count(*) FROM standard_items si WHERE si.standard_version_id = sv.id)
+             ) ORDER BY sv.created_at DESC) FILTER (WHERE sv.id IS NOT NULL), '[]'::json) AS versions
+      FROM standards s
+      LEFT JOIN standard_versions sv ON sv.standard_id = s.id
+      GROUP BY s.id
+      ORDER BY s.code`);
+    return result.rows;
+  }
+
+  async createStandard({ code, name, description, version }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const standard = await client.query(`
+        INSERT INTO standards (code, name, description) VALUES ($1, $2, $3) RETURNING *`,
+      [ code, name, description || null ]);
+      const standardVersion = await client.query(`
+        INSERT INTO standard_versions (standard_id, version, status)
+        VALUES ($1, $2, 'draft') RETURNING *`, [ standard.rows[0].id, version ]);
+      await client.query('COMMIT');
+      return { ...standard.rows[0], initialVersion: standardVersion.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createVersion({ standardId, version }) {
+    const result = await this.pool.query(`
+      INSERT INTO standard_versions (standard_id, version, status)
+      VALUES ($1, $2, 'draft') RETURNING *`, [ standardId, version ]);
+    return result.rows[0];
+  }
+
+  async getVersionDetail(versionId) {
+    const versionResult = await this.pool.query(`
+      SELECT sv.*, s.code AS standard_code, s.name AS standard_name, s.description AS standard_description
+      FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
+      WHERE sv.id = $1`, [ versionId ]);
+    if (!versionResult.rowCount) return null;
+    const chapters = await this.pool.query(`
+      SELECT sc.id, sc.code, sc.name, sc.sort_order,
+             count(si.id)::integer AS item_count,
+             COALESCE(json_agg(json_build_object(
+               'id', si.id, 'itemCode', si.item_code, 'title', si.title,
+               'content', si.content, 'level', si.level, 'isKey', si.is_key,
+               'metadata', si.metadata
+             ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
+      FROM standard_chapters sc
+      LEFT JOIN standard_items si ON si.chapter_id = sc.id
+      WHERE sc.standard_version_id = $1
+      GROUP BY sc.id
+      ORDER BY sc.sort_order, sc.code`, [ versionId ]);
+    return { version: versionResult.rows[0], chapters: chapters.rows };
+  }
+
+  async createChapter({ versionId, code, name, sortOrder }) {
+    const result = await this.pool.query(`
+      INSERT INTO standard_chapters (standard_version_id, code, name, sort_order)
+      VALUES ($1, $2, $3, $4) RETURNING *`, [ versionId, code, name, sortOrder || 0 ]);
+    return result.rows[0];
+  }
+
+  async findChapter(chapterId) {
+    const result = await this.pool.query(`
+      SELECT sc.*, sv.standard_id, sv.version, s.code AS standard_code
+      FROM standard_chapters sc
+      JOIN standard_versions sv ON sv.id = sc.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
+      WHERE sc.id = $1`, [ chapterId ]);
+    return result.rows[0] || null;
+  }
+
+  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata }) {
+    const result = await this.pool.query(`
+      INSERT INTO standard_items
+        (standard_version_id, chapter_id, item_code, title, content, level, is_key, metadata)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      RETURNING *`, [ versionId, chapterId, itemCode, title || null, content, level || null, isKey === true, JSON.stringify(metadata || {}) ]);
+    return result.rows[0];
+  }
+
+  async upsertItems({ versionId, chapterId, rows }) {
+    const client = await this.pool.connect();
+    let count = 0;
+    try {
+      await client.query('BEGIN');
+      for (const row of rows) {
+        await client.query(`
+          INSERT INTO standard_items
+            (standard_version_id, chapter_id, item_code, title, content, level, is_key, metadata)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+          ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            level = EXCLUDED.level, is_key = EXCLUDED.is_key, metadata = EXCLUDED.metadata`,
+        [ versionId, chapterId, row.itemCode, row.title || null, row.content, row.level || null, row.isKey === true, JSON.stringify(row.metadata || {}) ]);
+        count += 1;
+      }
+      await client.query('COMMIT');
+      return count;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async publishVersion(versionId) {
+    const result = await this.pool.query(`
+      UPDATE standard_versions SET status = 'published', published_at = COALESCE(published_at, now())
+      WHERE id = $1 RETURNING *`, [ versionId ]);
+    return result.rows[0] || null;
+  }
+}
+
+module.exports = StandardCatalogRepository;

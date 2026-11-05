@@ -1,0 +1,44 @@
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p class="text-secondary mb-0">维护规范主数据和版本。版本发布后，项目可以固定该版本快照。</p>
+  <button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#newStandardForm">新建规范</button>
+</div>
+
+<div class="collapse mb-4" id="newStandardForm">
+  <div class="card card-primary card-outline">
+    <div class="card-header"><h3 class="card-title">新建规范及初始版本</h3></div>
+    <form method="post" action="/standards">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="card-body row g-3">
+        <div class="col-md-3"><label class="form-label">规范编号</label><input class="form-control" name="code" placeholder="例如：MCS-001" required></div>
+        <div class="col-md-5"><label class="form-label">规范名称</label><input class="form-control" name="name" required></div>
+        <div class="col-md-4"><label class="form-label">初始版本号</label><input class="form-control" name="version" placeholder="例如：V1.0" required></div>
+        <div class="col-12"><label class="form-label">规范说明</label><textarea class="form-control" name="description" rows="2"></textarea></div>
+      </div>
+      <div class="card-footer"><button class="btn btn-primary" type="submit">保存规范</button></div>
+    </form>
+  </div>
+</div>
+
+<% if (!standards.length) { %>
+  <div class="card"><div class="card-body text-center text-secondary py-5">暂无规范。请先新建规范及初始版本。</div></div>
+<% } %>
+<% standards.forEach(standard => { %>
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center">
+      <div><h3 class="card-title mb-1"><%= standard.code %> · <%= standard.name %></h3><div class="small text-secondary"><%= standard.description || '未填写规范说明' %></div></div>
+      <button class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="collapse" data-bs-target="#newVersion-<%= standard.id %>">新增版本</button>
+    </div>
+    <div class="collapse border-bottom" id="newVersion-<%= standard.id %>">
+      <form method="post" action="/standards/<%= standard.id %>/versions" class="p-3 d-flex gap-2">
+        <input type="hidden" name="_csrf" value="<%= csrf %>"><input class="form-control" name="version" placeholder="版本号，例如 V1.1" required><button class="btn btn-primary" type="submit">创建草稿版本</button>
+      </form>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0"><thead><tr><th>版本</th><th>状态</th><th>章节数</th><th>标准项数</th><th>发布时间</th><th>操作</th></tr></thead><tbody>
+        <% (standard.versions || []).forEach(version => { %>
+          <tr><td><strong><%= version.version %></strong></td><td><span class="badge <%= version.status === 'published' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= version.status === 'published' ? '已发布' : '草稿' %></span></td><td><%= version.chapterCount %></td><td><%= version.itemCount %></td><td><%= version.publishedAt ? new Date(version.publishedAt).toLocaleString('zh-CN') : '-' %></td><td><a class="btn btn-sm btn-outline-primary" href="/standards/versions/<%= version.id %>">维护章节与标准项</a></td></tr>
+        <% }) %>
+      </tbody></table>
+    </div>
+  </div>
+<% }) %>

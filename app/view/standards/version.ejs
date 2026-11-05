@@ -1,0 +1,27 @@
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+  <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong></div>
+  <% if (version.status === 'published') { %><span class="badge text-bg-success">已发布</span><% } else { %><span class="badge text-bg-secondary">草稿</span><form method="post" action="/standards/versions/<%= version.id %>/publish" class="ms-auto"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-success btn-sm" type="submit">发布此版本</button></form><% } %>
+</div>
+
+<div class="alert alert-info py-2"><strong>接入工作流：</strong>先建立章节，再维护标准项；也可以按“标准项编号、标题、标准内容、层级、是否关键项”的 TSV/CSV 格式批量导入。发布后版本内容作为项目基线候选。</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">新增章节</h3></div>
+  <form method="post" action="/standards/versions/<%= version.id %>/chapters">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="card-body row g-2"><div class="col-md-3"><label class="form-label">章节编号</label><input class="form-control" name="code" placeholder="例如：3.1" required></div><div class="col-md-6"><label class="form-label">章节名称</label><input class="form-control" name="name" required></div><div class="col-md-2"><label class="form-label">排序</label><input class="form-control" name="sortOrder" type="number" value="0"></div><div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">添加</button></div></div>
+  </form>
+</div>
+
+<% if (!chapters.length) { %><div class="card"><div class="card-body text-center text-secondary py-5">暂无章节，请先添加章节。</div></div><% } %>
+<% chapters.forEach(chapter => { %>
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center"><h3 class="card-title"><%= chapter.code %> · <%= chapter.name %> <span class="badge text-bg-light ms-2"><%= chapter.item_count %> 项</span></h3><button class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="collapse" data-bs-target="#itemForm-<%= chapter.id %>">新增标准项</button><button class="btn btn-sm btn-outline-secondary ms-2" data-bs-toggle="collapse" data-bs-target="#importForm-<%= chapter.id %>">批量导入</button></div>
+    <div class="collapse border-bottom" id="itemForm-<%= chapter.id %>"><form method="post" action="/standards/chapters/<%= chapter.id %>/items" class="p-3 row g-2"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="/standards/versions/<%= version.id %>"><div class="col-md-2"><input class="form-control" name="itemCode" placeholder="标准项编号" required></div><div class="col-md-3"><input class="form-control" name="title" placeholder="标准项标题"></div><div class="col-md-5"><input class="form-control" name="content" placeholder="标准内容" required></div><div class="col-md-1"><input class="form-control" name="level" placeholder="层级"></div><div class="col-md-1"><button class="btn btn-primary w-100" type="submit">保存</button></div></form></div>
+    <div class="collapse border-bottom" id="importForm-<%= chapter.id %>"><form method="post" action="/standards/chapters/<%= chapter.id %>/import" class="p-3"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="/standards/versions/<%= version.id %>"><label class="form-label">每行一项，字段顺序：标准项编号[TAB或逗号]标题[TAB或逗号]标准内容[TAB或逗号]层级[TAB或逗号]是否关键项</label><textarea class="form-control font-monospace mb-2" name="text" rows="4" placeholder="3.1.1\t账号管理\t应建立账号管理制度\t基础\t是"></textarea><button class="btn btn-outline-primary" type="submit">导入并更新</button></form></div>
+    <div class="table-responsive"><table class="table table-sm table-striped align-middle mb-0"><thead><tr><th style="width:14%">标准项编号</th><th style="width:18%">标题</th><th>标准内容</th><th style="width:10%">层级</th><th style="width:9%">关键项</th></tr></thead><tbody>
+      <% (chapter.items || []).forEach(item => { %><tr><td><strong><%= item.itemCode %></strong></td><td><%= item.title || '-' %></td><td><%= item.content %></td><td><%= item.level || '-' %></td><td><%= item.isKey ? '是' : '否' %></td></tr><% }) %>
+      <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
+    </tbody></table></div>
+  </div>
+<% }) %>
