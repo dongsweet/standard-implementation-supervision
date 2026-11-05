@@ -88,7 +88,7 @@ class StandardCatalogService extends Service {
     const lines = String(text || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     if (!lines.length) this.ctx.throw(400, '请填写待导入内容');
     const rows = lines.map((line, index) => {
-      const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+      const parts = this.splitDelimitedLine(line);
       if (index === 0 && /标准项编号|item.?code/i.test(parts[0])) return null;
       const [ itemCode, title, content, level, isKey, providers, unifiedRequirement, implementationEvidence ] = parts.map(item => String(item || '').trim());
       if (!itemCode || !content) this.ctx.throw(400, `第${index + 1}行缺少标准项编号或标准内容`);
@@ -102,6 +102,29 @@ class StandardCatalogService extends Service {
     }).filter(Boolean);
     if (!rows.length) this.ctx.throw(400, '没有可导入的标准项');
     return rows;
+  }
+
+  splitDelimitedLine(line) {
+    if (line.includes('\t')) return line.split('\t');
+    const parts = [];
+    let current = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === '"' && line[index + 1] === '"' && quoted) {
+        current += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === ',' && !quoted) {
+        parts.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    parts.push(current);
+    return parts;
   }
 
   parseProviders(value) {
