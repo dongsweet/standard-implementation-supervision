@@ -190,18 +190,26 @@ class ProjectRepository {
     const availableUsers = await this.pool.query(`
       SELECT id, username, display_name
       FROM users WHERE is_active = true ORDER BY display_name, username`);
+    const projectUsers = await this.pool.query(`
+      SELECT DISTINCT u.id, u.username, u.display_name
+      FROM users u JOIN user_roles ur ON ur.user_id = u.id AND ur.project_id = $1
+      JOIN roles r ON r.id = ur.role_id AND r.scope = 'project'
+      WHERE u.is_active = true ORDER BY u.display_name, u.username`, [ projectId ]);
     const chapters = await this.pool.query(`
       SELECT sc.id, sc.code, sc.name, sc.sort_order,
-             COALESCE(json_agg(json_build_object('id', u.id, 'username', u.username, 'displayName', u.display_name)
-               ORDER BY u.display_name, u.username) FILTER (WHERE u.id IS NOT NULL), '[]'::json) AS responsibles
+             COALESCE(jsonb_agg(DISTINCT jsonb_build_object('id', u.id, 'username', u.username, 'displayName', u.display_name)
+               ORDER BY jsonb_build_object('id', u.id, 'username', u.username, 'displayName', u.display_name)) FILTER (WHERE u.id IS NOT NULL), '[]'::jsonb) AS responsibles
       FROM standard_chapters sc
-      JOIN standard_items si ON si.chapter_id = sc.id
-      JOIN project_standard_items psi ON psi.standard_item_id = si.id AND psi.project_id = $1
       LEFT JOIN chapter_responsibilities cr ON cr.project_id = $1 AND cr.chapter_id = sc.id
       LEFT JOIN users u ON u.id = cr.user_id
+      WHERE EXISTS (
+        SELECT 1 FROM standard_items si
+        JOIN project_standard_items psi ON psi.standard_item_id = si.id AND psi.project_id = $1
+        WHERE si.chapter_id = sc.id
+      )
       GROUP BY sc.id
       ORDER BY sc.sort_order, sc.code`, [ projectId ]);
-    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, chapters: chapters.rows };
+    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, projectUsers: projectUsers.rows, chapters: chapters.rows };
   }
 
   async setProjectMember({ projectId, userId, roleCode }) {
@@ -240,6 +248,12 @@ class ProjectRepository {
   }
 
   async removeProjectMember(projectId, userId) {
+    const project = await this.pool.query('SELECT project_manager_id FROM projects WHERE id = $1', [ projectId ]);
+    if (project.rows[0] && project.rows[0].project_manager_id === userId) {
+      const error = new Error('请先指定新的项目管理员，再移除当前管理员');
+      error.code = 'CURRENT_MANAGER';
+      throw error;
+    }
     await this.pool.query(`
       DELETE FROM user_roles ur USING roles r
       WHERE ur.user_id = $1 AND ur.project_id = $2 AND ur.role_id = r.id AND r.scope = 'project'`, [ userId, projectId ]);
@@ -247,6 +261,12 @@ class ProjectRepository {
   }
 
   async setProjectManager(projectId, userId) {
+    const user = await this.pool.query('SELECT id FROM users WHERE id = $1 AND is_active = true', [ userId ]);
+    if (!user.rowCount) {
+      const error = new Error('项目管理员不存在或已停用');
+      error.code = 'INVALID_MANAGER';
+      throw error;
+    }
     const result = await this.pool.query(`
       UPDATE projects SET project_manager_id = $2, updated_at = now() WHERE id = $1 RETURNING id`, [ projectId, userId || null ]);
     if (!result.rowCount) return null;
@@ -279,6 +299,10 @@ class ProjectRepository {
           INSERT INTO chapter_responsibilities (project_id, chapter_id, user_id, assigned_by)
           SELECT $1, $2, u.id, $4 FROM users u
           WHERE u.id = $3 AND u.is_active = true
+            AND EXISTS (
+              SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+              WHERE ur.user_id = u.id AND ur.project_id = $1 AND r.scope = 'project'
+            )
           ON CONFLICT DO NOTHING`, [ projectId, chapterId, userId, assignedBy ]);
       }
       await client.query('COMMIT');

@@ -67,13 +67,23 @@ class ProjectService extends Service {
 
   async removeProjectMember(projectId, userId) {
     if (String(userId) === String(this.ctx.session.userId)) this.ctx.throw(400, '不能移除当前登录账号的项目角色');
-    await this.repository.removeProjectMember(projectId, userId);
+    try {
+      await this.repository.removeProjectMember(projectId, userId);
+    } catch (error) {
+      if (error.code === 'CURRENT_MANAGER') this.ctx.throw(400, error.message);
+      throw error;
+    }
   }
 
   async setProjectManager(projectId, userId) {
     const managerId = String(userId || '').trim();
     if (!managerId) this.ctx.throw(400, '请选择项目管理员');
-    await this.repository.setProjectManager(projectId, managerId);
+    try {
+      await this.repository.setProjectManager(projectId, managerId);
+    } catch (error) {
+      if (error.code === 'INVALID_MANAGER') this.ctx.throw(400, error.message);
+      throw error;
+    }
   }
 
   async replaceChapterResponsibilities(projectId, chapterId, value, assignedBy) {
