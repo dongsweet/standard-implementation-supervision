@@ -20,6 +20,101 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
+  async listDefinitions() {
+    const result = await this.pool.query(`
+      SELECT d.id, d.object_name, d.object_category, d.check_layer, d.check_method,
+             d.description, d.steps, d.frequency, d.access_mode, d.status,
+             d.merged_into_id, d.created_at, d.updated_at,
+             COALESCE(json_agg(json_build_object(
+               'id', si.id, 'code', si.item_code, 'title', si.title,
+               'standardCode', s.code, 'version', sv.version
+             ) ORDER BY s.code, sv.version, si.item_code)
+             FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
+      FROM supervision_definitions d
+      LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
+      LEFT JOIN standard_items si ON si.id = dsi.standard_item_id
+      LEFT JOIN standard_versions sv ON sv.id = si.standard_version_id
+      LEFT JOIN standards s ON s.id = sv.standard_id
+      GROUP BY d.id
+      ORDER BY d.status, d.created_at DESC`);
+    return result.rows;
+  }
+
+  async listStandardItems() {
+    const result = await this.pool.query(`
+      SELECT si.id, si.item_code, si.title, s.code AS standard_code, sv.version
+      FROM standard_items si
+      JOIN standard_versions sv ON sv.id = si.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
+      ORDER BY s.code, sv.version, si.item_code`);
+    return result.rows;
+  }
+
+  async create({ fields, standardItemIds }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(`
+        INSERT INTO supervision_definitions
+          (object_name, object_category, check_layer, check_method, description, steps, frequency, access_mode, normalized_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING *`, [
+        fields.objectName, fields.objectCategory || null, fields.checkLayer || null,
+        fields.checkMethod, fields.description, fields.steps || null,
+        fields.frequency || null, fields.accessMode || null, fields.normalizedHash,
+      ]);
+      for (const standardItemId of standardItemIds) {
+        await client.query(`
+          INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
+          SELECT $1, id FROM standard_items WHERE id = $2
+          ON CONFLICT DO NOTHING`, [ result.rows[0].id, standardItemId ]);
+      }
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async update(id, { fields, standardItemIds }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(`
+        UPDATE supervision_definitions
+        SET object_name = $2, object_category = $3, check_layer = $4,
+            check_method = $5, description = $6, steps = $7, frequency = $8,
+            access_mode = $9, normalized_hash = $10, updated_at = now()
+        WHERE id = $1 AND status = 'active'
+        RETURNING *`, [
+        id, fields.objectName, fields.objectCategory || null, fields.checkLayer || null,
+        fields.checkMethod, fields.description, fields.steps || null,
+        fields.frequency || null, fields.accessMode || null, fields.normalizedHash,
+      ]);
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ id ]);
+      for (const standardItemId of standardItemIds) {
+        await client.query(`
+          INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
+          SELECT $1, id FROM standard_items WHERE id = $2
+          ON CONFLICT DO NOTHING`, [ id, standardItemId ]);
+      }
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findById(id, client = this.pool) {
     const result = await client.query(`
       SELECT id, object_name, object_category, check_layer, check_method,

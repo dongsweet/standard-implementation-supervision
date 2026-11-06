@@ -12,6 +12,9 @@ module.exports = app => {
   router.get('/cloud-centers', controller.cloudCenter.index);
   router.post('/cloud-centers', controller.cloudCenter.create);
   router.post('/cloud-centers/:cloudCenterId', controller.cloudCenter.update);
+  router.get('/supervision-definitions', controller.supervisionDefinition.index);
+  router.post('/supervision-definitions', controller.supervisionDefinition.create);
+  router.post('/supervision-definitions/:definitionId', controller.supervisionDefinition.update);
   router.get('/project-overview', controller.project.overview);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);

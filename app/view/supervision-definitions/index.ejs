@@ -1,0 +1,82 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <p class="text-secondary mb-0">监督定义是可复用的检查方案；一条定义可以关联多个标准项，后续一次检查执行只需创建一条记录。</p>
+  <% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#createDefinitionModal">新增监督定义</button><% } %>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">监督定义列表</h3><span class="badge text-bg-secondary ms-auto"><%= definitions.length %> 条</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>检查对象</th><th>分类/层面</th><th>检查方法</th><th>检查描述</th><th>频率/方式</th><th>关联标准项</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+    <tbody>
+      <% definitions.forEach(definition => { %>
+        <tr>
+          <td><strong><%= definition.object_name %></strong></td>
+          <td><%= definition.object_category || '-' %><div class="small text-secondary"><%= definition.check_layer || '-' %></div></td>
+          <td><%= definition.check_method %><% if (definition.steps) { %><div class="small text-secondary text-truncate" style="max-width:220px" title="<%= definition.steps %>">步骤：<%= definition.steps %></div><% } %></td>
+          <td><div class="text-truncate" style="max-width:280px" title="<%= definition.description %>"><%= definition.description %></div></td>
+          <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
+          <td><% (definition.standard_items || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item.standardCode %> / <%= item.version %> · <%= item.code %></span><% }) %><% if (!(definition.standard_items || []).length) { %><span class="text-secondary">未关联</span><% } %></td>
+          <td><span class="badge <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
+          <td class="text-end text-nowrap"><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition).replace(/&/g, '&amp;').replace(/&quot;/g, '&amp;quot;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') %>">编辑</button><% } %></td>
+        </tr>
+      <% }) %>
+      <% if (!definitions.length) { %><tr><td colspan="8" class="text-center text-secondary py-5">暂无监督定义，请先新增。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<div class="modal fade" id="createDefinitionModal" tabindex="-1" aria-labelledby="createDefinitionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form method="post" action="/supervision-definitions"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="createDefinitionModalLabel">新增监督定义</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-md-4"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" required maxlength="500" placeholder="例如：云平台账号管理"></div>
+      <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" placeholder="例如：制度、技术、现场"></div>
+      <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" placeholder="例如：管理、配置、运行"></div>
+      <div class="col-md-6"><label class="form-label" for="createCheckMethod">检查方法</label><input class="form-control" id="createCheckMethod" name="checkMethod" required maxlength="2000" placeholder="例如：制度文件核查、配置核查"></div>
+      <div class="col-md-3"><label class="form-label" for="createFrequency">频率</label><input class="form-control" id="createFrequency" name="frequency" placeholder="例如：每季度"></div>
+      <div class="col-md-3"><label class="form-label" for="createAccessMode">远程/现场方式</label><select class="form-select" id="createAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
+      <div class="col-12"><label class="form-label" for="createDescription">检查描述</label><textarea class="form-control" id="createDescription" name="description" rows="3" required maxlength="5000"></textarea></div>
+      <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="3" placeholder="按顺序填写检查步骤"></textarea></div>
+      <div class="col-12"><label class="form-label" for="createStandardItems">关联标准项（可多选）</label><select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="8"><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select><div class="form-text">一条监督定义可以覆盖多个标准项；按住 Ctrl/⌘ 可多选。</div></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存监督定义</button></div>
+  </form>
+</div></div></div>
+
+<div class="modal fade" id="editDefinitionModal" tabindex="-1" aria-labelledby="editDefinitionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form id="editDefinitionForm" method="post" action=""><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="editDefinitionModalLabel">编辑监督定义</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-md-4"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" required maxlength="500"></div>
+      <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory"></div>
+      <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer"></div>
+      <div class="col-md-6"><label class="form-label" for="editCheckMethod">检查方法</label><input class="form-control" id="editCheckMethod" name="checkMethod" required maxlength="2000"></div>
+      <div class="col-md-3"><label class="form-label" for="editFrequency">频率</label><input class="form-control" id="editFrequency" name="frequency"></div>
+      <div class="col-md-3"><label class="form-label" for="editAccessMode">远程/现场方式</label><select class="form-select" id="editAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
+      <div class="col-12"><label class="form-label" for="editDescription">检查描述</label><textarea class="form-control" id="editDescription" name="description" rows="3" required maxlength="5000"></textarea></div>
+      <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="3"></textarea></div>
+      <div class="col-12"><label class="form-label" for="editStandardItems">关联标准项（可多选）</label><select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="8"><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
+  </form>
+</div></div></div>
+<script>
+  document.getElementById('editDefinitionModal').addEventListener('show.bs.modal', event => {
+    const definition = JSON.parse(event.relatedTarget.dataset.definition);
+    const form = document.getElementById('editDefinitionForm');
+    form.action = '/supervision-definitions/' + definition.id;
+    const fields = {
+      editObjectName: definition.object_name,
+      editObjectCategory: definition.object_category || '',
+      editCheckLayer: definition.check_layer || '',
+      editCheckMethod: definition.check_method,
+      editFrequency: definition.frequency || '',
+      editDescription: definition.description,
+      editSteps: definition.steps || '',
+    };
+    Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
+    document.getElementById('editAccessMode').value = definition.access_mode || '';
+    const selected = new Set((definition.standard_items || []).map(item => item.id));
+    Array.from(document.getElementById('editStandardItems').options).forEach(option => { option.selected = selected.has(option.value); });
+  });
+</script>
