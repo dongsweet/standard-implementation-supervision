@@ -1,11 +1,11 @@
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-  <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong></div>
+  <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　发布版：<strong><%= version.version %></strong><span class="badge text-bg-light ms-2"><%= ({ national: '国家标准', industry: '行业标准', local: '地方标准', group: '团体标准', enterprise: '企业标准', internal: '企业内部制度/规范', regulatory: '监管要求', other: '其他' })[version.standard_type] || version.standard_type %></span></div>
   <% if (version.status === 'published') { %><span class="badge text-bg-success">已发布</span><% } else { %>
     <form method="post" action="/standards/versions/<%= version.id %>/publish" class="ms-auto" data-confirm="确认发布此规范版本？发布后它可被项目用作固定内容，且不能再修改。" data-confirm-title="发布规范版本"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-success btn-sm" type="submit">发布此版本</button></form>
   <% } %>
 </div>
 
-<div class="alert alert-info py-2"><strong>接入工作流：</strong>先建立章节，再维护标准项；也可以按“标准项编号、标题、标准内容、层级、是否关键项”的 TSV/CSV 格式批量导入。发布后版本内容作为项目基线候选。</div>
+<div class="alert alert-info py-2"><strong>接入工作流：</strong>先建立章节，再维护标准项；也可以按“标准项编号、标题、标准内容、层级、是否关键项”的 TSV/CSV 格式批量导入。发布版发布后，项目可以基于该内容建立自己的规范快照。</div>
 
 <div class="d-flex justify-content-end mb-3"><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button></div>
 

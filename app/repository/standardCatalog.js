@@ -5,29 +5,64 @@ class StandardCatalogRepository {
     this.pool = pool;
   }
 
-  async listCatalog() {
-    const result = await this.pool.query(`
-      SELECT s.id, s.code, s.name, s.description,
-             COALESCE(json_agg(json_build_object(
-               'id', sv.id, 'version', sv.version, 'status', sv.status,
-               'publishedAt', sv.published_at, 'createdAt', sv.created_at,
-               'chapterCount', (SELECT count(*) FROM standard_chapters sc WHERE sc.standard_version_id = sv.id),
-               'itemCount', (SELECT count(*) FROM standard_items si WHERE si.standard_version_id = sv.id)
-             ) ORDER BY sv.created_at DESC) FILTER (WHERE sv.id IS NOT NULL), '[]'::json) AS versions
+  async listCatalog({ search = '', standardType = '', page = 1, pageSize = 20 } = {}) {
+    const conditions = [];
+    const values = [];
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(
+        s.code ILIKE $${values.length}
+        OR s.name ILIKE $${values.length}
+        OR COALESCE(s.issuing_organization, '') ILIKE $${values.length}
+      )`);
+    }
+    if (standardType) {
+      values.push(standardType);
+      conditions.push(`s.standard_type = $${values.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const countResult = await this.pool.query(`
+      SELECT count(*)::integer AS total
       FROM standards s
-      LEFT JOIN standard_versions sv ON sv.standard_id = s.id
-      GROUP BY s.id
-      ORDER BY s.code`);
-    return result.rows;
+      JOIN standard_versions sv ON sv.standard_id = s.id
+      ${where}`, values);
+    const total = countResult.rows[0].total;
+    const offset = (page - 1) * pageSize;
+    const listValues = [ ...values, pageSize, offset ];
+    const result = await this.pool.query(`
+      SELECT s.id AS standard_id, s.code, s.name, s.description,
+             s.standard_type, s.issuing_organization,
+             sv.id AS version_id, sv.version, sv.status,
+             sv.published_at, sv.created_at,
+             (SELECT count(*)::integer FROM standard_chapters sc WHERE sc.standard_version_id = sv.id) AS chapter_count,
+             (SELECT count(*)::integer FROM standard_items si WHERE si.standard_version_id = sv.id) AS item_count
+      FROM standards s
+      JOIN standard_versions sv ON sv.standard_id = s.id
+      ${where}
+      ORDER BY s.code, sv.created_at DESC
+      LIMIT ${listValues.length - 1} OFFSET ${listValues.length}`, listValues);
+    const options = await this.pool.query(`
+      SELECT id, code, name
+      FROM standards
+      ORDER BY code, name`);
+    return {
+      rows: result.rows,
+      standardOptions: options.rows,
+      total,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    };
   }
 
-  async createStandard({ code, name, description, version }) {
+  async createStandard({ code, name, description, standardType, issuingOrganization, version }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const standard = await client.query(`
-        INSERT INTO standards (code, name, description) VALUES ($1, $2, $3) RETURNING *`,
-      [ code, name, description || null ]);
+        INSERT INTO standards (code, name, description, standard_type, issuing_organization)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [ code, name, description || null, standardType, issuingOrganization || null ]);
       const standardVersion = await client.query(`
         INSERT INTO standard_versions (standard_id, version, status)
         VALUES ($1, $2, 'draft') RETURNING *`, [ standard.rows[0].id, version ]);
@@ -50,7 +85,8 @@ class StandardCatalogRepository {
 
   async getVersionDetail(versionId) {
     const versionResult = await this.pool.query(`
-      SELECT sv.*, s.code AS standard_code, s.name AS standard_name, s.description AS standard_description
+      SELECT sv.*, s.code AS standard_code, s.name AS standard_name, s.description AS standard_description,
+             s.standard_type, s.issuing_organization
       FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
       WHERE sv.id = $1`, [ versionId ]);
     if (!versionResult.rowCount) return null;

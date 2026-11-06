@@ -2,13 +2,16 @@
 
 const Controller = require('egg').Controller;
 const { requireGlobalRead, requireGlobalWrite } = require('../lib/authorization');
+const { STANDARD_TYPES } = require('../lib/standardTypes');
 
 class StandardCatalogController extends Controller {
   async index() {
     requireGlobalRead(this.ctx);
+    const catalog = await this.ctx.service.standardCatalog.listCatalog(this.ctx.query);
     await this.ctx.render('standards/index', {
-      title: '规范目录与版本',
-      standards: await this.ctx.service.standardCatalog.listCatalog(),
+      title: '规范库',
+      ...catalog,
+      standardTypes: STANDARD_TYPES,
       csrf: this.ctx.csrf,
     });
   }
@@ -28,13 +31,13 @@ class StandardCatalogController extends Controller {
   async version() {
     requireGlobalRead(this.ctx);
     const detail = await this.ctx.service.standardCatalog.getVersionDetail(this.ctx.params.versionId);
-    await this.ctx.render('standards/version', { title: `${detail.version.standard_code} ${detail.version.version}`, ...detail, csrf: this.ctx.csrf });
+    await this.ctx.render('standards/version', { title: `${detail.version.standard_code} · ${detail.version.version} 发布版`, ...detail, csrf: this.ctx.csrf });
   }
 
   async publishVersion() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.standardCatalog.publishVersion(this.ctx.params.versionId);
-    this.ctx.redirect(`/standards/versions/${this.ctx.params.versionId}?notice=` + encodeURIComponent('规范版本已发布'));
+    this.ctx.redirect(`/standards/versions/${this.ctx.params.versionId}?notice=` + encodeURIComponent('规范发布版已发布'));
   }
 
   async createChapter() {

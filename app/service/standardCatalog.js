@@ -2,6 +2,9 @@
 
 const Service = require('egg').Service;
 const StandardCatalogRepository = require('../repository/standardCatalog');
+const { STANDARD_TYPES, STANDARD_TYPE_LABELS } = require('../lib/standardTypes');
+
+const STANDARD_TYPE_VALUES = new Set(STANDARD_TYPES.map(item => item.value));
 
 function required(value, field) {
   const result = String(value || '').trim();
@@ -14,16 +17,28 @@ class StandardCatalogService extends Service {
     return new StandardCatalogRepository(this.ctx.app.db);
   }
 
-  async listCatalog() {
-    return this.repository.listCatalog();
+  async listCatalog(query = {}) {
+    const search = String(query.search || '').trim().slice(0, 100);
+    const standardType = String(query.standardType || '').trim();
+    if (standardType && !STANDARD_TYPE_VALUES.has(standardType)) this.ctx.throw(400, '无效的规范类型');
+    const pageSize = 20;
+    const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+    const result = await this.repository.listCatalog({ search, standardType, page, pageSize });
+    const currentPage = Math.min(result.page, result.pageCount);
+    if (currentPage !== page) return this.listCatalog({ ...query, page: currentPage });
+    return { ...result, search, standardType, typeLabels: STANDARD_TYPE_LABELS };
   }
 
   async createStandard(payload) {
     try {
+      const standardType = String(payload.standardType || 'other').trim();
+      if (!STANDARD_TYPE_VALUES.has(standardType)) this.ctx.throw(400, '无效的规范类型');
       return await this.repository.createStandard({
         code: required(payload.code, '规范编号'),
         name: required(payload.name, '规范名称'),
         description: payload.description,
+        standardType,
+        issuingOrganization: String(payload.issuingOrganization || '').trim().slice(0, 300) || null,
         version: required(payload.version, '初始版本号'),
       });
     } catch (error) {
