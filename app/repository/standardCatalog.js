@@ -21,14 +21,17 @@ class StandardCatalogRepository {
       conditions.push(`s.standard_type = $${values.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const countResult = await this.pool.query(`
+    const countSql = `
       SELECT count(*)::integer AS total
       FROM standards s
       JOIN standard_versions sv ON sv.standard_id = s.id
-      ${where}`, values);
+      ${where}`;
+    const countResult = values.length ? await this.pool.query(countSql, values) : await this.pool.query(countSql);
     const total = countResult.rows[0].total;
     const offset = (page - 1) * pageSize;
     const listValues = [ ...values, pageSize, offset ];
+    const limitParameter = values.length + 1;
+    const offsetParameter = values.length + 2;
     const result = await this.pool.query(`
       SELECT s.id AS standard_id, s.code, s.name, s.description,
              s.standard_type, s.issuing_organization,
@@ -40,7 +43,7 @@ class StandardCatalogRepository {
       JOIN standard_versions sv ON sv.standard_id = s.id
       ${where}
       ORDER BY s.code, sv.created_at DESC
-      LIMIT ${listValues.length - 1} OFFSET ${listValues.length}`, listValues);
+      LIMIT $${limitParameter} OFFSET $${offsetParameter}`, listValues);
     const options = await this.pool.query(`
       SELECT id, code, name
       FROM standards
