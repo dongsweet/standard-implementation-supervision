@@ -1,0 +1,52 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <p class="text-secondary mb-0">维护可纳入项目的云中心。项目配置中可选择本项目实际涉及的云中心。</p>
+  <% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %>
+    <button class="btn btn-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#createCloudCenterModal">新增云中心</button>
+  <% } %>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">云中心列表</h3><span class="badge text-bg-secondary ms-auto"><%= cloudCenters.length %> 个</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>编码</th><th>名称</th><th>类型</th><th>已纳入项目数</th><th class="text-end">操作</th></tr></thead>
+    <tbody>
+      <% cloudCenters.forEach(center => { %>
+        <tr><td><strong><%= center.code %></strong></td><td><%= center.name %></td><td><%= center.center_type || '-' %></td><td><%= center.project_count %></td><td class="text-end"><% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editCloudCenterModal" data-id="<%= center.id %>" data-code="<%= center.code %>" data-name="<%= center.name %>" data-center-type="<%= center.center_type || '' %>">编辑</button><% } else { %><span class="text-secondary">只读</span><% } %></td></tr>
+      <% }) %>
+      <% if (!cloudCenters.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">暂无云中心，请先新增。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<div class="modal fade" id="createCloudCenterModal" tabindex="-1" aria-labelledby="createCloudCenterModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/cloud-centers"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="createCloudCenterModalLabel">新增云中心</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label" for="newCloudCenterCode">云中心编码</label><input class="form-control" id="newCloudCenterCode" name="code" maxlength="100" required placeholder="例如：ALI-CN-NORTH"></div>
+      <div class="mb-3"><label class="form-label" for="newCloudCenterName">云中心名称</label><input class="form-control" id="newCloudCenterName" name="name" maxlength="200" required></div>
+      <div><label class="form-label" for="newCloudCenterType">云中心类型</label><input class="form-control" id="newCloudCenterType" name="centerType" maxlength="50" placeholder="例如：公有云、私有云、政务云"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存</button></div>
+  </form>
+</div></div></div>
+
+<div class="modal fade" id="editCloudCenterModal" tabindex="-1" aria-labelledby="editCloudCenterModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <form id="editCloudCenterForm" method="post" action=""><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="editCloudCenterModalLabel">编辑云中心</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label" for="editCloudCenterCode">云中心编码</label><input class="form-control" id="editCloudCenterCode" name="code" maxlength="100" required></div>
+      <div class="mb-3"><label class="form-label" for="editCloudCenterName">云中心名称</label><input class="form-control" id="editCloudCenterName" name="name" maxlength="200" required></div>
+      <div><label class="form-label" for="editCloudCenterType">云中心类型</label><input class="form-control" id="editCloudCenterType" name="centerType" maxlength="50"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存</button></div>
+  </form>
+</div></div></div>
+<script>
+  document.getElementById('editCloudCenterModal').addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    document.getElementById('editCloudCenterForm').action = '/cloud-centers/' + button.dataset.id;
+    document.getElementById('editCloudCenterCode').value = button.dataset.code;
+    document.getElementById('editCloudCenterName').value = button.dataset.name;
+    document.getElementById('editCloudCenterType').value = button.dataset.centerType;
+  });
+</script>

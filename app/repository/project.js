@@ -209,7 +209,26 @@ class ProjectRepository {
       )
       GROUP BY sc.id
       ORDER BY sc.sort_order, sc.code`, [ projectId ]);
-    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, projectUsers: projectUsers.rows, chapters: chapters.rows };
+    const cloudCenters = await this.pool.query('SELECT id, code, name, center_type FROM cloud_centers ORDER BY name, code');
+    const projectCloudCenters = await this.pool.query('SELECT cc.id, cc.code, cc.name, cc.center_type, pcc.owner_user_id FROM project_cloud_centers pcc JOIN cloud_centers cc ON cc.id = pcc.cloud_center_id WHERE pcc.project_id = $1 ORDER BY cc.name, cc.code', [ projectId ]);
+    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, projectUsers: projectUsers.rows, chapters: chapters.rows, cloudCenters: cloudCenters.rows, projectCloudCenters: projectCloudCenters.rows };
+  }
+
+  async replaceProjectCloudCenters({ projectId, cloudCenterIds, ownerUserId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM project_cloud_centers WHERE project_id = $1', [ projectId ]);
+      for (const cloudCenterId of cloudCenterIds) {
+        await client.query('INSERT INTO project_cloud_centers (project_id, cloud_center_id, owner_user_id) SELECT $1, id, $3 FROM cloud_centers WHERE id = $2 ON CONFLICT DO NOTHING', [ projectId, cloudCenterId, ownerUserId || null ]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async setProjectMember({ projectId, userId, roleCode }) {

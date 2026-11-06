@@ -103,6 +103,15 @@ class ProjectService extends Service {
     }
   }
 
+  async replaceProjectCloudCenters(projectId, value, ownerUserId) {
+    const values = Array.isArray(value) ? value : [ value ];
+    return this.repository.replaceProjectCloudCenters({
+      projectId,
+      cloudCenterIds: [ ...new Set(values.map(item => String(item || '').trim()).filter(Boolean)) ],
+      ownerUserId,
+    });
+  }
+
   async saveAnswer(projectId, standardItemId, payload, ownerUserId) {
     const status = String(payload.status || 'unassessed');
     if (!ANSWER_STATUSES.has(status)) this.ctx.throw(400, '无效的应答状态');

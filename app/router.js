@@ -9,6 +9,9 @@ module.exports = app => {
   router.get('/', controller.home.index);
   router.get('/health', controller.home.health);
   router.get('/dedupe', controller.dedupe.index);
+  router.get('/cloud-centers', controller.cloudCenter.index);
+  router.post('/cloud-centers', controller.cloudCenter.create);
+  router.post('/cloud-centers/:cloudCenterId', controller.cloudCenter.update);
   router.get('/project-overview', controller.project.overview);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);
@@ -28,6 +31,7 @@ module.exports = app => {
   router.post('/projects/:projectId/members/:userId/delete', controller.project.removeMember);
   router.post('/projects/:projectId/manager', controller.project.setManager);
   router.post('/projects/:projectId/chapters/:chapterId/responsibilities', controller.project.saveChapterResponsibilities);
+  router.post('/projects/:projectId/cloud-centers', controller.project.saveCloudCenters);
   router.get('/users', controller.user.index);
   router.post('/users', controller.user.create);
   router.post('/users/:userId/active', controller.user.toggleActive);

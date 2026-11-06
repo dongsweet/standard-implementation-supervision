@@ -88,6 +88,16 @@ class ProjectController extends Controller {
     this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('章节负责人已保存'));
   }
 
+  async saveCloudCenters() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.replaceProjectCloudCenters(
+      this.ctx.params.projectId,
+      this.ctx.request.body.cloudCenterIds,
+      this.ctx.session.userId,
+    );
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('项目云中心已保存'));
+  }
+
   async switchProject() {
     await this.ctx.service.project.switchProject(String(this.ctx.request.body.projectId || ''));
     const returnTo = String(this.ctx.request.body.returnTo || '/').trim();

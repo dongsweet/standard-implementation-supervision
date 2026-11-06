@@ -20,6 +20,11 @@
 </div>
 
 <div class="card mb-3">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">项目云中心</h3><span class="badge text-bg-secondary ms-auto me-2"><%= (projectCloudCenters || []).length %> 个</span><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#projectCloudCentersModal">配置云中心</button></div>
+  <div class="card-body"><% if ((projectCloudCenters || []).length) { %><div class="d-flex flex-wrap gap-2"><% projectCloudCenters.forEach(center => { %><span class="badge text-bg-light border"><%= center.name %>（<%= center.code %>）</span><% }) %></div><% } else { %><span class="text-secondary">当前项目尚未纳入云中心。</span><% } %><div class="form-text mt-2">云中心是项目应答、证据材料和持续监督的适用范围。</div></div>
+</div>
+
+<div class="card mb-3">
   <div class="card-header"><h3 class="card-title">项目成员与项目角色</h3><span class="badge text-bg-secondary ms-auto me-2"><%= (members || []).length %> 人</span><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#projectMemberModal">添加或调整成员</button></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
     <thead><tr><th>用户</th><th>角色</th><th>状态</th><th class="text-end">操作</th></tr></thead>
@@ -102,3 +107,12 @@
     </form>
   </div></div></div>
 <% }) %>
+
+<% const selectedCloudCenters = new Set((projectCloudCenters || []).map(center => center.id)); %>
+<div class="modal fade" id="projectCloudCentersModal" tabindex="-1" aria-labelledby="projectCloudCentersModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/projects/<%= project.id %>/cloud-centers"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="projectCloudCentersModalLabel">配置项目云中心</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body"><label class="form-label" for="projectCloudCenterIds">纳入本项目的云中心</label><select class="form-select" id="projectCloudCenterIds" name="cloudCenterIds" multiple size="8"><% (cloudCenters || []).forEach(center => { %><option value="<%= center.id %>" <%= selectedCloudCenters.has(center.id) ? 'selected' : '' %>><%= center.name %>（<%= center.code %>）<%= center.center_type ? ' · ' + center.center_type : '' %></option><% }) %></select><div class="form-text">按住 Ctrl/⌘ 可选择多个。取消选择会移除该云中心与本项目的关联，不会删除云中心。</div><% if (!(cloudCenters || []).length) { %><div class="alert alert-warning mt-3 mb-0">暂无可用云中心，请先到“云中心管理”新增。</div><% } %></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存配置</button></div>
+  </form>
+</div></div></div>
