@@ -1,5 +1,4 @@
 <p class="text-secondary mb-3">规则筛选 → AI 判断 → 人工确认；AI 不会自动归并定义。</p>
-<% if (message) { %><div class="alert alert-info"><%= message %></div><% } %>
 <div class="card">
   <div class="card-header"><h3 class="card-title">待复核候选</h3></div>
   <div class="table-responsive">
@@ -25,6 +24,11 @@
     </table>
   </div>
 </div>
+<div class="modal fade" id="dedupeResultModal" tabindex="-1" aria-labelledby="dedupeResultModalTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="dedupeResultModalTitle">AI 分析结果</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  <div class="modal-body"><pre class="mb-0 text-wrap" id="dedupeResultModalBody"></pre></div>
+  <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button></div>
+</div></div></div>
 <script>
   const csrfToken = '<%= csrf %>';
   async function send(path, body) {
@@ -35,20 +39,28 @@
   }
   async function aiReview(button) {
     button.disabled = true;
-    try { const job = await send('/api/dedupe/ai-review', { leftId: button.dataset.left, rightId: button.dataset.right }); alert(JSON.stringify(job.result || job, null, 2)); }
-    catch (error) { alert(error.message); }
+    try {
+      const job = await send('/api/dedupe/ai-review', { leftId: button.dataset.left, rightId: button.dataset.right });
+      document.getElementById('dedupeResultModalBody').textContent = JSON.stringify(job.result || job, null, 2);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('dedupeResultModal')).show();
+    }
+    catch (error) { window.showAppNotice(error.message, 'AI 分析未完成'); }
     finally { button.disabled = false; }
   }
   async function humanReview(leftId, rightId, decision, canonicalId) {
+    const labels = { duplicate: '确认这两条定义重复并归并', similar_but_distinct: '标记为相似但不归并', unrelated: '标记为无关', uncertain: '标记为待进一步确认' };
+    if (!await window.confirmAppAction(`${labels[decision]}？`, '确认人工复核结论')) return;
     const body = { leftId, rightId, decision, canonicalId, confirmConflicts: false };
-    try { await send('/api/dedupe/reviews', body); window.location.reload(); }
+    try { await send('/api/dedupe/reviews', body); window.location.assign('/dedupe?notice=' + encodeURIComponent('人工复核结论已保存')); }
     catch (error) {
-      if (decision === 'duplicate' && error.message.includes('字段冲突') && window.confirm(`${error.message}。仍要归并并保留所选主定义吗？`)) {
-        try { body.confirmConflicts = true; await send('/api/dedupe/reviews', body); window.location.reload(); }
-        catch (retryError) { alert(retryError.message); }
+      if (decision === 'duplicate' && error.message.includes('字段冲突')) {
+        const confirmed = await window.confirmAppAction(`${error.message}。仍要归并并保留所选主定义吗？`, '归并字段冲突');
+        if (!confirmed) return;
+        try { body.confirmConflicts = true; await send('/api/dedupe/reviews', body); window.location.assign('/dedupe?notice=' + encodeURIComponent('定义已按确认归并')); }
+        catch (retryError) { window.showAppNotice(retryError.message, '归并失败'); }
         return;
       }
-      alert(error.message);
+      window.showAppNotice(error.message, '复核未完成');
     }
   }
 </script>

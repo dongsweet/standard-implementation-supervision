@@ -14,29 +14,22 @@ class ProjectService extends Service {
     return this.repository.listProjects(userId);
   }
 
-  async listPublishedVersions() {
-    return this.repository.listPublishedVersions();
-  }
-
   async listActiveUsers() {
     return this.repository.listActiveUsers();
   }
 
   async createProject(payload) {
-    const code = String(payload.code || '').trim();
     const name = String(payload.name || '').trim();
-    if (!code || !name) this.ctx.throw(400, '项目编号和项目名称不能为空');
+    if (!name) this.ctx.throw(400, '项目名称不能为空');
+    if (name.length > 200) this.ctx.throw(400, '项目名称不能超过 200 个字符');
     try {
       return await this.repository.createProject({
-        code,
         name,
         projectManagerId: payload.projectManagerId || null,
         sourceProjectId: payload.sourceProjectId || null,
-        isTemplate: payload.isTemplate === true || payload.isTemplate === 'true' || payload.isTemplate === 'on',
       });
     } catch (error) {
-      if (error.code === '23505') this.ctx.throw(409, '项目编号已存在');
-      if (error.code === 'INVALID_TEMPLATE') this.ctx.throw(409, error.message);
+      if (error.code === 'INVALID_SOURCE_PROJECT') this.ctx.throw(409, error.message);
       throw error;
     }
   }

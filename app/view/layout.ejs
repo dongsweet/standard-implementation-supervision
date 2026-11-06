@@ -32,7 +32,7 @@
               <label class="small text-secondary text-nowrap" for="currentProjectSelect">当前项目</label>
               <select id="currentProjectSelect" name="projectId" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="切换当前项目" style="max-width:260px">
                 <option value="">未选择</option>
-                <% (projects || []).forEach(project => { %><option value="<%= project.id %>" <%= currentProject && currentProject.id === project.id ? 'selected' : '' %>><%= project.code %> · <%= project.name %></option><% }) %>
+                <% (projects || []).forEach(project => { %><option value="<%= project.id %>" <%= currentProject && currentProject.id === project.id ? 'selected' : '' %>><%= project.name %></option><% }) %>
               </select>
             </form>
           </li>
@@ -102,7 +102,87 @@
       <div class="app-content"><div class="container-fluid"><%- bodyContent %></div></div>
     </main>
   </div>
+  <div class="modal fade" id="appNoticeModal" tabindex="-1" aria-labelledby="appNoticeModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title fs-5" id="appNoticeModalTitle">提示</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body" id="appNoticeModalMessage"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">知道了</button></div>
+    </div></div>
+  </div>
+  <div class="modal fade" id="appConfirmModal" tabindex="-1" aria-labelledby="appConfirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+      <div class="modal-header"><h2 class="modal-title fs-5" id="appConfirmModalTitle">请确认</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body" id="appConfirmModalMessage"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-danger" id="appConfirmModalSubmit">确认</button></div>
+    </div></div>
+  </div>
   <script src="/public/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/public/vendor/adminlte/js/adminlte.min.js"></script>
+  <script>
+    (() => {
+      const noticeElement = document.getElementById('appNoticeModal');
+      const noticeModal = bootstrap.Modal.getOrCreateInstance(noticeElement);
+      const confirmElement = document.getElementById('appConfirmModal');
+      const confirmModal = bootstrap.Modal.getOrCreateInstance(confirmElement);
+      const confirmButton = document.getElementById('appConfirmModalSubmit');
+
+      window.showAppNotice = (message, title = '提示') => {
+        document.getElementById('appNoticeModalTitle').textContent = title;
+        document.getElementById('appNoticeModalMessage').textContent = String(message || '');
+        noticeModal.show();
+      };
+
+      window.confirmAppAction = (message, title = '请确认') => new Promise(resolve => {
+        document.getElementById('appConfirmModalTitle').textContent = title;
+        document.getElementById('appConfirmModalMessage').textContent = String(message || '');
+        let settled = false;
+        const finish = value => {
+          if (settled) return;
+          settled = true;
+          confirmButton.removeEventListener('click', onConfirm);
+          confirmElement.removeEventListener('hidden.bs.modal', onCancel);
+          resolve(value);
+        };
+        const onConfirm = () => {
+          finish(true);
+          confirmModal.hide();
+        };
+        const onCancel = () => finish(false);
+        confirmButton.addEventListener('click', onConfirm);
+        confirmElement.addEventListener('hidden.bs.modal', onCancel, { once: true });
+        confirmModal.show();
+      });
+
+      document.addEventListener('submit', event => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.dataset.confirm || form.dataset.confirmed === 'true') return;
+        event.preventDefault();
+        const submitter = event.submitter;
+        const activeModal = document.querySelector('.modal.show');
+        const askAndSubmit = () => window.confirmAppAction(form.dataset.confirm, form.dataset.confirmTitle || '请确认').then(confirmed => {
+          if (!confirmed) {
+            if (activeModal) bootstrap.Modal.getOrCreateInstance(activeModal).show();
+            return;
+          }
+          form.dataset.confirmed = 'true';
+          if (submitter) form.requestSubmit(submitter);
+          else form.requestSubmit();
+        });
+        if (activeModal) {
+          activeModal.addEventListener('hidden.bs.modal', askAndSubmit, { once: true });
+          bootstrap.Modal.getOrCreateInstance(activeModal).hide();
+        } else askAndSubmit();
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      const notice = params.get('notice');
+      if (notice) {
+        window.showAppNotice(notice);
+        params.delete('notice');
+        const query = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -27,7 +27,7 @@ module.exports = () => {
     ctx.state.user = result.rows[0];
     ctx.state.roles = result.rows[0].roles || [];
     const projects = await ctx.app.db.query(`
-      SELECT DISTINCT p.id, p.code, p.name, p.status, p.is_template, p.source_project_id
+      SELECT DISTINCT p.id, p.name, p.status, p.source_project_id
       FROM projects p
       WHERE EXISTS (
         SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
@@ -38,7 +38,7 @@ module.exports = () => {
         WHERE ur.user_id = $1 AND ur.project_id = p.id
           AND r.code IN ('project_admin', 'operator')
       ) OR p.project_manager_id = $1
-      ORDER BY p.name, p.code`, [ userId ]);
+      ORDER BY p.name`, [ userId ]);
     ctx.state.projects = projects.rows;
     const sessionProject = projects.rows.find(project => project.id === ctx.session.currentProjectId);
     const rememberedProject = projects.rows.find(project => project.id === result.rows[0].last_project_id);

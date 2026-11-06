@@ -7,11 +7,12 @@ class ProjectRepository {
 
   async listProjects(userId) {
     const result = await this.pool.query(`
-      SELECT p.id, p.code, p.name, p.status, p.is_template, p.source_project_id, p.project_manager_id, u.display_name AS project_manager_name,
+      SELECT p.id, p.name, p.status, p.source_project_id, sp.name AS source_project_name, p.project_manager_id, u.display_name AS project_manager_name,
              count(DISTINCT psv.standard_version_id)::integer AS standard_version_count,
              count(DISTINCT pcc.cloud_center_id)::integer AS cloud_center_count
       FROM projects p
       LEFT JOIN users u ON u.id = p.project_manager_id
+      LEFT JOIN projects sp ON sp.id = p.source_project_id
       LEFT JOIN project_standard_versions psv ON psv.project_id = p.id
       LEFT JOIN project_cloud_centers pcc ON pcc.project_id = p.id
       WHERE EXISTS (
@@ -23,20 +24,8 @@ class ProjectRepository {
         WHERE ur.user_id = $1 AND ur.project_id = p.id
           AND r.code IN ('project_admin', 'operator')
       ) OR p.project_manager_id = $1
-      GROUP BY p.id, u.display_name
-      ORDER BY p.is_template DESC, p.created_at DESC`, [ userId ]);
-    return result.rows;
-  }
-
-  async listPublishedVersions() {
-    const result = await this.pool.query(`
-      SELECT sv.id, sv.version, sv.standard_id, s.code AS standard_code, s.name AS standard_name,
-             count(si.id)::integer AS item_count
-      FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
-      LEFT JOIN standard_items si ON si.standard_version_id = sv.id
-      WHERE sv.status = 'published'
-      GROUP BY sv.id, s.id
-      ORDER BY s.code, sv.created_at DESC`);
+      GROUP BY p.id, u.display_name, sp.name
+      ORDER BY p.created_at DESC`, [ userId ]);
     return result.rows;
   }
 
@@ -47,24 +36,24 @@ class ProjectRepository {
     return result.rows;
   }
 
-  async createProject({ code, name, projectManagerId, sourceProjectId, isTemplate }) {
+  async createProject({ name, projectManagerId, sourceProjectId }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       let source = null;
       if (sourceProjectId) {
-        const sourceResult = await client.query(`SELECT * FROM projects WHERE id = $1 AND is_template = true`, [ sourceProjectId ]);
+        const sourceResult = await client.query('SELECT * FROM projects WHERE id = $1', [ sourceProjectId ]);
         if (!sourceResult.rowCount) {
-          const error = new Error('只能从已标记为模板的项目派生');
-          error.code = 'INVALID_TEMPLATE';
+          const error = new Error('所选来源项目不存在');
+          error.code = 'INVALID_SOURCE_PROJECT';
           throw error;
         }
         source = sourceResult.rows[0];
       }
       const created = await client.query(`
-        INSERT INTO projects (code, name, project_manager_id, is_template, source_project_id)
-        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [ code, name, projectManagerId || null, isTemplate === true, sourceProjectId || null ]);
+        INSERT INTO projects (code, name, project_manager_id, source_project_id)
+        VALUES ('PRJ-' || upper(replace(gen_random_uuid()::text, '-', '')), $1, $2, $3) RETURNING *`,
+      [ name, projectManagerId || null, sourceProjectId || null ]);
       const project = created.rows[0];
       if (source) await this.cloneProjectContents(client, source.id, project.id);
       if (projectManagerId) {
@@ -145,8 +134,10 @@ class ProjectRepository {
 
   async getProjectDetail(projectId) {
     const projectResult = await this.pool.query(`
-      SELECT p.*, u.display_name AS project_manager_name FROM projects p
-      LEFT JOIN users u ON u.id = p.project_manager_id WHERE p.id = $1`, [ projectId ]);
+      SELECT p.*, source_project.name AS source_project_name, u.display_name AS project_manager_name FROM projects p
+      LEFT JOIN users u ON u.id = p.project_manager_id
+      LEFT JOIN projects source_project ON source_project.id = p.source_project_id
+      WHERE p.id = $1`, [ projectId ]);
     if (!projectResult.rowCount) return null;
     const versions = await this.pool.query(`
       SELECT psv.snapshot_at, sv.id, sv.version, s.code AS standard_code, s.name AS standard_name,
@@ -178,7 +169,7 @@ class ProjectRepository {
     const result = await this.pool.query(`
       UPDATE projects SET name = $2, updated_at = now()
       WHERE id = $1
-      RETURNING id, code, name, status, is_template, source_project_id, project_manager_id, updated_at`,
+      RETURNING id, name, status, source_project_id, project_manager_id, updated_at`,
     [ projectId, name ]);
     return result.rows[0] || null;
   }

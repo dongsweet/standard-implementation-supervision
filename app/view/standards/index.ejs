@@ -1,37 +1,14 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <p class="text-secondary mb-0">维护规范主数据和版本。版本发布后，项目可以固定该版本快照。</p>
-  <button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#newStandardForm">新建规范</button>
+  <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newStandardModal">新建规范</button>
 </div>
 
-<div class="collapse mb-4" id="newStandardForm">
-  <div class="card card-primary card-outline">
-    <div class="card-header"><h3 class="card-title">新建规范及初始版本</h3></div>
-    <form method="post" action="/standards">
-      <input type="hidden" name="_csrf" value="<%= csrf %>">
-      <div class="card-body row g-3">
-        <div class="col-md-3"><label class="form-label">规范编号</label><input class="form-control" name="code" placeholder="例如：MCS-001" required></div>
-        <div class="col-md-5"><label class="form-label">规范名称</label><input class="form-control" name="name" required></div>
-        <div class="col-md-4"><label class="form-label">初始版本号</label><input class="form-control" name="version" placeholder="例如：V1.0" required></div>
-        <div class="col-12"><label class="form-label">规范说明</label><textarea class="form-control" name="description" rows="2"></textarea></div>
-      </div>
-      <div class="card-footer"><button class="btn btn-primary" type="submit">保存规范</button></div>
-    </form>
-  </div>
-</div>
-
-<% if (!standards.length) { %>
-  <div class="card"><div class="card-body text-center text-secondary py-5">暂无规范。请先新建规范及初始版本。</div></div>
-<% } %>
+<% if (!standards.length) { %><div class="card"><div class="card-body text-center text-secondary py-5">暂无规范。请先新建规范及初始版本。</div></div><% } %>
 <% standards.forEach(standard => { %>
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center">
       <div><h3 class="card-title mb-1"><%= standard.code %> · <%= standard.name %></h3><div class="small text-secondary"><%= standard.description || '未填写规范说明' %></div></div>
-      <button class="btn btn-sm btn-outline-primary ms-auto" data-bs-toggle="collapse" data-bs-target="#newVersion-<%= standard.id %>">新增版本</button>
-    </div>
-    <div class="collapse border-bottom" id="newVersion-<%= standard.id %>">
-      <form method="post" action="/standards/<%= standard.id %>/versions" class="p-3 d-flex gap-2">
-        <input type="hidden" name="_csrf" value="<%= csrf %>"><input class="form-control" name="version" placeholder="版本号，例如 V1.1" required><button class="btn btn-primary" type="submit">创建草稿版本</button>
-      </form>
+      <button class="btn btn-sm btn-outline-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#newVersionModal-<%= standard.id %>">新增版本</button>
     </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0"><thead><tr><th>版本</th><th>状态</th><th>章节数</th><th>标准项数</th><th>发布时间</th><th>操作</th></tr></thead><tbody>
@@ -41,4 +18,24 @@
       </tbody></table>
     </div>
   </div>
+  <div class="modal fade" id="newVersionModal-<%= standard.id %>" tabindex="-1" aria-labelledby="newVersionModalLabel-<%= standard.id %>" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form method="post" action="/standards/<%= standard.id %>/versions"><input type="hidden" name="_csrf" value="<%= csrf %>">
+      <div class="modal-header"><h2 class="modal-title fs-5" id="newVersionModalLabel-<%= standard.id %>">新增规范版本</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+      <div class="modal-body"><p><strong><%= standard.code %> · <%= standard.name %></strong></p><label class="form-label" for="newVersionNumber-<%= standard.id %>">版本号</label><input class="form-control" id="newVersionNumber-<%= standard.id %>" name="version" placeholder="例如 V1.1" required></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">创建草稿版本</button></div>
+    </form>
+  </div></div></div>
 <% }) %>
+
+<div class="modal fade" id="newStandardModal" tabindex="-1" aria-labelledby="newStandardModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/standards"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="newStandardModalLabel">新建规范及初始版本</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-md-3"><label class="form-label" for="standardCode">规范编号</label><input class="form-control" id="standardCode" name="code" placeholder="例如：MCS-001" required></div>
+      <div class="col-md-5"><label class="form-label" for="standardName">规范名称</label><input class="form-control" id="standardName" name="name" required></div>
+      <div class="col-md-4"><label class="form-label" for="standardVersion">初始版本号</label><input class="form-control" id="standardVersion" name="version" placeholder="例如：V1.0" required></div>
+      <div class="col-12"><label class="form-label" for="standardDescription">规范说明</label><textarea class="form-control" id="standardDescription" name="description" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存规范</button></div>
+  </form>
+</div></div></div>
