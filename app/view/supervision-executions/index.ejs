@@ -1,0 +1,59 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <p class="text-secondary mb-0">当前项目：<strong><%= project.name %></strong>。一次检查执行可覆盖多个标准项，并分别保存检查结论。</p>
+  <% if (user && (user.roles || []).some(role => role.projectId === project.id || !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#createExecutionModal">新建检查记录</button><% } %>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">检查记录</h3><span class="badge text-bg-secondary ms-auto"><%= executions.length %> 条</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>检查时间</th><th>监督定义</th><th>云中心</th><th>总体结论</th><th>标准项结果</th><th>检查人</th><th>备注</th></tr></thead>
+    <tbody>
+      <% executions.forEach(execution => { %>
+        <tr><td><%= new Date(execution.checked_at).toLocaleString('zh-CN') %></td><td><strong><%= execution.object_name %></strong><div class="small text-secondary"><%= execution.check_method %></div></td><td><%= execution.cloud_center_name || '项目级' %></td><td><span class="badge <%= execution.overall_result === 'satisfied' ? 'text-bg-success' : execution.overall_result === 'not_satisfied' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= execution.overall_result === 'satisfied' ? '满足' : execution.overall_result === 'partially_satisfied' ? '部分满足' : execution.overall_result === 'not_satisfied' ? '不满足' : '未填写' %></span></td><td><%= execution.satisfied_count %> / <%= execution.item_result_count %> 项满足</td><td><%= execution.checked_by_name || '-' %></td><td><%= execution.notes || '-' %></td></tr>
+      <% }) %>
+      <% if (!executions.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">暂无检查记录，请先新建一次检查执行。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<div class="modal fade" id="createExecutionModal" tabindex="-1" aria-labelledby="createExecutionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form id="createExecutionForm" method="post" action="/projects/<%= project.id %>/supervision-executions"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="itemResults" id="itemResults">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="createExecutionModalLabel">新建检查记录</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="executionDefinition">监督定义</label><select class="form-select" id="executionDefinition" name="definitionId" required><option value="">请选择监督定义</option><% definitions.forEach(definition => { %><option value="<%= definition.id %>"><%= definition.object_name %> · <%= definition.check_method %>（<%= (definition.standard_items || []).length %> 项）</option><% }) %></select></div>
+        <div class="col-md-3"><label class="form-label" for="executionCloudCenter">云中心</label><select class="form-select" id="executionCloudCenter" name="cloudCenterId"><option value="">项目级</option><% cloudCenters.forEach(center => { %><option value="<%= center.id %>"><%= center.name %></option><% }) %></select></div>
+        <div class="col-md-3"><label class="form-label" for="executionCheckedAt">检查时间</label><input class="form-control" id="executionCheckedAt" type="datetime-local" name="checkedAt" required></div>
+        <div class="col-md-4"><label class="form-label" for="executionOverallResult">总体结论</label><select class="form-select" id="executionOverallResult" name="overallResult"><option value="">未填写</option><option value="satisfied">满足</option><option value="partially_satisfied">部分满足</option><option value="not_satisfied">不满足</option></select></div>
+        <div class="col-md-8"><label class="form-label" for="executionNotes">总体备注</label><input class="form-control" id="executionNotes" name="notes" maxlength="2000"></div>
+      </div>
+      <hr>
+      <div id="executionItems"><div class="text-secondary py-3">选择监督定义后，这里会显示关联的标准项结果。</div></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存检查记录</button></div>
+  </form>
+</div></div></div>
+<script>
+  const executionDefinitions = <%- JSON.stringify(definitions) %>;
+  const executionItems = document.getElementById('executionItems');
+  document.getElementById('executionDefinition').addEventListener('change', event => {
+    const definition = executionDefinitions.find(item => item.id === event.target.value);
+    if (!definition) {
+      executionItems.innerHTML = '<div class="text-secondary py-3">选择监督定义后，这里会显示关联的标准项结果。</div>';
+      return;
+    }
+    executionItems.innerHTML = (definition.standard_items || []).map(item => '<div class="border rounded p-3 mb-2"><div class="fw-semibold mb-2">' + item.code + ' · ' + (item.title || '') + '</div><div class="row g-2"><div class="col-md-3"><label class="form-label small">结果</label><select class="form-select form-select-sm execution-item-result" data-id="' + item.id + '"><option value="unassessed">未评估</option><option value="satisfied">满足</option><option value="partially_satisfied">部分满足</option><option value="not_satisfied">不满足</option><option value="not_applicable">不适用</option></select></div><div class="col-md-9"><label class="form-label small">说明</label><textarea class="form-control form-control-sm execution-item-description" data-id="' + item.id + '" rows="2"></textarea></div></div><div class="mt-2"><label class="form-label small">问题与整改</label><textarea class="form-control form-control-sm execution-item-problem" data-id="' + item.id + '" rows="2"></textarea></div></div>').join('');
+  });
+  document.getElementById('createExecutionForm').addEventListener('submit', () => {
+    const result = {};
+    document.querySelectorAll('.execution-item-result').forEach(select => {
+      const id = select.dataset.id;
+      result[id] = {
+        result: select.value,
+        description: document.querySelector('.execution-item-description[data-id="' + id + '"]').value,
+        problemDescription: document.querySelector('.execution-item-problem[data-id="' + id + '"]').value,
+      };
+    });
+    document.getElementById('itemResults').value = JSON.stringify(result);
+  });
+</script>

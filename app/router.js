@@ -15,6 +15,8 @@ module.exports = app => {
   router.get('/supervision-definitions', controller.supervisionDefinition.index);
   router.post('/supervision-definitions', controller.supervisionDefinition.create);
   router.post('/supervision-definitions/:definitionId', controller.supervisionDefinition.update);
+  router.get('/supervision-executions', controller.supervisionExecution.index);
+  router.post('/projects/:projectId/supervision-executions', controller.supervisionExecution.create);
   router.get('/project-overview', controller.project.overview);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);
