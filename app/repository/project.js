@@ -154,12 +154,12 @@ class ProjectRepository {
       ORDER BY s.code, sv.version`, [ projectId ]);
     const items = await this.pool.query(`
       SELECT psi.standard_item_id, psi.item_code_snapshot, psi.content_snapshot, psi.chapter_code_snapshot,
-             si.title, si.level, si.is_key,
-             COALESCE(si.metadata ->> 'clauseAssignment', si.metadata ->> 'providerAssignment', '') AS clause_assignment,
-             COALESCE((SELECT string_agg(sir.unified_requirement, '；' ORDER BY sir.sort_order, sir.id)
-               FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '') AS unified_requirement,
-             COALESCE((SELECT string_agg(sir.expected_evidence, '；' ORDER BY sir.sort_order, sir.id)
-               FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '') AS expected_evidence,
+             si.title,
+             COALESCE(psa.standard_level, '') AS standard_level,
+             COALESCE(psa.is_key, false) AS is_key,
+             COALESCE(psa.clause_assignment, '') AS clause_assignment,
+             COALESCE(psa.unified_requirement, '') AS unified_requirement,
+             COALESCE(psa.expected_evidence, '') AS expected_evidence,
              COALESCE(psa.applicability, 'unspecified') AS applicability,
              COALESCE(psa.applicability_scope, '') AS applicability_scope,
              COALESCE(psa.status, 'unassessed') AS answer_status,
@@ -403,20 +403,26 @@ class ProjectRepository {
     }
   }
 
-  async saveAnswer({ projectId, standardItemId, applicability, applicabilityScope, status, actualEvidence, measureDescription, problemDescription, ownerUserId }) {
+  async saveAnswer({ projectId, standardItemId, standardLevel, isKey, clauseAssignment, unifiedRequirement, expectedEvidence, applicability, applicabilityScope, status, actualEvidence, measureDescription, problemDescription, ownerUserId }) {
     const result = await this.pool.query(`
       INSERT INTO project_standard_answers
-        (project_id, standard_item_id, applicability, applicability_scope, status, actual_evidence,
+        (project_id, standard_item_id, standard_level, is_key, clause_assignment, unified_requirement,
+         expected_evidence, applicability, applicability_scope, status, actual_evidence,
          measure_description, problem_description, owner_user_id, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
       ON CONFLICT (project_id, standard_item_id) WHERE cloud_center_id IS NULL DO UPDATE SET
+        standard_level = EXCLUDED.standard_level, is_key = EXCLUDED.is_key,
+        clause_assignment = EXCLUDED.clause_assignment, unified_requirement = EXCLUDED.unified_requirement,
+        expected_evidence = EXCLUDED.expected_evidence,
         applicability = EXCLUDED.applicability, applicability_scope = EXCLUDED.applicability_scope,
         status = EXCLUDED.status, actual_evidence = EXCLUDED.actual_evidence,
         measure_description = EXCLUDED.measure_description,
         problem_description = EXCLUDED.problem_description, owner_user_id = EXCLUDED.owner_user_id,
         updated_at = now()
       RETURNING *`, [
-      projectId, standardItemId, applicability, applicabilityScope || null, status, actualEvidence || null,
+      projectId, standardItemId, standardLevel || null, isKey === true,
+      clauseAssignment || null, unifiedRequirement || null, expectedEvidence || null,
+      applicability, applicabilityScope || null, status, actualEvidence || null,
       measureDescription || null, problemDescription || null, ownerUserId || null,
     ]);
     return result.rows[0];

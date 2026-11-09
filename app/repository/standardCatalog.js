@@ -123,17 +123,12 @@ class StandardCatalogRepository {
       const items = chapters.flatMap(chapter => chapter.items.map(item => ({
         ...item, chapterId: chapterIds.get(chapter.code),
       })));
-      const insertedItems = await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'level', 'is_key', 'metadata' ],
+      await insertMany(client, 'standard_items',
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content' ],
         items.map(item => [
           standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
-          item.level || null, item.isKey === true, JSON.stringify(item.clauseAssignment ? { clauseAssignment: item.clauseAssignment } : {}),
         ]),
         { returning: 'id, item_code' });
-      const itemIds = new Map(insertedItems.map(item => [ item.item_code, item.id ]));
-      const requirementRows = items.filter(item => item.unifiedRequirement || item.expectedEvidence)
-        .map(item => [ itemIds.get(item.itemCode), item.unifiedRequirement || '', item.expectedEvidence || null ]);
-      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'expected_evidence' ], requirementRows);
       await client.query('COMMIT');
       return {
         standardId: standard.id,
@@ -193,30 +188,16 @@ class StandardCatalogRepository {
           databaseItemCode: existing ? existing.item_code : item.itemCode,
         };
       }));
-      const savedItems = await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'level', 'is_key', 'metadata' ],
+      await insertMany(client, 'standard_items',
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content' ],
         items.map(item => [
           versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
-          item.level || null, item.isKey === true,
-          JSON.stringify(item.clauseAssignment ? { clauseAssignment: item.clauseAssignment } : {}),
         ]),
         {
           onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
-            level = EXCLUDED.level, is_key = EXCLUDED.is_key, metadata = EXCLUDED.metadata`,
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content`,
           returning: 'id, item_code',
         });
-      const itemIds = new Map(savedItems.map(item => [ normalizeCode(item.item_code), item.id ]));
-      const importedItemIds = items.map(item => itemIds.get(normalizeCode(item.databaseItemCode)));
-      await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = ANY($1::uuid[])', [ importedItemIds ]);
-      const requirementRows = items
-        .filter(item => item.unifiedRequirement || item.expectedEvidence)
-        .map(item => [
-          itemIds.get(normalizeCode(item.databaseItemCode)),
-          item.unifiedRequirement || '',
-          item.expectedEvidence || null,
-        ]);
-      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'expected_evidence' ], requirementRows);
       await client.query('COMMIT');
       return { chapterCount: chapters.length, itemCount: items.length };
     } catch (error) {
@@ -276,9 +257,7 @@ class StandardCatalogRepository {
              count(si.id)::integer AS item_count,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'itemCode', si.item_code, 'title', si.title,
-               'content', si.content, 'level', si.level, 'isKey', si.is_key,
-               'metadata', si.metadata,
-               'requirements', COALESCE((SELECT json_agg(json_build_object('requirement', sir.unified_requirement, 'evidence', sir.expected_evidence) ORDER BY sir.sort_order, sir.id) FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '[]'::json)
+               'content', si.content
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
       LEFT JOIN standard_items si ON si.chapter_id = sc.id
@@ -305,19 +284,15 @@ class StandardCatalogRepository {
     return result.rows[0] || null;
   }
 
-  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata, unifiedRequirement, expectedEvidence }) {
+  async createItem({ versionId, chapterId, itemCode, title, content }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const result = await client.query(`
       INSERT INTO standard_items
-        (standard_version_id, chapter_id, item_code, title, content, level, is_key, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-      RETURNING *`, [ versionId, chapterId, itemCode, title || null, content, level || null, isKey === true, JSON.stringify(metadata || {}) ]);
-      const itemId = result.rows[0].id;
-      if (unifiedRequirement || expectedEvidence) {
-        await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, expected_evidence) VALUES ($1, $2, $3)', [ itemId, unifiedRequirement || '', expectedEvidence || null ]);
-      }
+        (standard_version_id, chapter_id, item_code, title, content)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`, [ versionId, chapterId, itemCode, title || null, content ]);
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {
@@ -336,18 +311,11 @@ class StandardCatalogRepository {
       for (const row of rows) {
         await client.query(`
           INSERT INTO standard_items
-            (standard_version_id, chapter_id, item_code, title, content, level, is_key, metadata)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+            (standard_version_id, chapter_id, item_code, title, content)
+          VALUES ($1, $2, $3, $4, $5)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
-            level = EXCLUDED.level, is_key = EXCLUDED.is_key, metadata = EXCLUDED.metadata`,
-        [ versionId, chapterId, row.itemCode, row.title || null, row.content, row.level || null, row.isKey === true, JSON.stringify(row.metadata || {}) ]);
-        const itemResult = await client.query('SELECT id FROM standard_items WHERE standard_version_id = $1 AND item_code = $2', [ versionId, row.itemCode ]);
-        const itemId = itemResult.rows[0].id;
-        if (row.unifiedRequirement || row.expectedEvidence) {
-          await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = $1', [ itemId ]);
-          await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, expected_evidence) VALUES ($1, $2, $3)', [ itemId, row.unifiedRequirement || '', row.expectedEvidence || null ]);
-        }
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content`,
+        [ versionId, chapterId, row.itemCode, row.title || null, row.content ]);
         count += 1;
       }
       await client.query('COMMIT');

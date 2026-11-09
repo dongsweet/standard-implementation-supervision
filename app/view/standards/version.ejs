@@ -5,7 +5,7 @@
 <div class="alert alert-info py-2"><strong>维护说明：</strong>基本信息已创建后，可通过“仅导入内容”上传整份 Excel/TSV，一次导入章节和标准项。也可单独新增章节或按章节批量导入。</div>
 
 <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
-  <a class="btn btn-outline-secondary" href="/public/standard-import-template.xlsx?v=2" download>下载Excel模板</a>
+  <a class="btn btn-outline-secondary" href="/public/standard-import-template.xlsx?v=3" download>下载标准原文模板</a>
   <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#importVersionContentModal">仅导入内容</button>
   <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button>
 </div>
@@ -19,9 +19,9 @@
       <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#importModal-<%= chapter.id %>">批量导入</button>
     </div>
     <div class="table-responsive"><table class="table table-sm table-striped align-middle mb-0">
-      <thead><tr><th>标准项编号</th><th>标准内容</th><th>级别/重点项</th><th>条款占位符赋值</th><th>统一要求</th><th>应提供证据</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { %><tr><td><strong><%= item.itemCode %></strong><div class="small text-secondary"><%= item.title || '' %></div></td><td><%= item.content %></td><td><%= item.level || '-' %> / <%= item.isKey ? '重点项' : '普通项' %></td><td><%= item.metadata && (item.metadata.clauseAssignment || item.metadata.providerAssignment) || '-' %></td><td><%= (item.requirements || []).map(row => row.requirement).filter(Boolean).join('；') || '-' %></td><td><%= (item.requirements || []).map(row => row.evidence).filter(Boolean).join('；') || '-' %></td></tr><% }) %>
-        <% if (!chapter.items.length) { %><tr><td colspan="6" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
+      <thead><tr><th>标准项编号</th><th>标准项标题</th><th>标准内容</th></tr></thead><tbody>
+        <% (chapter.items || []).forEach(item => { %><tr><td><strong><%= item.itemCode %></strong></td><td><%= item.title || '-' %></td><td><%= item.content %></td></tr><% }) %>
+        <% if (!chapter.items.length) { %><tr><td colspan="3" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>
 
@@ -30,13 +30,8 @@
       <div class="modal-header"><h2 class="modal-title fs-5" id="itemModalLabel-<%= chapter.id %>">新增标准项 · <%= chapter.code %></h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
       <div class="modal-body row g-3">
         <div class="col-md-3"><label class="form-label">标准项编号</label><input class="form-control" name="itemCode" required></div>
-        <div class="col-md-5"><label class="form-label">标准项标题</label><input class="form-control" name="title"></div>
-        <div class="col-md-4"><label class="form-label">级别</label><input class="form-control" name="level"></div>
-        <div class="col-12"><label class="form-label">标准内容</label><textarea class="form-control" name="content" rows="3" required></textarea></div>
-        <div class="col-md-4"><label class="form-label">条款占位符赋值</label><input class="form-control" name="clauseAssignment" placeholder="例如：火灾"><div class="form-text">替换条款正文中的占位符，不是项目适用范围。</div></div>
-        <div class="col-md-4"><label class="form-label">统一要求</label><textarea class="form-control" name="unifiedRequirement" rows="2"></textarea></div>
-        <div class="col-md-4"><label class="form-label">应提供的证据类型</label><textarea class="form-control" name="expectedEvidence" rows="2"></textarea></div>
-        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="isKey-<%= chapter.id %>" name="isKey" value="true"><label class="form-check-label" for="isKey-<%= chapter.id %>">重点项</label></div></div>
+        <div class="col-md-9"><label class="form-label">标准项标题</label><input class="form-control" name="title"></div>
+        <div class="col-12"><label class="form-label">标准内容</label><textarea class="form-control" name="content" rows="4" required></textarea></div>
       </div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存标准项</button></div>
     </form>
@@ -45,7 +40,7 @@
   <div class="modal fade" id="importModal-<%= chapter.id %>" tabindex="-1" aria-labelledby="importModalLabel-<%= chapter.id %>" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered"><div class="modal-content">
     <form method="post" action="/standards/chapters/<%= chapter.id %>/import" data-confirm="确认导入本批标准项？请先核对每行的字段顺序和标准项编号。" data-confirm-title="批量导入标准项"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="/standards/versions/<%= version.id %>">
       <div class="modal-header"><h2 class="modal-title fs-5" id="importModalLabel-<%= chapter.id %>">批量导入 · <%= chapter.code %></h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
-      <div class="modal-body"><label class="form-label" for="importText-<%= chapter.id %>">每行一项，字段顺序：编号[TAB]标题[TAB]标准内容[TAB]级别[TAB]重点项[TAB]条款占位符赋值[TAB]统一要求[TAB]应提供证据</label><textarea class="form-control font-monospace" id="importText-<%= chapter.id %>" name="text" rows="8" placeholder="3.1.1	账号管理	应建立账号管理制度	基础	是	火灾	应纳入统一账号管理	制度文件、配置截图" required></textarea></div>
+      <div class="modal-body"><label class="form-label" for="importText-<%= chapter.id %>">每行一项，字段顺序：编号[TAB]标题[TAB]标准内容</label><textarea class="form-control font-monospace" id="importText-<%= chapter.id %>" name="text" rows="8" placeholder="3.1.1	账号管理	应建立账号管理制度" required></textarea></div>
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-outline-primary" type="submit">导入并更新</button></div>
     </form>
   </div></div></div>
@@ -56,7 +51,7 @@
     <div class="modal-header"><h2 class="modal-title fs-5" id="importVersionContentModalLabel">仅导入规范内容</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-12"><div class="alert alert-info py-2 mb-0">当前规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>，版本：<strong><%= version.version %></strong>。此操作只导入章节和标准项，不修改规范编号、名称、类型、组织或版本标识。</div></div>
-      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=2" download>Excel模板</a>；也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=2" download>TSV格式</a>。</div></div>
+      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=3" download>Excel模板</a>；也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=3" download>TSV格式</a>。应用口径和项目证据在项目页填写。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入内容</button></div>
   </form>

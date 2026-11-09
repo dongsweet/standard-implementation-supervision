@@ -13,12 +13,7 @@ const FIELD_ALIASES = {
   sectionName: [ '标准名称' ],
   itemCode: [ '标准项编号', '标准编号' ],
   itemTitle: [ '标准项标题' ],
-  level: [ '级别', '层级' ],
   content: [ '标准内容', '标准项内容' ],
-  isKey: [ '是否为重点项', '是否重点项', '是否关键项' ],
-  clauseAssignment: [ '条款占位符赋值', '云服务商赋值' ],
-  unifiedRequirement: [ '多云统管体系具体要求', '多云统管要求', '统管要求' ],
-  expectedEvidence: [ '统一规范实施证据列表', '实施证据列表' ],
 };
 const SECOND_HEADER_MARKERS = new Set([
   '多云统管体系具体要求', '统一规范实施证据列表', '满足情况',
@@ -104,11 +99,6 @@ function splitChapter(value) {
   return { code: text, name: text };
 }
 
-function isKeyValue(value) {
-  return [ '1', 'true', 'yes', 'y', '是', '是关键项', '重点', '关键' ]
-    .includes(cellText(value).normalize('NFKC').toLowerCase());
-}
-
 function parseStandardRows(sheets) {
   const chapters = [];
   const chaptersByCode = new Map();
@@ -141,7 +131,6 @@ function parseStandardRows(sheets) {
       itemCodes.add(normalizedItemCode);
       if (itemCode.length > 100) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项编号不能超过100个字符');
       if (value('itemTitle').length > 500) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项标题不能超过500个字符');
-      if (value('level').length > 100) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的级别不能超过100个字符');
       itemCount += 1;
       if (itemCount > MAX_ITEMS) throw importError('一次最多导入' + MAX_ITEMS + '个标准项');
 
@@ -174,11 +163,6 @@ function parseStandardRows(sheets) {
         itemCode,
         title: value('itemTitle') || null,
         content,
-        level: value('level') || null,
-        isKey: isKeyValue(value('isKey')),
-        clauseAssignment: value('clauseAssignment') || null,
-        unifiedRequirement: value('unifiedRequirement') || null,
-        expectedEvidence: value('expectedEvidence') || null,
       });
     }
   }

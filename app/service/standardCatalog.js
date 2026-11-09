@@ -143,15 +143,8 @@ class StandardCatalogService extends Service {
         versionId: chapter.standard_version_id,
         chapterId,
         itemCode: required(payload.itemCode, '标准项编号'),
-        title: payload.title,
+        title: String(payload.title || '').trim() || null,
         content: required(payload.content, '标准内容'),
-        level: String(payload.level || '').trim() || null,
-        isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
-        metadata: String(payload.clauseAssignment || '').trim()
-          ? { clauseAssignment: String(payload.clauseAssignment).trim() }
-          : {},
-        unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
-        expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       });
     } catch (error) {
       if (error.code === '23505') this.ctx.throw(409, '该版本下标准项编号已存在');
@@ -165,15 +158,9 @@ class StandardCatalogService extends Service {
     const rows = lines.map((line, index) => {
       const parts = this.splitDelimitedLine(line);
       if (index === 0 && /标准项编号|item.?code/i.test(parts[0])) return null;
-      const [ itemCode, title, content, level, isKey, clauseAssignment, unifiedRequirement, expectedEvidence ] = parts.map(item => String(item || '').trim());
+      const [ itemCode, title, content ] = parts.map(item => String(item || '').trim());
       if (!itemCode || !content) this.ctx.throw(400, `第${index + 1}行缺少标准项编号或标准内容`);
-      return {
-        itemCode, title, content, level,
-        isKey: [ '1', 'true', '是', '是关键项' ].includes(isKey.toLowerCase()),
-        metadata: clauseAssignment ? { clauseAssignment } : {},
-        unifiedRequirement: unifiedRequirement || null,
-        expectedEvidence: expectedEvidence || null,
-      };
+      return { itemCode, title, content };
     }).filter(Boolean);
     if (!rows.length) this.ctx.throw(400, '没有可导入的标准项');
     return rows;

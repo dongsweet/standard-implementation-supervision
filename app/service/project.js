@@ -134,6 +134,11 @@ class ProjectService extends Service {
     return this.repository.saveAnswer({
       projectId,
       standardItemId,
+      standardLevel: String(payload.standardLevel || '').trim() || null,
+      isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
+      clauseAssignment: String(payload.clauseAssignment || '').trim() || null,
+      unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
+      expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       applicability,
       applicabilityScope: String(payload.applicabilityScope || '').trim() || null,
       status,
