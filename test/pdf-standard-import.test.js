@@ -2,12 +2,25 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildStandardTree, mapWithConcurrency } = require('../app/lib/pdfStandardExtract');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { buildStandardTree, listPdfImages, mapWithConcurrency } = require('../app/lib/pdfStandardExtract');
 const StandardImportJobRepository = require('../app/repository/standardImportJob');
 
 function line(text, top, left = 100) {
   return { text, top, left, width: 500, height: 20, confidence: 93, pageHeight: 1200 };
 }
+
+test('maps actual Poppler image filenames to page numbers without padding assumptions', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-pages-'));
+  try {
+    await Promise.all([ 'page-01.jpg', 'page-02.jpg', 'page-10.jpg' ].map(name => fs.writeFile(path.join(directory, name), '')));
+    assert.deepEqual(await listPdfImages(directory), [ 'page-01.jpg', 'page-02.jpg', 'page-10.jpg' ]);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('runs OCR pages concurrently while preserving input order', async () => {
   let active = 0;

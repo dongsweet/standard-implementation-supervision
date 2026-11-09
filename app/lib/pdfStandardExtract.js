@@ -254,6 +254,12 @@ function buildStandardTree(pages) {
   };
 }
 
+async function listPdfImages(directory) {
+  return (await fs.readdir(directory))
+    .filter(name => /\.jpe?g$/i.test(name))
+    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+}
+
 async function mapWithConcurrency(items, concurrency, worker) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -281,17 +287,23 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
     await command('pdftoppm', [ '-r', String(dpi), '-jpeg', '-jpegopt', 'quality=85', filePath, path.join(directory, 'page') ], {
       timeout: Math.max(120000, pageCount * 10000),
     });
-    const pageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1);
-    const worker = async page => {
-      const prefix = path.join(directory, `page-${String(page).padStart(pageCount >= 1000 ? 4 : 3, '0')}`);
-      const tsv = await command('tesseract', [ `${prefix}.jpg`, 'stdout', '-l', lang, '--psm', '6', 'tsv' ], {
+    const imageFiles = await listPdfImages(directory);
+    if (imageFiles.length !== pageCount) {
+      throw new Error(`PDF转图页数不一致：预期${pageCount}页，实际${imageFiles.length}页`);
+    }
+    const worker = async ({ page, imageFile }) => {
+      const tsv = await command('tesseract', [ path.join(directory, imageFile), 'stdout', '-l', lang, '--psm', '6', 'tsv' ], {
         timeout: 180000,
         env: { OMP_THREAD_LIMIT: '1' },
       });
       return parseTsv(tsv, page);
     };
     worker.progress = async (completed, total) => onProgress(completed, total);
-    const pages = await mapWithConcurrency(pageNumbers, concurrency, worker);
+    const pages = await mapWithConcurrency(
+      imageFiles.map((imageFile, index) => ({ page: index + 1, imageFile })),
+      concurrency,
+      worker
+    );
     pages.sort((left, right) => left.page - right.page);
     return { tree: buildStandardTree(pages), pageCount };
   } finally {
@@ -302,6 +314,7 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
 module.exports = {
   buildStandardTree,
   inspectPdf,
+  listPdfImages,
   mapWithConcurrency,
   ocrPdf,
   parseTsv,
