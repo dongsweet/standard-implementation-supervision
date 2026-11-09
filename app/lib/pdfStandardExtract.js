@@ -254,6 +254,12 @@ function buildStandardTree(pages) {
   };
 }
 
+function progressForStage(completed, total, stage) {
+  if (stage === 'render') return 3;
+  if (!total) return 10;
+  return Math.min(95, 10 + Math.round(completed / total * 85));
+}
+
 async function listPdfImages(directory) {
   return (await fs.readdir(directory))
     .filter(name => /\.jpe?g$/i.test(name))
@@ -284,9 +290,11 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
   const lang = options.lang || 'chi_sim+eng';
   const concurrency = Math.max(1, Math.min(Number(options.concurrency || DEFAULT_CONCURRENCY), 8));
   try {
+    await onProgress(0, pageCount, 'render');
     await command('pdftoppm', [ '-r', String(dpi), '-jpeg', '-jpegopt', 'quality=85', filePath, path.join(directory, 'page') ], {
       timeout: Math.max(120000, pageCount * 10000),
     });
+    await onProgress(0, pageCount, 'ocr');
     const imageFiles = await listPdfImages(directory);
     if (imageFiles.length !== pageCount) {
       throw new Error(`PDF转图页数不一致：预期${pageCount}页，实际${imageFiles.length}页`);
@@ -298,7 +306,7 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
       });
       return parseTsv(tsv, page);
     };
-    worker.progress = async (completed, total) => onProgress(completed, total);
+    worker.progress = async (completed, total) => onProgress(completed, total, 'ocr');
     const pages = await mapWithConcurrency(
       imageFiles.map((imageFile, index) => ({ page: index + 1, imageFile })),
       concurrency,
@@ -318,4 +326,5 @@ module.exports = {
   mapWithConcurrency,
   ocrPdf,
   parseTsv,
+  progressForStage,
 };

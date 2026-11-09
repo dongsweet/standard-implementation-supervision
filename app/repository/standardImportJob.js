@@ -31,11 +31,11 @@ class StandardImportJobRepository {
       WHERE id = $1`, [ jobId ]);
   }
 
-  async updateProgress(jobId, progress) {
+  async updateProgress(jobId, progress, pageCount = null) {
     await this.pool.query(`
       UPDATE standard_import_jobs
-      SET progress = $2, updated_at = now()
-      WHERE id = $1 AND status = 'processing'`, [ jobId, progress ]);
+      SET progress = $2, page_count = COALESCE($3, page_count), updated_at = now()
+      WHERE id = $1 AND status = 'processing'`, [ jobId, progress, pageCount ]);
   }
 
   async completeExtraction(jobId, { pageCount, result }) {

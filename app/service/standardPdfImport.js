@@ -6,7 +6,7 @@ const { randomUUID } = require('node:crypto');
 const Service = require('egg').Service;
 const StandardImportJobRepository = require('../repository/standardImportJob');
 const { createStorageProvider } = require('../lib/storage');
-const { ocrPdf } = require('../lib/pdfStandardExtract');
+const { ocrPdf, progressForStage } = require('../lib/pdfStandardExtract');
 
 class StandardPdfImportService extends Service {
   get repository() {
@@ -46,9 +46,9 @@ class StandardPdfImportService extends Service {
         concurrency: this.config.pdfImport.concurrency,
         lang: this.config.pdfImport.ocrLanguages,
         maxPages: this.config.pdfImport.maxPages,
-      }, async (page, totalPages) => {
-        const progress = Math.min(95, Math.round(page / totalPages * 95));
-        await this.repository.updateProgress(jobId, progress);
+      }, async (completed, totalPages, stage) => {
+        const progress = progressForStage(completed, totalPages, stage);
+        await this.repository.updateProgress(jobId, progress, totalPages);
       });
       await this.repository.completeExtraction(jobId, { pageCount, result: tree });
     } catch (error) {

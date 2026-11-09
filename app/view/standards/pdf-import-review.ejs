@@ -6,7 +6,7 @@
 <% if ([ 'queued', 'processing' ].includes(job.status)) { %>
   <div class="card" id="processingPanel"><div class="card-body py-5 text-center">
     <h2 class="h5">正在识别PDF并构建章节树</h2>
-    <p class="text-secondary mb-3" id="processingMessage">已处理 <%= job.progress || 0 %>%<%= job.page_count ? '，共 ' + job.page_count + ' 页' : '' %></p>
+    <p class="text-secondary mb-3" id="processingMessage"><%= job.page_count ? (job.progress < 10 ? '正在将 ' + job.page_count + ' 页PDF转换为图像…' : '正在OCR识别，已完成 ' + job.progress + '%') : '正在读取PDF页数…' %></p>
     <div class="progress mx-auto" style="max-width:560px;height:24px"><div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width:<%= job.progress || 0 %>%"><%= job.progress || 0 %>%</div></div>
     <p class="small text-secondary mt-3 mb-0">扫描型PDF需要逐页 OCR；完成后会显示预览树，不会自动写入规范库。</p>
   </div></div>
@@ -118,7 +118,11 @@
         const status = await response.json();
         document.getElementById('progressBar').style.width = status.progress + '%';
         document.getElementById('progressBar').textContent = status.progress + '%';
-        document.getElementById('processingMessage').textContent = '已处理 ' + status.progress + '%' + (status.pageCount ? '，共 ' + status.pageCount + ' 页' : '');
+        document.getElementById('processingMessage').textContent = !status.pageCount
+          ? '正在读取PDF页数…'
+          : status.progress < 10
+            ? '正在将 ' + status.pageCount + ' 页PDF转换为图像…'
+            : '正在OCR识别，已完成 ' + status.progress + '%';
         if (status.status === 'ready' || status.status === 'failed' || status.status === 'completed') {
           window.location.reload();
           return;

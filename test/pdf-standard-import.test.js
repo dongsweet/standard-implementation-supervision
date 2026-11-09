@@ -5,12 +5,19 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { buildStandardTree, listPdfImages, mapWithConcurrency } = require('../app/lib/pdfStandardExtract');
+const { buildStandardTree, listPdfImages, mapWithConcurrency, progressForStage } = require('../app/lib/pdfStandardExtract');
 const StandardImportJobRepository = require('../app/repository/standardImportJob');
 
 function line(text, top, left = 100) {
   return { text, top, left, width: 500, height: 20, confidence: 93, pageHeight: 1200 };
 }
+
+test('reports visible render and OCR progress stages', () => {
+  assert.equal(progressForStage(0, 77, 'render'), 3);
+  assert.equal(progressForStage(0, 77, 'ocr'), 10);
+  assert.equal(progressForStage(38, 77, 'ocr'), 52);
+  assert.equal(progressForStage(77, 77, 'ocr'), 95);
+});
 
 test('maps actual Poppler image filenames to page numbers without padding assumptions', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pdf-pages-'));
