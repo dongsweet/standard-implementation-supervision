@@ -75,14 +75,14 @@
   <form method="post" action="/standards/import" enctype="multipart/form-data" data-confirm="将新建一个规范及其版本，并导入章节和标准项。源工作簿中的项目应答、云中心运行情况、证据附件及监督记录不会导入。确认继续？" data-confirm-title="导入规范"><input type="hidden" name="_csrf" value="<%= csrf %>">
     <div class="modal-header"><h2 class="modal-title fs-5" id="importStandardModalLabel">从Excel导入规范</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
-      <div class="col-12"><div class="alert alert-info py-2 mb-0">支持原始多工作表Excel和系统导入模板TSV。只读取章节、标准项编号、标题、内容、级别、重点项、云服务商赋值、多云统管要求及实施证据列表等规范字段。</div></div>
+      <div class="col-12"><div class="alert alert-info py-2 mb-0">支持原始多工作表Excel、Excel导入模板和TSV。只读取章节、标准项编号、标题、内容、级别、重点项、云服务商赋值、多云统管要求及实施证据列表等规范字段。</div></div>
       <div class="col-md-4"><label class="form-label" for="importStandardType">规范类型</label><select class="form-select" id="importStandardType" name="standardType" required><% standardTypes.forEach(type => { %><option value="<%= type.value %>" <%= type.value === 'national' ? 'selected' : '' %>><%= type.label %></option><% }) %></select></div>
       <div class="col-md-4"><label class="form-label" for="importStandardCode">规范编号</label><input class="form-control" id="importStandardCode" name="code" maxlength="100" placeholder="例如：GB/T 31168" required></div>
       <div class="col-md-4"><label class="form-label" for="importStandardVersion">版本标识</label><input class="form-control" id="importStandardVersion" name="version" maxlength="100" placeholder="例如：2023" required></div>
       <div class="col-md-8"><label class="form-label" for="importStandardName">规范名称</label><input class="form-control" id="importStandardName" name="name" maxlength="300" required></div>
       <div class="col-md-4"><label class="form-label" for="importStandardOrganization">发布/制定组织</label><input class="form-control" id="importStandardOrganization" name="issuingOrganization" maxlength="300"></div>
       <div class="col-12"><label class="form-label" for="importStandardDescription">规范说明</label><textarea class="form-control" id="importStandardDescription" name="description" rows="2"></textarea></div>
-      <div class="col-12"><label class="form-label" for="standardImportFile">规范内容文件</label><input class="form-control" id="standardImportFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。没有原始Excel时，可先<a href="/public/standard-import-template.tsv" download>下载TSV模板</a>填写后导入。</div></div>
+      <div class="col-12"><label class="form-label" for="standardImportFile">规范内容文件</label><input class="form-control" id="standardImportFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx" download>Excel模板</a>；也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv" download>TSV格式</a>。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入并创建规范</button></div>
   </form>
