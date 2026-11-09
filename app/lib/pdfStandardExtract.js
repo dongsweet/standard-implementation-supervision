@@ -116,7 +116,7 @@ function heading(text) {
 
 function listItem(text) {
   const value = cleanLine(text);
-  let match = value.match(/^([a-zA-Z])\s*[）)]\s*["'*“”]?\s*(\p{L}.*)$/u);
+  let match = value.match(/^([a-zA-Z])\s*[）)_]\s*["'*“”]?\s*(\p{L}.*)$/u);
   if (match) return { kind: 'list', marker: `${match[1].toLowerCase()})`, body: match[2].trim(), markerType: 'letter', markerIndex: match[1].toLowerCase() };
   match = value.match(/^[（(](\d{1,3})[）)]\s*(.+)$/);
   if (match) return { kind: 'list', marker: `(${match[1]})`, body: match[2].trim(), markerType: 'number', markerIndex: Number(match[1]) };
@@ -136,9 +136,10 @@ function buildStandardTree(pages) {
   let nodeNumber = 0;
   const hasChapterOne = pages.some(page => (page.lines || []).some(raw => {
     const match = heading(raw.text);
-    return match?.number === '1';
+    return match?.number === '1' && match.title === '范围';
   }));
   let started = !hasChapterOne;
+  const lastLetterMarker = new Map();
 
   for (const page of pages) {
     for (const raw of page.lines) {
@@ -148,7 +149,7 @@ function buildStandardTree(pages) {
 
       const headingMatch = raw.left <= (page.width || Infinity) * 0.28 ? heading(text) : null;
       if (headingMatch) {
-        if (!started && headingMatch.number !== '1') continue;
+        if (!started && !(headingMatch.number === '1' && headingMatch.title === '范围')) continue;
         if (!started) started = true;
         nodeNumber += 1;
         const node = {
@@ -177,10 +178,18 @@ function buildStandardTree(pages) {
       const listMatch = listItem(text);
       if (listMatch && started) {
         const parent = stack.length ? stack[stack.length - 1] : current;
+        const markerKey = parent ? parent.id : 'root';
+        let marker = listMatch.marker;
+        if (listMatch.markerType === 'letter') {
+          const expectedCode = (lastLetterMarker.get(markerKey) || 96) + 1;
+          const expected = expectedCode <= 122 ? String.fromCharCode(expectedCode) : '';
+          if (marker !== `${expected})` && [ 'o)', '0)' ].includes(marker)) marker = `${expected})`;
+          lastLetterMarker.set(markerKey, marker.charCodeAt(0));
+        }
         nodeNumber += 1;
         const composite = parent && parent.headingNumber
-          ? `${parent.headingNumber} ${listMatch.marker}`
-          : listMatch.marker;
+          ? `${parent.headingNumber} ${marker}`
+          : marker;
         const node = {
           id: `n${nodeNumber}`,
           kind: 'list',

@@ -38,6 +38,28 @@ test('builds selectable leaf clauses and preserves the original numbering hierar
   assert.equal(byNumber.get('6.1.1 a)').pageFrom, 7);
 });
 
+test('skips table-of-contents headings and repairs common OCR list marker confusions', () => {
+  const result = buildStandardTree([
+    { page: 2, width: 1000, lines: [
+      line('1 范围........1', 100),
+      line('6.1 资源分配........7', 200),
+    ] },
+    { page: 8, width: 1000, lines: [
+      line('1 范围', 100),
+      line('6 系统开发与供应链安全', 300),
+      line('6.3 采购过程', 350),
+      line('6.3.1 一般要求', 400),
+      line('云服务商应：', 450, 220),
+      line('a）第一项要求；', 500, 220),
+      line('b）第二项要求；', 550, 220),
+      line('o）第三项要求；', 600, 220),
+    ] },
+  ]);
+  assert.equal(result.nodes.filter(node => node.pageFrom === 2).length, 0);
+  assert.equal(result.nodes.find(node => node.originalNumber === '6.3.1 c)').content, '第三项要求；');
+  assert.equal(result.nodes.some(node => node.originalNumber === '6.3.1 o)'), false);
+});
+
 test('uses section 6.1 as chapter and aggregates skipped child content for a level-3 item', () => {
   const repository = new StandardImportJobRepository({});
   const nodes = [
