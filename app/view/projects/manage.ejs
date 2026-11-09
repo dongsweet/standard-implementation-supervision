@@ -63,13 +63,26 @@
   </table></div>
 </div>
 
-<div class="card"><div class="card-header"><h3 class="card-title">项目固定规范版本</h3></div><div class="table-responsive"><table class="table table-sm mb-0">
+<div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title">项目固定规范版本</h3><button class="btn btn-sm btn-outline-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#addStandardVersionModal">纳入规范版本</button></div><div class="table-responsive"><table class="table table-sm mb-0">
   <thead><tr><th>规范</th><th>版本</th><th>快照时间</th><th>标准项数</th></tr></thead>
   <tbody>
     <% (versions || []).forEach(version => { %><tr><td><%= version.standard_code %> · <%= version.standard_name %></td><td><%= version.version %></td><td><%= new Date(version.snapshot_at).toLocaleString('zh-CN') %></td><td><%= version.item_count %></td></tr><% }) %>
-    <% if (!(versions || []).length) { %><tr><td colspan="4" class="text-center text-secondary py-4">该项目当前没有固定的规范版本。可在创建项目时基于已有项目复制。</td></tr><% } %>
+    <% if (!(versions || []).length) { %><tr><td colspan="4" class="text-center text-secondary py-4">该项目当前没有固定的规范版本，可从规范库纳入。</td></tr><% } %>
   </tbody>
 </table></div></div>
+
+<div class="modal fade" id="addStandardVersionModal" tabindex="-1" aria-labelledby="addStandardVersionModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/projects/<%= project.id %>/standard-versions"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="addStandardVersionModalLabel">纳入规范版本</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <label class="form-label" for="standardVersionId">规范版本</label>
+      <select class="form-select" id="standardVersionId" name="standardVersionId" required><option value="">请选择已包含标准项的规范版本</option><% (availableStandardVersions || []).forEach(version => { %><option value="<%= version.id %>"><%= version.standard_code %> · <%= version.standard_name %> · <%= version.version %>（<%= version.item_count %> 项）</option><% }) %></select>
+      <div class="form-text mt-2">纳入后会复制当前标准项作为项目固定快照，后续规范库变化不会自动覆盖项目内容。</div>
+      <% if (!(availableStandardVersions || []).length) { %><div class="alert alert-warning mt-3 mb-0">没有可纳入的规范版本。请先在规范库为对应版本导入标准项。</div><% } %>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit" <%= (availableStandardVersions || []).length ? '' : 'disabled' %>>纳入项目</button></div>
+  </form>
+</div></div></div>
 
 <div class="modal fade" id="editProjectModal" tabindex="-1" aria-labelledby="editProjectModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/projects/<%= project.id %>"><input type="hidden" name="_csrf" value="<%= csrf %>">

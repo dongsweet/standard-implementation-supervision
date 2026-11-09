@@ -104,6 +104,17 @@ class ProjectService extends Service {
     }
   }
 
+  async addProjectStandardVersion(projectId, standardVersionId) {
+    const versionId = String(standardVersionId || '').trim();
+    if (!versionId) this.ctx.throw(400, '请选择要纳入项目的规范版本');
+    try {
+      await this.repository.addProjectStandardVersion({ projectId, standardVersionId: versionId });
+    } catch (error) {
+      if (error.code === 'INVALID_STANDARD_VERSION') this.ctx.throw(400, error.message);
+      throw error;
+    }
+  }
+
   async replaceProjectCloudCenters(projectId, value, ownerUserId) {
     const values = Array.isArray(value) ? value : [ value ];
     return this.repository.replaceProjectCloudCenters({

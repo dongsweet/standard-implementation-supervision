@@ -88,6 +88,15 @@ class ProjectController extends Controller {
     this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('章节负责人已保存'));
   }
 
+  async addStandardVersion() {
+    requireProjectAdmin(this.ctx, this.ctx.params.projectId);
+    await this.ctx.service.project.addProjectStandardVersion(
+      this.ctx.params.projectId,
+      this.ctx.request.body.standardVersionId
+    );
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('规范版本已纳入项目基线'));
+  }
+
   async saveCloudCenters() {
     requireProjectAdmin(this.ctx, this.ctx.params.projectId);
     await this.ctx.service.project.replaceProjectCloudCenters(

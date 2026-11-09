@@ -38,6 +38,7 @@ module.exports = app => {
   router.post('/projects/:projectId/members/:userId/delete', controller.project.removeMember);
   router.post('/projects/:projectId/manager', controller.project.setManager);
   router.post('/projects/:projectId/chapters/:chapterId/responsibilities', controller.project.saveChapterResponsibilities);
+  router.post('/projects/:projectId/standard-versions', controller.project.addStandardVersion);
   router.post('/projects/:projectId/cloud-centers', controller.project.saveCloudCenters);
   router.get('/users', controller.user.index);
   router.post('/users', controller.user.create);

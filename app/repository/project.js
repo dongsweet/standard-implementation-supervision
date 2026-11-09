@@ -222,7 +222,66 @@ class ProjectRepository {
       ORDER BY sc.sort_order, sc.code`, [ projectId ]);
     const cloudCenters = await this.pool.query('SELECT id, code, name, center_type FROM cloud_centers ORDER BY name, code');
     const projectCloudCenters = await this.pool.query('SELECT cc.id, cc.code, cc.name, cc.center_type, pcc.owner_user_id FROM project_cloud_centers pcc JOIN cloud_centers cc ON cc.id = pcc.cloud_center_id WHERE pcc.project_id = $1 ORDER BY cc.name, cc.code', [ projectId ]);
-    return { ...detail, members: members.rows, availableUsers: availableUsers.rows, projectUsers: projectUsers.rows, chapters: chapters.rows, cloudCenters: cloudCenters.rows, projectCloudCenters: projectCloudCenters.rows };
+    const availableStandardVersions = await this.pool.query(`
+      SELECT sv.id, sv.version, s.code AS standard_code, s.name AS standard_name,
+             count(si.id)::integer AS item_count
+      FROM standard_versions sv
+      JOIN standards s ON s.id = sv.standard_id
+      LEFT JOIN standard_items si ON si.standard_version_id = sv.id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM project_standard_versions psv
+        WHERE psv.project_id = $1 AND psv.standard_version_id = sv.id
+      )
+      GROUP BY sv.id, sv.version, s.code, s.name
+      HAVING count(si.id) > 0
+      ORDER BY s.code, s.version`, [ projectId ]);
+    return {
+      ...detail,
+      members: members.rows,
+      availableUsers: availableUsers.rows,
+      projectUsers: projectUsers.rows,
+      chapters: chapters.rows,
+      cloudCenters: cloudCenters.rows,
+      projectCloudCenters: projectCloudCenters.rows,
+      availableStandardVersions: availableStandardVersions.rows,
+    };
+  }
+
+  async addProjectStandardVersion({ projectId, standardVersionId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const project = await client.query('SELECT id FROM projects WHERE id = $1 FOR UPDATE', [ projectId ]);
+      const version = await client.query(`
+        SELECT sv.id
+        FROM standard_versions sv
+        WHERE sv.id = $1
+          AND EXISTS (SELECT 1 FROM standard_items si WHERE si.standard_version_id = sv.id)
+        FOR UPDATE`, [ standardVersionId ]);
+      if (!project.rowCount || !version.rowCount) {
+        const error = new Error('项目不存在或所选规范版本没有标准项');
+        error.code = 'INVALID_STANDARD_VERSION';
+        throw error;
+      }
+      await client.query(`
+        INSERT INTO project_standard_versions (project_id, standard_version_id, snapshot_at)
+        VALUES ($1, $2, now())
+        ON CONFLICT DO NOTHING`, [ projectId, standardVersionId ]);
+      await client.query(`
+        INSERT INTO project_standard_items
+          (project_id, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at)
+        SELECT $1, si.id, si.item_code, si.content, sc.code, now()
+        FROM standard_items si
+        JOIN standard_chapters sc ON sc.id = si.chapter_id
+        WHERE si.standard_version_id = $2
+        ON CONFLICT DO NOTHING`, [ projectId, standardVersionId ]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async replaceProjectCloudCenters({ projectId, cloudCenterIds, ownerUserId }) {
