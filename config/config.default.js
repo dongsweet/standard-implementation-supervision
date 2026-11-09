@@ -8,7 +8,9 @@ module.exports = appInfo => {
   config.cluster = { listen: { port: Number(process.env.PORT || 7001) } };
   config.bodyParser = { enable: true, jsonLimit: '2mb', formLimit: '2mb' };
   config.multipart = { mode: 'file', fileSize: '15mb', fileExtensions: [ '.xlsx', '.tsv' ] };
-  config.security = { csrf: { enable: true } };
+  // Egg checks CSRF before multipart parsing, so file uploads use the same-origin
+  // referer check while regular forms continue to use the token.
+  config.security = { csrf: { enable: true, type: 'any' } };
   config.middleware = [ 'auth' ];
   config.static = { prefix: '/public/', dir: path.join(appInfo.baseDir, 'app/public') };
   config.session = { key: 'security_supervision.sid', maxAge: 8 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' };
