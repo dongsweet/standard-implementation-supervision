@@ -7,6 +7,7 @@ module.exports = appInfo => {
   config.keys = process.env.EGG_KEYS || `${appInfo.name}_local_development_key`;
   config.cluster = { listen: { port: Number(process.env.PORT || 7001) } };
   config.bodyParser = { enable: true, jsonLimit: '2mb', formLimit: '2mb' };
+  config.multipart = { mode: 'file', fileSize: '15mb', fileExtensions: [ '.xlsx', '.tsv' ] };
   config.security = { csrf: { enable: true } };
   config.middleware = [ 'auth' ];
   config.static = { prefix: '/public/', dir: path.join(appInfo.baseDir, 'app/public') };

@@ -3,6 +3,7 @@
 const Service = require('egg').Service;
 const StandardCatalogRepository = require('../repository/standardCatalog');
 const { STANDARD_TYPES, STANDARD_TYPE_LABELS } = require('../lib/standardTypes');
+const { parseStandardImportFile } = require('../lib/standardImport');
 
 const STANDARD_TYPE_VALUES = new Set(STANDARD_TYPES.map(item => item.value));
 
@@ -47,9 +48,60 @@ class StandardCatalogService extends Service {
     }
   }
 
+  async importStandard(payload, filePath, fileName) {
+    const standardType = String(payload.standardType || 'other').trim();
+    if (!STANDARD_TYPE_VALUES.has(standardType)) this.ctx.throw(400, '无效的规范类型');
+    const code = required(payload.code, '规范编号');
+    const name = required(payload.name, '规范名称');
+    const version = required(payload.version, '版本标识');
+    if (code.length > 100) this.ctx.throw(400, '规范编号不能超过100个字符');
+    if (name.length > 300) this.ctx.throw(400, '规范名称不能超过300个字符');
+    if (version.length > 100) this.ctx.throw(400, '版本标识不能超过100个字符');
+    const imported = await parseStandardImportFile(filePath, fileName);
+    try {
+      return await this.repository.importStandard({
+        code, name, version, standardType,
+        description: String(payload.description || '').trim() || null,
+        issuingOrganization: String(payload.issuingOrganization || '').trim().slice(0, 300) || null,
+        chapters: imported.chapters,
+      });
+    } catch (error) {
+      if (error.code === '23505') this.ctx.throw(409, '规范编号或版本标识已存在，请检查规范库后重试');
+      throw error;
+    }
+  }
+
+  async updateStandard(standardId, versionId, payload) {
+    try {
+      const standardType = String(payload.standardType || 'other').trim();
+      if (!STANDARD_TYPE_VALUES.has(standardType)) this.ctx.throw(400, '无效的规范类型');
+      const code = required(payload.code, '规范编号');
+      const name = required(payload.name, '规范名称');
+      const version = required(payload.version, '版本标识');
+      if (code.length > 100) this.ctx.throw(400, '规范编号不能超过100个字符');
+      if (name.length > 300) this.ctx.throw(400, '规范名称不能超过300个字符');
+      if (version.length > 100) this.ctx.throw(400, '版本标识不能超过100个字符');
+      const result = await this.repository.updateStandard({
+        standardId,
+        versionId,
+        code,
+        name,
+        description: String(payload.description || '').trim() || null,
+        standardType,
+        issuingOrganization: String(payload.issuingOrganization || '').trim().slice(0, 300) || null,
+        version,
+      });
+      if (!result) this.ctx.throw(404, '规范或规范版本不存在');
+      return result;
+    } catch (error) {
+      if (error.code === '23505') this.ctx.throw(409, '规范编号或该规范版本标识已存在');
+      throw error;
+    }
+  }
+
   async createVersion(standardId, payload) {
     try {
-      return await this.repository.createVersion({ standardId, version: required(payload.version, '版本号') });
+      return await this.repository.createVersion({ standardId, version: required(payload.version, '版本标识') });
     } catch (error) {
       if (error.code === '23505') this.ctx.throw(409, '该规范版本号已存在');
       throw error;
@@ -153,11 +205,6 @@ class StandardCatalogService extends Service {
     return this.repository.upsertItems({ versionId: chapter.standard_version_id, chapterId, rows });
   }
 
-  async publishVersion(versionId) {
-    const result = await this.repository.publishVersion(versionId);
-    if (!result) this.ctx.throw(404, '规范版本不存在');
-    return result;
-  }
 }
 
 module.exports = StandardCatalogService;

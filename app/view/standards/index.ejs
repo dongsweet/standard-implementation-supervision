@@ -8,8 +8,8 @@
   };
 %>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <p class="text-secondary mb-0">规范库按“规范发布版”管理，每行是一套可被项目采用的规范内容。</p>
-  <button class="btn btn-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#newStandardModal">新建规范</button>
+  <p class="text-secondary mb-0">规范及其版本信息可在此维护；每行代表一个规范版本。</p>
+  <div class="ms-auto d-flex gap-2"><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#importStandardModal">导入规范</button><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newStandardModal">新建规范</button></div>
 </div>
 
 <div class="card mb-3">
@@ -23,10 +23,10 @@
 </div>
 
 <div class="card">
-  <div class="card-header d-flex align-items-center"><h3 class="card-title">规范发布版</h3><span class="badge text-bg-secondary ms-auto"><%= total %> 条</span></div>
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">规范版本</h3><span class="badge text-bg-secondary ms-auto"><%= total %> 条</span></div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-      <thead><tr><th>规范类型</th><th>规范编号</th><th>规范名称</th><th>发布/制定组织</th><th>发布版</th><th>状态</th><th>章节数</th><th>标准项数</th><th>发布时间</th><th>操作</th></tr></thead>
+      <thead><tr><th>规范类型</th><th>规范编号</th><th>规范名称</th><th>发布/制定组织</th><th>版本标识</th><th>章节数</th><th>标准项数</th><th>操作</th></tr></thead>
       <tbody>
         <% rows.forEach(row => { %>
           <tr>
@@ -35,14 +35,12 @@
             <td><div><%= row.name %></div><% if (row.description) { %><div class="small text-secondary text-truncate" style="max-width:260px" title="<%= row.description %>"><%= row.description %></div><% } %></td>
             <td><%= row.issuing_organization || '-' %></td>
             <td><strong><%= row.version %></strong></td>
-            <td><span class="badge <%= row.status === 'published' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= row.status === 'published' ? '已发布' : '草稿' %></span></td>
             <td><%= row.chapter_count %></td>
             <td><%= row.item_count %></td>
-            <td><%= row.published_at ? new Date(row.published_at).toLocaleDateString('zh-CN') : '-' %></td>
-            <td class="text-nowrap"><a class="btn btn-sm btn-outline-primary" href="/standards/versions/<%= row.version_id %>">维护内容</a> <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#newVersionModal" data-standard-id="<%= row.standard_id %>" data-standard-label="<%= row.code %> · <%= row.name %>">新增发布版</button></td>
+            <td class="text-nowrap"><button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#editStandardModal" data-standard-id="<%= row.standard_id %>" data-version-id="<%= row.version_id %>" data-standard-type="<%= row.standard_type %>" data-code="<%= row.code %>" data-name="<%= row.name %>" data-description="<%= row.description || '' %>" data-issuing-organization="<%= row.issuing_organization || '' %>" data-version="<%= row.version %>">编辑</button> <a class="btn btn-sm btn-outline-primary" href="/standards/versions/<%= row.version_id %>">维护内容</a> <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#newVersionModal" data-standard-id="<%= row.standard_id %>" data-standard-label="<%= row.code %> · <%= row.name %>">新增版本</button></td>
           </tr>
         <% }) %>
-        <% if (!rows.length) { %><tr><td colspan="10" class="text-center text-secondary py-5">没有找到匹配的规范发布版。</td></tr><% } %>
+        <% if (!rows.length) { %><tr><td colspan="8" class="text-center text-secondary py-5">没有找到匹配的规范版本。</td></tr><% } %>
       </tbody>
     </table>
   </div>
@@ -60,24 +58,57 @@
 
 <div class="modal fade" id="newStandardModal" tabindex="-1" aria-labelledby="newStandardModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/standards"><input type="hidden" name="_csrf" value="<%= csrf %>">
-    <div class="modal-header"><h2 class="modal-title fs-5" id="newStandardModalLabel">新建规范及首个发布版</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-header"><h2 class="modal-title fs-5" id="newStandardModalLabel">新建规范及初始版本</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-md-4"><label class="form-label" for="standardType">规范类型</label><select class="form-select" id="standardType" name="standardType" required><% standardTypes.forEach(type => { %><option value="<%= type.value %>" <%= type.value === 'national' ? 'selected' : '' %>><%= type.label %></option><% }) %></select></div>
-      <div class="col-md-4"><label class="form-label" for="standardCode">规范编号</label><input class="form-control" id="standardCode" name="code" placeholder="例如：GB/T 31168" required></div>
-      <div class="col-md-4"><label class="form-label" for="standardVersion">发布版</label><input class="form-control" id="standardVersion" name="version" placeholder="例如：2023年发布版" required></div>
-      <div class="col-md-8"><label class="form-label" for="standardName">规范名称</label><input class="form-control" id="standardName" name="name" required></div>
-      <div class="col-md-4"><label class="form-label" for="issuingOrganization">发布/制定组织</label><input class="form-control" id="issuingOrganization" name="issuingOrganization" placeholder="例如：国家标准化管理委员会"></div>
+      <div class="col-md-4"><label class="form-label" for="standardCode">规范编号</label><input class="form-control" id="standardCode" name="code" maxlength="100" placeholder="例如：GB/T 31168" required></div>
+      <div class="col-md-4"><label class="form-label" for="standardVersion">版本标识</label><input class="form-control" id="standardVersion" name="version" maxlength="100" placeholder="例如：2023" required></div>
+      <div class="col-md-8"><label class="form-label" for="standardName">规范名称</label><input class="form-control" id="standardName" name="name" maxlength="300" required></div>
+      <div class="col-md-4"><label class="form-label" for="issuingOrganization">发布/制定组织</label><input class="form-control" id="issuingOrganization" name="issuingOrganization" maxlength="300" placeholder="例如：国家标准化管理委员会"></div>
       <div class="col-12"><label class="form-label" for="standardDescription">规范说明</label><textarea class="form-control" id="standardDescription" name="description" rows="2"></textarea></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存规范</button></div>
   </form>
 </div></div></div>
 
+<div class="modal fade" id="importStandardModal" tabindex="-1" aria-labelledby="importStandardModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form method="post" action="/standards/import" enctype="multipart/form-data" data-confirm="将新建一个规范及其版本，并导入章节和标准项。源工作簿中的项目应答、云中心运行情况、证据附件及监督记录不会导入。确认继续？" data-confirm-title="导入规范"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="importStandardModalLabel">从Excel导入规范</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-12"><div class="alert alert-info py-2 mb-0">支持原始多工作表Excel和系统导入模板TSV。只读取章节、标准项编号、标题、内容、级别、重点项、云服务商赋值、多云统管要求及实施证据列表等规范字段。</div></div>
+      <div class="col-md-4"><label class="form-label" for="importStandardType">规范类型</label><select class="form-select" id="importStandardType" name="standardType" required><% standardTypes.forEach(type => { %><option value="<%= type.value %>" <%= type.value === 'national' ? 'selected' : '' %>><%= type.label %></option><% }) %></select></div>
+      <div class="col-md-4"><label class="form-label" for="importStandardCode">规范编号</label><input class="form-control" id="importStandardCode" name="code" maxlength="100" placeholder="例如：GB/T 31168" required></div>
+      <div class="col-md-4"><label class="form-label" for="importStandardVersion">版本标识</label><input class="form-control" id="importStandardVersion" name="version" maxlength="100" placeholder="例如：2023" required></div>
+      <div class="col-md-8"><label class="form-label" for="importStandardName">规范名称</label><input class="form-control" id="importStandardName" name="name" maxlength="300" required></div>
+      <div class="col-md-4"><label class="form-label" for="importStandardOrganization">发布/制定组织</label><input class="form-control" id="importStandardOrganization" name="issuingOrganization" maxlength="300"></div>
+      <div class="col-12"><label class="form-label" for="importStandardDescription">规范说明</label><textarea class="form-control" id="importStandardDescription" name="description" rows="2"></textarea></div>
+      <div class="col-12"><label class="form-label" for="standardImportFile">规范内容文件</label><input class="form-control" id="standardImportFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。没有原始Excel时，可先<a href="/public/standard-import-template.tsv" download>下载TSV模板</a>填写后导入。</div></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入并创建规范</button></div>
+  </form>
+</div></div></div>
+
+<div class="modal fade" id="editStandardModal" tabindex="-1" aria-labelledby="editStandardModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+  <form id="editStandardForm" method="post" action="/standards"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="editStandardModalLabel">编辑规范</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-12"><div class="form-text">规范基本信息会同步到该规范的所有版本；版本标识只修改当前行对应的版本。</div></div>
+      <div class="col-md-4"><label class="form-label" for="editStandardType">规范类型</label><select class="form-select" id="editStandardType" name="standardType" required><% standardTypes.forEach(type => { %><option value="<%= type.value %>"><%= type.label %></option><% }) %></select></div>
+      <div class="col-md-4"><label class="form-label" for="editStandardCode">规范编号</label><input class="form-control" id="editStandardCode" name="code" maxlength="100" required></div>
+      <div class="col-md-4"><label class="form-label" for="editStandardVersion">版本标识</label><input class="form-control" id="editStandardVersion" name="version" maxlength="100" required></div>
+      <div class="col-md-8"><label class="form-label" for="editStandardName">规范名称</label><input class="form-control" id="editStandardName" name="name" maxlength="300" required></div>
+      <div class="col-md-4"><label class="form-label" for="editIssuingOrganization">发布/制定组织</label><input class="form-control" id="editIssuingOrganization" name="issuingOrganization" maxlength="300"></div>
+      <div class="col-12"><label class="form-label" for="editStandardDescription">规范说明</label><textarea class="form-control" id="editStandardDescription" name="description" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
+  </form>
+</div></div></div>
+
 <div class="modal fade" id="newVersionModal" tabindex="-1" aria-labelledby="newVersionModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <form id="newVersionForm" method="post" action="/standards"><input type="hidden" name="_csrf" value="<%= csrf %>">
-    <div class="modal-header"><h2 class="modal-title fs-5" id="newVersionModalLabel">新增规范发布版</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
-    <div class="modal-body"><p id="newVersionStandardLabel" class="mb-3"></p><label class="form-label" for="newVersionNumber">发布版</label><input class="form-control" id="newVersionNumber" name="version" placeholder="例如：2026年修订版" required><div class="form-text">发布版用于区分同一规范在不同时间发布的内容。</div></div>
-    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">创建草稿发布版</button></div>
+    <div class="modal-header"><h2 class="modal-title fs-5" id="newVersionModalLabel">新增规范版本</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body"><p id="newVersionStandardLabel" class="mb-3"></p><label class="form-label" for="newVersionNumber">版本标识</label><input class="form-control" id="newVersionNumber" name="version" maxlength="100" placeholder="例如：2026修订版" required><div class="form-text">用于区分同一规范的不同年份或修订内容。</div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">新增版本</button></div>
   </form>
 </div></div></div>
 <script>
@@ -86,5 +117,15 @@
     document.getElementById('newVersionForm').action = '/standards/' + button.dataset.standardId + '/versions';
     document.getElementById('newVersionStandardLabel').textContent = button.dataset.standardLabel;
     document.getElementById('newVersionNumber').value = '';
+  });
+  document.getElementById('editStandardModal').addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    document.getElementById('editStandardForm').action = '/standards/' + button.dataset.standardId + '/versions/' + button.dataset.versionId;
+    document.getElementById('editStandardType').value = button.dataset.standardType;
+    document.getElementById('editStandardCode').value = button.dataset.code;
+    document.getElementById('editStandardName').value = button.dataset.name;
+    document.getElementById('editStandardVersion').value = button.dataset.version;
+    document.getElementById('editIssuingOrganization').value = button.dataset.issuingOrganization;
+    document.getElementById('editStandardDescription').value = button.dataset.description;
   });
 </script>

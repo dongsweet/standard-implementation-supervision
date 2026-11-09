@@ -1,5 +1,20 @@
 'use strict';
 
+async function insertMany(client, table, columns, rows, options = {}) {
+  const output = [];
+  const batchSize = options.batchSize || 300;
+  for (let offset = 0; offset < rows.length; offset += batchSize) {
+    const batch = rows.slice(offset, offset + batchSize);
+    const placeholders = batch.map((row, rowIndex) => '(' + row.map((value, columnIndex) => '$' + (rowIndex * columns.length + columnIndex + 1)).join(', ') + ')').join(', ');
+    const sql = 'INSERT INTO ' + table + ' (' + columns.join(', ') + ') VALUES ' + placeholders
+      + (options.onConflict ? ' ' + options.onConflict : '')
+      + (options.returning ? ' RETURNING ' + options.returning : '');
+    const result = await client.query(sql, batch.flat());
+    output.push(...(result.rows || []));
+  }
+  return output;
+}
+
 class StandardCatalogRepository {
   constructor(pool) {
     this.pool = pool;
@@ -35,8 +50,7 @@ class StandardCatalogRepository {
     const result = await this.pool.query(`
       SELECT s.id AS standard_id, s.code, s.name, s.description,
              s.standard_type, s.issuing_organization,
-             sv.id AS version_id, sv.version, sv.status,
-             sv.published_at, sv.created_at,
+             sv.id AS version_id, sv.version,
              (SELECT count(*)::integer FROM standard_chapters sc WHERE sc.standard_version_id = sv.id) AS chapter_count,
              (SELECT count(*)::integer FROM standard_items si WHERE si.standard_version_id = sv.id) AS item_count
       FROM standards s
@@ -67,8 +81,8 @@ class StandardCatalogRepository {
         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [ code, name, description || null, standardType, issuingOrganization || null ]);
       const standardVersion = await client.query(`
-        INSERT INTO standard_versions (standard_id, version, status)
-        VALUES ($1, $2, 'draft') RETURNING *`, [ standard.rows[0].id, version ]);
+        INSERT INTO standard_versions (standard_id, version)
+        VALUES ($1, $2) RETURNING *`, [ standard.rows[0].id, version ]);
       await client.query('COMMIT');
       return { ...standard.rows[0], initialVersion: standardVersion.rows[0] };
     } catch (error) {
@@ -79,16 +93,103 @@ class StandardCatalogRepository {
     }
   }
 
+  async importStandard({ code, name, description, standardType, issuingOrganization, version, chapters }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const standardResult = await client.query(
+        'INSERT INTO standards (code, name, description, standard_type, issuing_organization) VALUES ($1, $2, $3, $4, $5) RETURNING id, code, name',
+        [ code, name, description || null, standardType, issuingOrganization || null ]
+      );
+      const standard = standardResult.rows[0];
+      const versionResult = await client.query(
+        'INSERT INTO standard_versions (standard_id, version) VALUES ($1, $2) RETURNING id, version',
+        [ standard.id, version ]
+      );
+      const standardVersion = versionResult.rows[0];
+      const chapterIds = new Map();
+      for (const chapter of chapters) {
+        const result = await client.query(
+          'INSERT INTO standard_chapters (standard_version_id, code, name, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
+          [ standardVersion.id, chapter.code, chapter.name, chapter.sortOrder ]
+        );
+        chapterIds.set(chapter.code, result.rows[0].id);
+      }
+
+      const items = chapters.flatMap(chapter => chapter.items.map(item => ({
+        ...item, chapterId: chapterIds.get(chapter.code),
+      })));
+      const insertedItems = await insertMany(client, 'standard_items',
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'level', 'is_key', 'metadata' ],
+        items.map(item => [
+          standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
+          item.level || null, item.isKey === true, JSON.stringify(item.providerAssignment ? { providerAssignment: item.providerAssignment } : {}),
+        ]),
+        { returning: 'id, item_code' });
+      const itemIds = new Map(insertedItems.map(item => [ item.item_code, item.id ]));
+      const providerRows = items.flatMap(item => (item.providerNames || []).map(provider => [ itemIds.get(item.itemCode), provider ]));
+      const requirementRows = items.filter(item => item.unifiedRequirement || item.implementationEvidence)
+        .map(item => [ itemIds.get(item.itemCode), item.unifiedRequirement || '', item.implementationEvidence || null ]);
+      await insertMany(client, 'standard_provider_assignments', [ 'standard_item_id', 'provider_name' ], providerRows, { onConflict: 'ON CONFLICT DO NOTHING' });
+      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'implementation_evidence' ], requirementRows);
+      await client.query('COMMIT');
+      return {
+        standardId: standard.id,
+        versionId: standardVersion.id,
+        standardCode: standard.code,
+        standardName: standard.name,
+        version: standardVersion.version,
+        chapterCount: chapters.length,
+        itemCount: items.length,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createVersion({ standardId, version }) {
     const result = await this.pool.query(`
-      INSERT INTO standard_versions (standard_id, version, status)
-      VALUES ($1, $2, 'draft') RETURNING *`, [ standardId, version ]);
+      INSERT INTO standard_versions (standard_id, version)
+      VALUES ($1, $2) RETURNING *`, [ standardId, version ]);
     return result.rows[0];
+  }
+
+  async updateStandard({ standardId, versionId, code, name, description, standardType, issuingOrganization, version }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const standard = await client.query(`
+        UPDATE standards
+        SET code = $2, name = $3, description = $4,
+            standard_type = $5, issuing_organization = $6
+        WHERE id = $1
+        RETURNING id, code, name, description, standard_type, issuing_organization`,
+      [ standardId, code, name, description, standardType, issuingOrganization ]);
+      const standardVersion = await client.query(`
+        UPDATE standard_versions
+        SET version = $3
+        WHERE id = $1 AND standard_id = $2
+        RETURNING id, standard_id, version`, [ versionId, standardId, version ]);
+      if (!standard.rowCount || !standardVersion.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+      return { ...standard.rows[0], version: standardVersion.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getVersionDetail(versionId) {
     const versionResult = await this.pool.query(`
-      SELECT sv.*, s.code AS standard_code, s.name AS standard_name, s.description AS standard_description,
+      SELECT sv.id, sv.standard_id, sv.version, s.code AS standard_code, s.name AS standard_name, s.description AS standard_description,
              s.standard_type, s.issuing_organization
       FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
       WHERE sv.id = $1`, [ versionId ]);
@@ -189,12 +290,6 @@ class StandardCatalogRepository {
     }
   }
 
-  async publishVersion(versionId) {
-    const result = await this.pool.query(`
-      UPDATE standard_versions SET status = 'published', published_at = COALESCE(published_at, now())
-      WHERE id = $1 RETURNING *`, [ versionId ]);
-    return result.rows[0] || null;
-  }
 }
 
 module.exports = StandardCatalogRepository;

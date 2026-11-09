@@ -20,9 +20,10 @@ module.exports = app => {
   router.get('/project-overview', controller.project.overview);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);
+  router.post('/standards/import', controller.standardCatalog.importStandard);
+  router.post('/standards/:standardId/versions/:versionId', controller.standardCatalog.updateStandard);
   router.post('/standards/:standardId/versions', controller.standardCatalog.createVersion);
   router.get('/standards/versions/:versionId', controller.standardCatalog.version);
-  router.post('/standards/versions/:versionId/publish', controller.standardCatalog.publishVersion);
   router.post('/standards/versions/:versionId/chapters', controller.standardCatalog.createChapter);
   router.post('/standards/chapters/:chapterId/items', controller.standardCatalog.createItem);
   router.post('/standards/chapters/:chapterId/import', controller.standardCatalog.importItems);
