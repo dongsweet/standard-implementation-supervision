@@ -31,10 +31,10 @@ test('applies selected OCR leaves under section 6.1 with standardized numbers ge
   const repository = new StandardImportJobRepository({ connect: async () => client });
   const result = await repository.apply('job-1', 'version-1', [
     { id: 'n1', role: 'container' },
-    { id: 'n2', role: 'container' },
-    { id: 'n3', role: 'container' },
-    { id: 'n4', role: 'item' },
-    { id: 'n5', role: 'item' },
+    { id: 'n2', role: 'container', originalNumber: '6.1', title: '资源分配' },
+    { id: 'n3', role: 'container', originalNumber: '6.1.1', title: '一般要求' },
+    { id: 'n4', role: 'item', originalNumber: '6.1.1 a)', content: '分析资源并确保可用性。' },
+    { id: 'n5', role: 'item', originalNumber: '6.1.1 b)', content: '预算中单列网络安全。' },
   ], 'user-1');
 
   assert.deepEqual(result, { itemCount: 2, chapterCount: 1 });

@@ -67,15 +67,29 @@ class StandardPdfImportService extends Service {
     const job = await this.find(versionId, jobId);
     if (job.status !== 'ready') this.ctx.throw(409, 'PDF尚未完成解析或已经应用');
     const nodes = job.result?.nodes || [];
-    const requested = new Map((Array.isArray(payload.nodes) ? payload.nodes : []).map(node => [ node.id, node.role ]));
+    const requested = new Map((Array.isArray(payload.nodes) ? payload.nodes : []).map(node => [ node.id, node ]));
     const roles = new Set([ 'container', 'item', 'skip' ]);
     const selectedNodes = nodes.map(node => {
-      const role = requested.get(node.id) || node.role || 'container';
+      const requestedNode = requested.get(node.id);
+      const role = requestedNode?.role || node.role || 'container';
       if (!roles.has(role)) this.ctx.throw(400, `节点${node.id}的角色无效`);
-      return { id: node.id, role };
+      return {
+        id: node.id,
+        role,
+        originalNumber: typeof requestedNode?.originalNumber === 'string'
+          ? requestedNode.originalNumber
+          : node.originalNumber,
+        title: typeof requestedNode?.title === 'string' ? requestedNode.title : node.title,
+        content: typeof requestedNode?.content === 'string' ? requestedNode.content : node.content,
+      };
     });
+    for (const node of selectedNodes.filter(item => item.role === 'item')) {
+      if (!node.originalNumber.trim() || !node.content.trim()) {
+        this.ctx.throw(400, '标准项必须填写原文编号和标准内容');
+      }
+    }
     const byId = new Map(nodes.map(node => [ node.id, node ]));
-    for (const node of nodes.filter(item => requested.get(item.id) === 'item')) {
+    for (const node of nodes.filter(item => requested.get(item.id)?.role === 'item')) {
       let parentId = node.parentId;
       const visited = new Set();
       while (parentId && byId.has(parentId) && !visited.has(parentId)) {

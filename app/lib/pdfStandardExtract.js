@@ -125,6 +125,41 @@ function listItem(text) {
   return null;
 }
 
+function plausibleTitle(title) {
+  const text = cleanLine(title).replace(/[\s\d.…|,，。;；:：()（）_-]/g, '');
+  if (text.length < 2) return false;
+  if (/([A-Za-z])\1{7,}/i.test(text)) return false;
+  if (/(?:sss|ooo|eee|ccc|rrr|nnn){2,}/i.test(text)) return false;
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  return !(latin >= 8 && latin / text.length > 0.7);
+}
+
+function findBodyStartPage(pages) {
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
+    const pageHeadings = (page.lines || [])
+      .map(line => ({ line, match: heading(line.text) }))
+      .filter(item => item.match && item.line.left <= (page.width || Infinity) * 0.28);
+    const chapterOne = pageHeadings.find(item => item.match.number === '1');
+    if (!chapterOne) continue;
+    for (let offset = 0; offset <= 2 && index + offset < pages.length; offset += 1) {
+      const candidate = pages[index + offset];
+      if (candidate.page - page.page > 2) continue;
+      const chapterTwo = (candidate.lines || [])
+        .map(line => ({ line, match: heading(line.text) }))
+        .filter(item => item.match && item.line.left <= (candidate.width || Infinity) * 0.28)
+        .find(item => item.match.number === '2' && (
+          /规范性引用文件/.test(item.match.title) || (
+            item.line.confidence >= 75 && plausibleTitle(item.match.title)
+          )
+        ));
+      if (!chapterTwo) continue;
+      return page.page;
+    }
+  }
+  return null;
+}
+
 function defaultSkipped(node) {
   if (node.kind !== 'heading') return false;
   if (node.level !== 1) return false;
@@ -136,14 +171,12 @@ function buildStandardTree(pages) {
   const stack = [];
   let current = null;
   let nodeNumber = 0;
-  const hasChapterOne = pages.some(page => (page.lines || []).some(raw => {
-    const match = heading(raw.text);
-    return match?.number === '1' && match.title === '范围';
-  }));
-  let started = !hasChapterOne;
+  const bodyStartPage = findBodyStartPage(pages);
+  let started = false;
   const lastLetterMarker = new Map();
 
   for (const page of pages) {
+    if (bodyStartPage && page.page < bodyStartPage) continue;
     for (const raw of page.lines) {
       if (isHeaderOrFooter(raw)) continue;
       const text = cleanLine(raw.text);
@@ -151,7 +184,8 @@ function buildStandardTree(pages) {
 
       const headingMatch = raw.left <= (page.width || Infinity) * 0.28 ? heading(text) : null;
       if (headingMatch) {
-        if (!started && !(headingMatch.number === '1' && headingMatch.title === '范围')) continue;
+        if (headingMatch.level === 1 && !plausibleTitle(headingMatch.title)) continue;
+        if (!started && headingMatch.number !== '1') continue;
         if (!started) started = true;
         nodeNumber += 1;
         const node = {
@@ -179,6 +213,10 @@ function buildStandardTree(pages) {
 
       const listMatch = listItem(text);
       if (listMatch && started) {
+        if (listMatch.body.length < 2 || !plausibleTitle(listMatch.body)) {
+          if (current) current.content = [ current.content, listMatch.body ].filter(Boolean).join('\n');
+          continue;
+        }
         const parent = stack.length ? stack[stack.length - 1] : current;
         const markerKey = parent ? parent.id : 'root';
         let marker = listMatch.marker;
@@ -321,6 +359,7 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
 
 module.exports = {
   buildStandardTree,
+  findBodyStartPage,
   inspectPdf,
   listPdfImages,
   mapWithConcurrency,

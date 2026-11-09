@@ -69,15 +69,27 @@ class StandardImportJobRepository {
         throw error;
       }
       const sourceNodes = jobResult.rows[0].result?.nodes || [];
-      const byId = new Map(sourceNodes.map(node => [ node.id, node ]));
+      const requestedById = new Map(selectedNodes.map(node => [ node.id, node ]));
+      const effectiveNodes = sourceNodes.map(source => {
+        const requested = requestedById.get(source.id);
+        return {
+          ...source,
+          originalNumber: typeof requested?.originalNumber === 'string'
+            ? requested.originalNumber.trim()
+            : source.originalNumber,
+          title: typeof requested?.title === 'string' ? requested.title.trim() : source.title,
+          content: typeof requested?.content === 'string' ? requested.content.trim() : source.content,
+        };
+      });
+      const byId = new Map(effectiveNodes.map(node => [ node.id, node ]));
       const selection = new Map(selectedNodes.map(node => [ node.id, node.role ]));
       const children = new Map();
-      for (const node of sourceNodes) {
+      for (const node of effectiveNodes) {
         if (!node.parentId) continue;
         if (!children.has(node.parentId)) children.set(node.parentId, []);
         children.get(node.parentId).push(node);
       }
-      const selectedItems = sourceNodes.filter(node => selection.get(node.id) === 'item');
+      const selectedItems = effectiveNodes.filter(node => selection.get(node.id) === 'item');
       if (!selectedItems.length) {
         const error = new Error('请至少选择一个标准项');
         error.code = 'NO_SELECTED_ITEMS';

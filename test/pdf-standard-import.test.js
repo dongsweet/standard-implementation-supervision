@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { buildStandardTree, listPdfImages, mapWithConcurrency, progressForStage } = require('../app/lib/pdfStandardExtract');
+const { buildStandardTree, findBodyStartPage, listPdfImages, mapWithConcurrency, progressForStage } = require('../app/lib/pdfStandardExtract');
 const StandardImportJobRepository = require('../app/repository/standardImportJob');
 
 function line(text, top, left = 100) {
@@ -78,13 +78,16 @@ test('builds selectable leaf clauses and preserves the original numbering hierar
 });
 
 test('skips table-of-contents headings and repairs common OCR list marker confusions', () => {
-  const result = buildStandardTree([
+  const pages = [
     { page: 2, width: 1000, lines: [
       line('1 范围........1', 100),
       line('6.1 资源分配........7', 200),
+      line('6 系统开发与供应链安全ssssssssss 7', 250),
     ] },
     { page: 8, width: 1000, lines: [
-      line('1 范围', 100),
+      line('1 苑图', 100),
+      line('2 规范性引用文件', 150),
+      line('3 术语和定义', 200),
       line('6 系统开发与供应链安全', 300),
       line('6.3 采购过程', 350),
       line('6.3.1 一般要求', 400),
@@ -93,8 +96,11 @@ test('skips table-of-contents headings and repairs common OCR list marker confus
       line('b）第二项要求；', 550, 220),
       line('o）第三项要求；', 600, 220),
     ] },
-  ]);
+  ];
+  assert.equal(findBodyStartPage(pages), 8);
+  const result = buildStandardTree(pages);
   assert.equal(result.nodes.filter(node => node.pageFrom === 2).length, 0);
+  assert.equal(result.nodes.find(node => node.originalNumber === '1').title, '苑图');
   assert.equal(result.nodes.find(node => node.originalNumber === '6.3.1 c)').content, '第三项要求；');
   assert.equal(result.nodes.some(node => node.originalNumber === '6.3.1 o)'), false);
 });

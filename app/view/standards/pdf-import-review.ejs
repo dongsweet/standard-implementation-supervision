@@ -40,8 +40,8 @@
       <tbody>
         <% result.nodes.forEach(node => { const depth = Math.max(0, (node.level || 1) - 1); %>
           <tr data-node-id="<%= node.id %>">
-            <td><strong class="font-monospace"><%= node.originalNumber || '-' %></strong></td>
-            <td><div style="padding-left:<%= depth * 1.25 %>rem"><% if (node.title) { %><strong><%= node.title %></strong><% } else { %><span class="text-secondary">列表条款</span><% } %><details class="mt-1"><summary class="small text-secondary">查看原文</summary><div class="small mt-1" style="white-space:pre-wrap"><%= node.content || '（无后续正文）' %></div></details></div></td>
+            <td><input class="form-control form-control-sm font-monospace node-number" data-node-id="<%= node.id %>" value="<%= node.originalNumber || '' %>" aria-label="原文编号"></td>
+            <td><div style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><div class="small text-secondary mt-1">OCR 原文可直接修正；写入时使用修正后的内容。</div></div></td>
             <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
             <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
             <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select></td>
@@ -100,7 +100,13 @@
           window.showAppNotice('请至少选择一个标准项。');
           return;
         }
-        document.getElementById('selectionInput').value = JSON.stringify(selects().map(select => ({ id: select.dataset.nodeId, role: select.value })));
+        document.getElementById('selectionInput').value = JSON.stringify(selects().map(select => ({
+          id: select.dataset.nodeId,
+          role: select.value,
+          originalNumber: document.querySelector('.node-number[data-node-id="' + select.dataset.nodeId + '"]')?.value || '',
+          title: document.querySelector('.node-title[data-node-id="' + select.dataset.nodeId + '"]')?.value || '',
+          content: document.querySelector('.node-content[data-node-id="' + select.dataset.nodeId + '"]')?.value || ''
+        })));
       });
       applyGranularity('leaf');
     })();
