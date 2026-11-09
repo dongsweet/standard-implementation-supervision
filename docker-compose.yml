@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "${APP_HOST_PORT:-17005}:7001"
+      - "${APP_HOST_PORT:-17006}:7001"
     env_file: .env
     depends_on:
       db:
