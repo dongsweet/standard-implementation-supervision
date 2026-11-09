@@ -42,6 +42,28 @@ test('recognizes required field names placed only in the second header row', () 
   assert.deepEqual([ result.chapters[0].code, result.chapters[0].name ], [ '4', '访问控制' ]);
 });
 
+test('ignores instruction sheets whose adjacent labels share one column', () => {
+  const sheets = [
+    { name: '标准原文', rows: [
+      [ '章节编号', '章节名称', '标准项编号', '标准内容' ],
+      [ '8.1', '用户标识与鉴别', '8.1.1', '应建立账号管理要求' ],
+    ] },
+    { name: '填写说明', rows: [
+      [ '填写说明' ],
+      [ '章节编号', '例如 8.1' ],
+      [ '章节名称', '例如 用户标识与鉴别' ],
+      [ '标准项编号', '条款唯一编号' ],
+      [ '标准内容', '标准条款原文' ],
+      [ '应用内容位置', '其他内容在项目页填写' ],
+    ] },
+  ];
+  const result = parseStandardRows(sheets);
+  assert.equal(result.itemCount, 1);
+  assert.equal(result.importedSheetCount, 1);
+  assert.equal(result.skippedSheetCount, 1);
+  assert.deepEqual(result.chapters.map(chapter => chapter.name), [ '用户标识与鉴别' ]);
+});
+
 test('rejects duplicate item codes across sheets after Unicode normalization', () => {
   const header = [ '章节编号', '章节名称', '标准项编号', '标准内容' ];
   const sheets = [

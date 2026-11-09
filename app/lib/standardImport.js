@@ -64,10 +64,11 @@ function findHeader(rows) {
     const hasSecondHeader = next.some(value => SECOND_HEADER_MARKERS.has(normalizeHeader(value)));
     const combinedMap = headerMap(primary, next);
     const requiredFieldsInSecondRow = (firstMap.itemCode < 0 || firstMap.content < 0)
-      && combinedMap.itemCode >= 0 && combinedMap.content >= 0;
+      && combinedMap.itemCode >= 0 && combinedMap.content >= 0
+      && combinedMap.itemCode !== combinedMap.content;
     const usesSecondHeader = hasSecondHeader || requiredFieldsInSecondRow;
     const map = usesSecondHeader ? combinedMap : firstMap;
-    if (map.itemCode < 0 || map.content < 0) continue;
+    if (map.itemCode < 0 || map.content < 0 || map.itemCode === map.content) continue;
     return { map, dataStart: index + (usesSecondHeader ? 2 : 1) };
   }
   return null;
