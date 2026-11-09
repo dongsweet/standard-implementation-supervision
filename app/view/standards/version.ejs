@@ -2,9 +2,13 @@
   <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong><span class="badge text-bg-light ms-2"><%= ({ national: '国家标准', industry: '行业标准', local: '地方标准', group: '团体标准', enterprise: '企业标准', internal: '企业内部制度/规范', regulatory: '监管要求', other: '其他' })[version.standard_type] || version.standard_type %></span></div>
 </div>
 
-<div class="alert alert-info py-2"><strong>维护说明：</strong>规范版本用于区分不同年份或修订内容。可在此维护章节和标准项，也可按“标准项编号、标题、标准内容、层级、是否关键项”的 TSV/CSV 格式批量导入。</div>
+<div class="alert alert-info py-2"><strong>维护说明：</strong>基本信息已创建后，可通过“仅导入内容”上传整份 Excel/TSV，一次导入章节和标准项。也可单独新增章节或按章节批量导入。</div>
 
-<div class="d-flex justify-content-end mb-3"><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button></div>
+<div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+  <a class="btn btn-outline-secondary" href="/public/standard-import-template.tsv" download>下载导入模板</a>
+  <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#importVersionContentModal">仅导入内容</button>
+  <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button>
+</div>
 
 <% if (!chapters.length) { %><div class="card"><div class="card-body text-center text-secondary py-5">暂无章节，请先添加章节。</div></div><% } %>
 <% chapters.forEach(chapter => { %>
@@ -45,6 +49,17 @@
     </form>
   </div></div></div>
 <% }) %>
+
+<div class="modal fade" id="importVersionContentModal" tabindex="-1" aria-labelledby="importVersionContentModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/standards/versions/<%= version.id %>/import" enctype="multipart/form-data" data-confirm="将向当前版本导入章节和标准项，不修改规范基本信息。同编号章节和标准项会更新，文件中未包含的现有内容会保留。确认继续？" data-confirm-title="导入规范内容"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="importVersionContentModalLabel">仅导入规范内容</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-12"><div class="alert alert-info py-2 mb-0">当前规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>，版本：<strong><%= version.version %></strong>。此操作只导入章节和标准项，不修改规范编号、名称、类型、组织或版本标识。</div></div>
+      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">支持原始多工作表Excel和TSV模板，文件最大15MB。模板可从<a href="/public/standard-import-template.tsv" download>这里下载</a>。</div></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入内容</button></div>
+  </form>
+</div></div></div>
 
 <div class="modal fade" id="newChapterModal" tabindex="-1" aria-labelledby="newChapterModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/standards/versions/<%= version.id %>/chapters"><input type="hidden" name="_csrf" value="<%= csrf %>">

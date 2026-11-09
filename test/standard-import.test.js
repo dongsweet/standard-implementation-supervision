@@ -120,3 +120,76 @@ test('rolls back the whole standard import when an item insert fails', async () 
   assert.ok(statements.includes('ROLLBACK'));
   assert.equal(statements.includes('COMMIT'), false);
 });
+
+test('merges uploaded content into an existing version atomically', async () => {
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      queries.push({ statement, values });
+      if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: null };
+      if (statement === 'SELECT id FROM standard_versions WHERE id = $1 FOR UPDATE') {
+        return { rows: [ { id: 'version-1' } ], rowCount: 1 };
+      }
+      if (statement === 'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1') {
+        return { rows: [ { id: 'chapter-existing', code: '8.1' } ], rowCount: 1 };
+      }
+      if (statement.startsWith('INSERT INTO standard_chapters ')) {
+        return { rows: [ { id: 'chapter-existing', code: '8.1' } ], rowCount: 1 };
+      }
+      if (statement === 'SELECT id, item_code FROM standard_items WHERE standard_version_id = $1') {
+        return { rows: [ { id: 'item-existing', item_code: '8.1.1' } ], rowCount: 1 };
+      }
+      if (statement.startsWith('INSERT INTO standard_items ')) {
+        return { rows: [
+          { id: 'item-existing', item_code: '8.1.1' },
+          { id: 'item-new', item_code: '8.1.2' },
+        ], rowCount: 2 };
+      }
+      if (statement.startsWith('DELETE FROM standard_provider_assignments ')) return { rows: [], rowCount: 2 };
+      if (statement.startsWith('DELETE FROM standard_item_requirements ')) return { rows: [], rowCount: 2 };
+      return { rows: [], rowCount: 0 };
+    },
+    release() {},
+  };
+  const repository = new StandardCatalogRepository({ connect: async () => client });
+  const result = await repository.importVersionContent({
+    versionId: 'version-1',
+    chapters: [ { code: '8.1', name: '用户标识与鉴别', sortOrder: 0, items: [
+      { itemCode: '8.1.1', content: '更新后的内容', providerNames: [ '云A' ], unifiedRequirement: '统一策略' },
+      { itemCode: '8.1.2', content: '新增内容', implementationEvidence: '制度文件' },
+    ] } ],
+  });
+
+  assert.deepEqual(result, { chapterCount: 1, itemCount: 2 });
+  assert.ok(queries.some(query => query.statement === 'COMMIT'));
+  const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
+  assert.ok(itemInsert.statement.includes('ON CONFLICT (standard_version_id, item_code) DO UPDATE'));
+  assert.deepEqual(itemInsert.values.slice(0, 8), [ 'version-1', 'chapter-existing', '8.1.1', null, '更新后的内容', null, false, '{}' ]);
+  const providerInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_provider_assignments '));
+  assert.deepEqual(providerInsert.values, [ 'item-existing', '云A' ]);
+  const requirementInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_item_requirements '));
+  assert.deepEqual(requirementInsert.values, [ 'item-existing', '统一策略', null, 'item-new', '', '制度文件' ]);
+});
+
+test('rolls back existing-version content import when the version is missing', async () => {
+  const statements = [];
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      statements.push(statement);
+      if (statement === 'BEGIN' || statement === 'ROLLBACK') return { rows: [], rowCount: null };
+      if (statement === 'SELECT id FROM standard_versions WHERE id = $1 FOR UPDATE') return { rows: [], rowCount: 0 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  const repository = new StandardCatalogRepository({ connect: async () => client });
+  const result = await repository.importVersionContent({
+    versionId: 'missing-version',
+    chapters: [ { code: '1', name: '总则', sortOrder: 0, items: [ { itemCode: '1.1', content: '内容' } ] } ],
+  });
+  assert.equal(result, null);
+  assert.ok(statements.includes('ROLLBACK'));
+  assert.equal(statements.includes('COMMIT'), false);
+});

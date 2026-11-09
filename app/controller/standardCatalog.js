@@ -64,6 +64,27 @@ class StandardCatalogController extends Controller {
     await this.ctx.render('standards/version', { title: `${detail.version.standard_code} · ${detail.version.version}`, ...detail, csrf: this.ctx.csrf });
   }
 
+  async importVersionContent() {
+    const versionId = this.ctx.params.versionId;
+    try {
+      requireGlobalWrite(this.ctx);
+      const file = (this.ctx.request.files || []).find(item => item.fieldname === 'file');
+      if (!file) this.ctx.throw(400, '请选择要导入的Excel或TSV文件');
+      const result = await this.ctx.service.standardCatalog.importVersionContent(versionId, file.filepath, file.filename);
+      const notice = '内容导入完成：' + result.chapterCount + '个章节，' + result.itemCount + '个标准项';
+      this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent(notice));
+    } catch (error) {
+      if ([ 400, 409 ].includes(error.status)) {
+        const message = '导入失败：' + (error.message || '请检查文件后重试');
+        this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent(message));
+        return;
+      }
+      throw error;
+    } finally {
+      await this.ctx.cleanupRequestFiles();
+    }
+  }
+
   async createChapter() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.standardCatalog.createChapter(this.ctx.params.versionId, this.ctx.request.body || {});

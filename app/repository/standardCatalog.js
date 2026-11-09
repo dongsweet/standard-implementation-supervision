@@ -1,5 +1,9 @@
 'use strict';
 
+function normalizeCode(value) {
+  return String(value || '').normalize('NFKC').toUpperCase();
+}
+
 async function insertMany(client, table, columns, rows, options = {}) {
   const output = [];
   const batchSize = options.batchSize || 300;
@@ -142,6 +146,86 @@ class StandardCatalogRepository {
         chapterCount: chapters.length,
         itemCount: items.length,
       };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async importVersionContent({ versionId, chapters }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const version = await client.query('SELECT id FROM standard_versions WHERE id = $1 FOR UPDATE', [ versionId ]);
+      if (!version.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const existingChapters = await client.query(
+        'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1',
+        [ versionId ]
+      );
+      const chapterByExactCode = new Map(existingChapters.rows.map(chapter => [ chapter.code, chapter ]));
+      const chapterByNormalizedCode = new Map(existingChapters.rows.map(chapter => [ normalizeCode(chapter.code), chapter ]));
+      const chapterRows = chapters.map(chapter => {
+        const existing = chapterByExactCode.get(chapter.code) || chapterByNormalizedCode.get(normalizeCode(chapter.code));
+        return [ versionId, existing ? existing.code : chapter.code, chapter.name, chapter.sortOrder ];
+      });
+      const savedChapters = await insertMany(client, 'standard_chapters',
+        [ 'standard_version_id', 'code', 'name', 'sort_order' ], chapterRows, {
+          onConflict: 'ON CONFLICT (standard_version_id, code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order',
+          returning: 'id, code',
+        });
+      const chapterIds = new Map(savedChapters.map(chapter => [ normalizeCode(chapter.code), chapter.id ]));
+
+      const existingItems = await client.query(
+        'SELECT id, item_code FROM standard_items WHERE standard_version_id = $1',
+        [ versionId ]
+      );
+      const itemByExactCode = new Map(existingItems.rows.map(item => [ item.item_code, item ]));
+      const itemByNormalizedCode = new Map(existingItems.rows.map(item => [ normalizeCode(item.item_code), item ]));
+      const items = chapters.flatMap(chapter => chapter.items.map(item => {
+        const existing = itemByExactCode.get(item.itemCode) || itemByNormalizedCode.get(normalizeCode(item.itemCode));
+        return {
+          ...item,
+          chapterId: chapterIds.get(normalizeCode(chapter.code)),
+          databaseItemCode: existing ? existing.item_code : item.itemCode,
+        };
+      }));
+      const savedItems = await insertMany(client, 'standard_items',
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'level', 'is_key', 'metadata' ],
+        items.map(item => [
+          versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
+          item.level || null, item.isKey === true,
+          JSON.stringify(item.providerAssignment ? { providerAssignment: item.providerAssignment } : {}),
+        ]),
+        {
+          onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            level = EXCLUDED.level, is_key = EXCLUDED.is_key, metadata = EXCLUDED.metadata`,
+          returning: 'id, item_code',
+        });
+      const itemIds = new Map(savedItems.map(item => [ normalizeCode(item.item_code), item.id ]));
+      const importedItemIds = items.map(item => itemIds.get(normalizeCode(item.databaseItemCode)));
+      await client.query('DELETE FROM standard_provider_assignments WHERE standard_item_id = ANY($1::uuid[])', [ importedItemIds ]);
+      await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = ANY($1::uuid[])', [ importedItemIds ]);
+      const providerRows = items.flatMap(item => (item.providerNames || []).map(provider => [
+        itemIds.get(normalizeCode(item.databaseItemCode)), provider,
+      ]));
+      const requirementRows = items
+        .filter(item => item.unifiedRequirement || item.implementationEvidence)
+        .map(item => [
+          itemIds.get(normalizeCode(item.databaseItemCode)),
+          item.unifiedRequirement || '',
+          item.implementationEvidence || null,
+        ]);
+      await insertMany(client, 'standard_provider_assignments', [ 'standard_item_id', 'provider_name' ], providerRows, { onConflict: 'ON CONFLICT DO NOTHING' });
+      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'implementation_evidence' ], requirementRows);
+      await client.query('COMMIT');
+      return { chapterCount: chapters.length, itemCount: items.length };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

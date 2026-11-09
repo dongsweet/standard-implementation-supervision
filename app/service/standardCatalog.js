@@ -114,6 +114,13 @@ class StandardCatalogService extends Service {
     return result;
   }
 
+  async importVersionContent(versionId, filePath, fileName) {
+    const imported = await parseStandardImportFile(filePath, fileName);
+    const result = await this.repository.importVersionContent({ versionId, chapters: imported.chapters });
+    if (!result) this.ctx.throw(404, '规范版本不存在');
+    return result;
+  }
+
   async createChapter(versionId, payload) {
     try {
       return await this.repository.createChapter({
