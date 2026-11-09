@@ -16,10 +16,9 @@ const FIELD_ALIASES = {
   level: [ '级别', '层级' ],
   content: [ '标准内容', '标准项内容' ],
   isKey: [ '是否为重点项', '是否重点项', '是否关键项' ],
-  providerAssignment: [ '云服务商赋值' ],
-  providerNames: [ '适用云服务商' ],
+  clauseAssignment: [ '条款占位符赋值', '云服务商赋值' ],
   unifiedRequirement: [ '多云统管体系具体要求', '多云统管要求', '统管要求' ],
-  implementationEvidence: [ '统一规范实施证据列表', '实施证据列表' ],
+  expectedEvidence: [ '统一规范实施证据列表', '实施证据列表' ],
 };
 const SECOND_HEADER_MARKERS = new Set([
   '多云统管体系具体要求', '统一规范实施证据列表', '满足情况',
@@ -105,21 +104,6 @@ function splitChapter(value) {
   return { code: text, name: text };
 }
 
-function splitList(value) {
-  const result = [];
-  let current = '';
-  for (const char of cellText(value)) {
-    if ([ ',', '，', '、', ';', '；', '|', '\n' ].includes(char)) {
-      if (current.trim()) result.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  if (current.trim()) result.push(current.trim());
-  return [ ...new Set(result) ];
-}
-
 function isKeyValue(value) {
   return [ '1', 'true', 'yes', 'y', '是', '是关键项', '重点', '关键' ]
     .includes(cellText(value).normalize('NFKC').toLowerCase());
@@ -186,20 +170,15 @@ function parseStandardRows(sheets) {
         throw importError('章节编号“' + chapterCode + '”对应了多个不同章节名称');
       }
 
-      const providerNames = splitList(value('providerNames'));
-      if (providerNames.some(provider => provider.length > 200)) {
-        throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的云服务商名称不能超过200个字符');
-      }
       chapter.items.push({
         itemCode,
         title: value('itemTitle') || null,
         content,
         level: value('level') || null,
         isKey: isKeyValue(value('isKey')),
-        providerAssignment: value('providerAssignment') || null,
-        providerNames,
+        clauseAssignment: value('clauseAssignment') || null,
         unifiedRequirement: value('unifiedRequirement') || null,
-        implementationEvidence: value('implementationEvidence') || null,
+        expectedEvidence: value('expectedEvidence') || null,
       });
     }
   }

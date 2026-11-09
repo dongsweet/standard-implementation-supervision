@@ -127,15 +127,13 @@ class StandardCatalogRepository {
         [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'level', 'is_key', 'metadata' ],
         items.map(item => [
           standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
-          item.level || null, item.isKey === true, JSON.stringify(item.providerAssignment ? { providerAssignment: item.providerAssignment } : {}),
+          item.level || null, item.isKey === true, JSON.stringify(item.clauseAssignment ? { clauseAssignment: item.clauseAssignment } : {}),
         ]),
         { returning: 'id, item_code' });
       const itemIds = new Map(insertedItems.map(item => [ item.item_code, item.id ]));
-      const providerRows = items.flatMap(item => (item.providerNames || []).map(provider => [ itemIds.get(item.itemCode), provider ]));
-      const requirementRows = items.filter(item => item.unifiedRequirement || item.implementationEvidence)
-        .map(item => [ itemIds.get(item.itemCode), item.unifiedRequirement || '', item.implementationEvidence || null ]);
-      await insertMany(client, 'standard_provider_assignments', [ 'standard_item_id', 'provider_name' ], providerRows, { onConflict: 'ON CONFLICT DO NOTHING' });
-      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'implementation_evidence' ], requirementRows);
+      const requirementRows = items.filter(item => item.unifiedRequirement || item.expectedEvidence)
+        .map(item => [ itemIds.get(item.itemCode), item.unifiedRequirement || '', item.expectedEvidence || null ]);
+      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'expected_evidence' ], requirementRows);
       await client.query('COMMIT');
       return {
         standardId: standard.id,
@@ -200,7 +198,7 @@ class StandardCatalogRepository {
         items.map(item => [
           versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
           item.level || null, item.isKey === true,
-          JSON.stringify(item.providerAssignment ? { providerAssignment: item.providerAssignment } : {}),
+          JSON.stringify(item.clauseAssignment ? { clauseAssignment: item.clauseAssignment } : {}),
         ]),
         {
           onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
@@ -210,20 +208,15 @@ class StandardCatalogRepository {
         });
       const itemIds = new Map(savedItems.map(item => [ normalizeCode(item.item_code), item.id ]));
       const importedItemIds = items.map(item => itemIds.get(normalizeCode(item.databaseItemCode)));
-      await client.query('DELETE FROM standard_provider_assignments WHERE standard_item_id = ANY($1::uuid[])', [ importedItemIds ]);
       await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = ANY($1::uuid[])', [ importedItemIds ]);
-      const providerRows = items.flatMap(item => (item.providerNames || []).map(provider => [
-        itemIds.get(normalizeCode(item.databaseItemCode)), provider,
-      ]));
       const requirementRows = items
-        .filter(item => item.unifiedRequirement || item.implementationEvidence)
+        .filter(item => item.unifiedRequirement || item.expectedEvidence)
         .map(item => [
           itemIds.get(normalizeCode(item.databaseItemCode)),
           item.unifiedRequirement || '',
-          item.implementationEvidence || null,
+          item.expectedEvidence || null,
         ]);
-      await insertMany(client, 'standard_provider_assignments', [ 'standard_item_id', 'provider_name' ], providerRows, { onConflict: 'ON CONFLICT DO NOTHING' });
-      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'implementation_evidence' ], requirementRows);
+      await insertMany(client, 'standard_item_requirements', [ 'standard_item_id', 'unified_requirement', 'expected_evidence' ], requirementRows);
       await client.query('COMMIT');
       return { chapterCount: chapters.length, itemCount: items.length };
     } catch (error) {
@@ -285,8 +278,7 @@ class StandardCatalogRepository {
                'id', si.id, 'itemCode', si.item_code, 'title', si.title,
                'content', si.content, 'level', si.level, 'isKey', si.is_key,
                'metadata', si.metadata,
-               'providers', COALESCE((SELECT json_agg(spa.provider_name ORDER BY spa.provider_name) FROM standard_provider_assignments spa WHERE spa.standard_item_id = si.id), '[]'::json),
-               'requirements', COALESCE((SELECT json_agg(json_build_object('requirement', sir.unified_requirement, 'evidence', sir.implementation_evidence) ORDER BY sir.sort_order, sir.id) FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '[]'::json)
+               'requirements', COALESCE((SELECT json_agg(json_build_object('requirement', sir.unified_requirement, 'evidence', sir.expected_evidence) ORDER BY sir.sort_order, sir.id) FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '[]'::json)
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
       LEFT JOIN standard_items si ON si.chapter_id = sc.id
@@ -313,7 +305,7 @@ class StandardCatalogRepository {
     return result.rows[0] || null;
   }
 
-  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata, providerNames = [], unifiedRequirement, implementationEvidence }) {
+  async createItem({ versionId, chapterId, itemCode, title, content, level, isKey, metadata, unifiedRequirement, expectedEvidence }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -323,11 +315,8 @@ class StandardCatalogRepository {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
       RETURNING *`, [ versionId, chapterId, itemCode, title || null, content, level || null, isKey === true, JSON.stringify(metadata || {}) ]);
       const itemId = result.rows[0].id;
-      for (const provider of providerNames) {
-        await client.query('INSERT INTO standard_provider_assignments (standard_item_id, provider_name) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ itemId, provider ]);
-      }
-      if (unifiedRequirement) {
-        await client.query(`INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, implementation_evidence) VALUES ($1, $2, $3)`, [ itemId, unifiedRequirement, implementationEvidence || null ]);
+      if (unifiedRequirement || expectedEvidence) {
+        await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, expected_evidence) VALUES ($1, $2, $3)', [ itemId, unifiedRequirement || '', expectedEvidence || null ]);
       }
       await client.query('COMMIT');
       return result.rows[0];
@@ -355,12 +344,9 @@ class StandardCatalogRepository {
         [ versionId, chapterId, row.itemCode, row.title || null, row.content, row.level || null, row.isKey === true, JSON.stringify(row.metadata || {}) ]);
         const itemResult = await client.query('SELECT id FROM standard_items WHERE standard_version_id = $1 AND item_code = $2', [ versionId, row.itemCode ]);
         const itemId = itemResult.rows[0].id;
-        for (const provider of row.providerNames || []) {
-          await client.query('INSERT INTO standard_provider_assignments (standard_item_id, provider_name) VALUES ($1, $2) ON CONFLICT DO NOTHING', [ itemId, provider ]);
-        }
-        if (row.unifiedRequirement) {
+        if (row.unifiedRequirement || row.expectedEvidence) {
           await client.query('DELETE FROM standard_item_requirements WHERE standard_item_id = $1', [ itemId ]);
-          await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, implementation_evidence) VALUES ($1, $2, $3)', [ itemId, row.unifiedRequirement, row.implementationEvidence || null ]);
+          await client.query('INSERT INTO standard_item_requirements (standard_item_id, unified_requirement, expected_evidence) VALUES ($1, $2, $3)', [ itemId, row.unifiedRequirement || '', row.expectedEvidence || null ]);
         }
         count += 1;
       }

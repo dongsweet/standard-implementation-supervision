@@ -145,12 +145,13 @@ class StandardCatalogService extends Service {
         itemCode: required(payload.itemCode, '标准项编号'),
         title: payload.title,
         content: required(payload.content, '标准内容'),
-        level: payload.level,
+        level: String(payload.level || '').trim() || null,
         isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
-        metadata: {},
-        providerNames: this.parseProviders(payload.providerNames),
+        metadata: String(payload.clauseAssignment || '').trim()
+          ? { clauseAssignment: String(payload.clauseAssignment).trim() }
+          : {},
         unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
-        implementationEvidence: String(payload.implementationEvidence || '').trim() || null,
+        expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       });
     } catch (error) {
       if (error.code === '23505') this.ctx.throw(409, '该版本下标准项编号已存在');
@@ -164,14 +165,14 @@ class StandardCatalogService extends Service {
     const rows = lines.map((line, index) => {
       const parts = this.splitDelimitedLine(line);
       if (index === 0 && /标准项编号|item.?code/i.test(parts[0])) return null;
-      const [ itemCode, title, content, level, isKey, providers, unifiedRequirement, implementationEvidence ] = parts.map(item => String(item || '').trim());
+      const [ itemCode, title, content, level, isKey, clauseAssignment, unifiedRequirement, expectedEvidence ] = parts.map(item => String(item || '').trim());
       if (!itemCode || !content) this.ctx.throw(400, `第${index + 1}行缺少标准项编号或标准内容`);
       return {
         itemCode, title, content, level,
         isKey: [ '1', 'true', '是', '是关键项' ].includes(isKey.toLowerCase()),
-        providerNames: this.parseProviders(providers),
+        metadata: clauseAssignment ? { clauseAssignment } : {},
         unifiedRequirement: unifiedRequirement || null,
-        implementationEvidence: implementationEvidence || null,
+        expectedEvidence: expectedEvidence || null,
       };
     }).filter(Boolean);
     if (!rows.length) this.ctx.throw(400, '没有可导入的标准项');
@@ -199,10 +200,6 @@ class StandardCatalogService extends Service {
     }
     parts.push(current);
     return parts;
-  }
-
-  parseProviders(value) {
-    return String(value || '').split(/[,，、;；|\n]/).map(item => item.trim()).filter(Boolean).slice(0, 30);
   }
 
   async importItems(chapterId, text) {

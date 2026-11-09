@@ -95,17 +95,20 @@ class ProjectRepository {
       WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
 
     const answers = await client.query(`
-      SELECT id, standard_item_id, cloud_center_id, status, measure_description,
-             problem_description, owner_user_id, updated_at
+      SELECT id, standard_item_id, cloud_center_id, applicability, applicability_scope,
+             status, actual_evidence, measure_description, problem_description, owner_user_id, updated_at
       FROM project_standard_answers WHERE project_id = $1`, [ sourceProjectId ]);
     const answerMap = new Map();
     for (const answer of answers.rows) {
       const inserted = await client.query(`
         INSERT INTO project_standard_answers
-          (project_id, standard_item_id, cloud_center_id, status, measure_description, problem_description, owner_user_id, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          (project_id, standard_item_id, cloud_center_id, applicability, applicability_scope,
+           status, actual_evidence, measure_description, problem_description, owner_user_id, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT DO NOTHING RETURNING id`,
-      [ targetProjectId, answer.standard_item_id, answer.cloud_center_id, answer.status, answer.measure_description, answer.problem_description, answer.owner_user_id, answer.updated_at ]);
+      [ targetProjectId, answer.standard_item_id, answer.cloud_center_id, answer.applicability,
+        answer.applicability_scope, answer.status, answer.actual_evidence, answer.measure_description,
+        answer.problem_description, answer.owner_user_id, answer.updated_at ]);
       if (inserted.rowCount) answerMap.set(answer.id, inserted.rows[0].id);
     }
 
@@ -152,7 +155,15 @@ class ProjectRepository {
     const items = await this.pool.query(`
       SELECT psi.standard_item_id, psi.item_code_snapshot, psi.content_snapshot, psi.chapter_code_snapshot,
              si.title, si.level, si.is_key,
+             COALESCE(si.metadata ->> 'clauseAssignment', si.metadata ->> 'providerAssignment', '') AS clause_assignment,
+             COALESCE((SELECT string_agg(sir.unified_requirement, '；' ORDER BY sir.sort_order, sir.id)
+               FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '') AS unified_requirement,
+             COALESCE((SELECT string_agg(sir.expected_evidence, '；' ORDER BY sir.sort_order, sir.id)
+               FROM standard_item_requirements sir WHERE sir.standard_item_id = si.id), '') AS expected_evidence,
+             COALESCE(psa.applicability, 'unspecified') AS applicability,
+             COALESCE(psa.applicability_scope, '') AS applicability_scope,
              COALESCE(psa.status, 'unassessed') AS answer_status,
+             COALESCE(psa.actual_evidence, '') AS actual_evidence,
              COALESCE(psa.measure_description, '') AS measure_description,
              COALESCE(psa.problem_description, '') AS problem_description,
              psa.updated_at AS answer_updated_at
@@ -333,16 +344,22 @@ class ProjectRepository {
     }
   }
 
-  async saveAnswer({ projectId, standardItemId, status, measureDescription, problemDescription, ownerUserId }) {
+  async saveAnswer({ projectId, standardItemId, applicability, applicabilityScope, status, actualEvidence, measureDescription, problemDescription, ownerUserId }) {
     const result = await this.pool.query(`
       INSERT INTO project_standard_answers
-        (project_id, standard_item_id, status, measure_description, problem_description, owner_user_id, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, now())
+        (project_id, standard_item_id, applicability, applicability_scope, status, actual_evidence,
+         measure_description, problem_description, owner_user_id, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
       ON CONFLICT (project_id, standard_item_id) WHERE cloud_center_id IS NULL DO UPDATE SET
-        status = EXCLUDED.status, measure_description = EXCLUDED.measure_description,
+        applicability = EXCLUDED.applicability, applicability_scope = EXCLUDED.applicability_scope,
+        status = EXCLUDED.status, actual_evidence = EXCLUDED.actual_evidence,
+        measure_description = EXCLUDED.measure_description,
         problem_description = EXCLUDED.problem_description, owner_user_id = EXCLUDED.owner_user_id,
         updated_at = now()
-      RETURNING *`, [ projectId, standardItemId, status, measureDescription || null, problemDescription || null, ownerUserId || null ]);
+      RETURNING *`, [
+      projectId, standardItemId, applicability, applicabilityScope || null, status, actualEvidence || null,
+      measureDescription || null, problemDescription || null, ownerUserId || null,
+    ]);
     return result.rows[0];
   }
 }

@@ -13,17 +13,17 @@ const newline = String.fromCharCode(10);
 
 test('maps two-row headers and carries merged chapter names forward', () => {
   const result = parseStandardRows([ { name: '源工作表', rows: [
-    [ '标准名称', '标准项编号', '标准项标题', '标准内容', '级别', '是否为重点项', '云服务商赋值', '适用云服务商', '统管分组', '统管分组', '应答', '监督' ],
+    [ '标准名称', '标准项编号', '标准项标题', '标准内容', '级别', '是否为重点项', '条款占位符赋值', '适用云服务商', '统管分组', '统管分组', '应答', '监督' ],
     [ '', '', '', '', '', '', '', '', '多云统管体系具体要求', '统一规范实施证据列表', '满足情况', '检查频率' ],
-    [ '8.1 用户标识与鉴别', '8.1.1', '账号管理', '应建立账号管理要求', '三级', '是', '全部云服务商', '华为云、阿里云', '统一账号策略', '制度、配置截图', '满足', '每年' ],
-    [ '', '8.1.2', '身份鉴别', '应采用身份鉴别措施', '三级', '否', '重点云服务商', '腾讯云', '', '', '部分满足', '每季度' ],
+    [ '8.1 用户标识与鉴别', '8.1.1', '账号管理', '应建立账号管理要求', '三级', '是', '火灾', '华为云、阿里云', '统一账号策略', '制度、配置截图', '满足', '每年' ],
+    [ '', '8.1.2', '身份鉴别', '应采用身份鉴别措施', '三级', '否', '电磁泄漏', '腾讯云', '', '', '部分满足', '每季度' ],
   ] } ]);
   assert.equal(result.itemCount, 2);
   assert.deepEqual([ result.chapters[0].code, result.chapters[0].name ], [ '8.1', '用户标识与鉴别' ]);
   assert.equal(result.chapters[0].items[0].unifiedRequirement, '统一账号策略');
-  assert.equal(result.chapters[0].items[0].implementationEvidence, '制度、配置截图');
-  assert.equal(result.chapters[0].items[0].providerAssignment, '全部云服务商');
-  assert.deepEqual(result.chapters[0].items[0].providerNames, [ '华为云', '阿里云' ]);
+  assert.equal(result.chapters[0].items[0].expectedEvidence, '制度、配置截图');
+  assert.equal(result.chapters[0].items[0].clauseAssignment, '火灾');
+  assert.equal(Object.hasOwn(result.chapters[0].items[0], 'providerNames'), false);
   assert.equal(Object.hasOwn(result.chapters[0].items[0], 'satisfaction'), false);
   assert.equal(Object.hasOwn(result.chapters[0].items[0], 'frequency'), false);
 });
@@ -54,13 +54,13 @@ test('parses a TSV upload with quoted fields', async () => {
   const filePath = path.join(directory, 'source.tsv');
   try {
     const rows = [
-      [ '章节编号', '章节名称', '标准项编号', '标准项标题', '标准内容', '是否为重点项', '云服务商赋值', '适用云服务商', '多云统管体系具体要求', '统一规范实施证据列表' ],
-      [ '8.1', '用户标识与鉴别', '8.1.1', '账号管理', '账号管理要求', '是', '全部', '云A|云B', '统一策略', '制度文件' ],
+      [ '章节编号', '章节名称', '标准项编号', '标准项标题', '标准内容', '是否为重点项', '条款占位符赋值', '多云统管体系具体要求', '统一规范实施证据列表' ],
+      [ '8.1', '用户标识与鉴别', '8.1.1', '账号管理', '账号管理要求', '是', '火灾', '统一策略', '制度文件' ],
     ];
     await fs.writeFile(filePath, rows.map(row => row.join(tab)).join(newline), 'utf8');
     const result = await parseStandardImportFile(filePath, 'source.tsv');
     assert.equal(result.itemCount, 1);
-    assert.equal(result.chapters[0].items[0].implementationEvidence, '制度文件');
+    assert.equal(result.chapters[0].items[0].expectedEvidence, '制度文件');
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -85,15 +85,15 @@ test('writes mapped standard fields inside one database transaction', async () =
   const result = await repository.importStandard({
     code: 'STD-1', name: '测试规范', standardType: 'national', version: '2026',
     chapters: [ { code: '8.1', name: '用户标识与鉴别', sortOrder: 0, items: [ {
-      itemCode: '8.1.1', content: '账号管理要求', isKey: true, providerAssignment: '全部云服务商',
-      providerNames: [ '云A' ], unifiedRequirement: '统一策略', implementationEvidence: '制度文件',
+      itemCode: '8.1.1', content: '账号管理要求', isKey: true, clauseAssignment: '火灾',
+      unifiedRequirement: '统一策略', expectedEvidence: '制度文件',
     } ] } ],
   });
   assert.equal(result.itemCount, 1);
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
-  assert.equal(JSON.parse(itemInsert.values[7]).providerAssignment, '全部云服务商');
-  assert.deepEqual(queries.find(query => query.statement.startsWith('INSERT INTO standard_provider_assignments ')).values, [ 'item-1', '云A' ]);
+  assert.equal(JSON.parse(itemInsert.values[7]).clauseAssignment, '火灾');
+  assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
   assert.deepEqual(queries.find(query => query.statement.startsWith('INSERT INTO standard_item_requirements ')).values, [ 'item-1', '统一策略', '制度文件' ]);
 });
 
@@ -146,7 +146,6 @@ test('merges uploaded content into an existing version atomically', async () => 
           { id: 'item-new', item_code: '8.1.2' },
         ], rowCount: 2 };
       }
-      if (statement.startsWith('DELETE FROM standard_provider_assignments ')) return { rows: [], rowCount: 2 };
       if (statement.startsWith('DELETE FROM standard_item_requirements ')) return { rows: [], rowCount: 2 };
       return { rows: [], rowCount: 0 };
     },
@@ -156,8 +155,8 @@ test('merges uploaded content into an existing version atomically', async () => 
   const result = await repository.importVersionContent({
     versionId: 'version-1',
     chapters: [ { code: '8.1', name: '用户标识与鉴别', sortOrder: 0, items: [
-      { itemCode: '8.1.1', content: '更新后的内容', providerNames: [ '云A' ], unifiedRequirement: '统一策略' },
-      { itemCode: '8.1.2', content: '新增内容', implementationEvidence: '制度文件' },
+      { itemCode: '8.1.1', content: '更新后的内容', clauseAssignment: '火灾', unifiedRequirement: '统一策略' },
+      { itemCode: '8.1.2', content: '新增内容', expectedEvidence: '制度文件' },
     ] } ],
   });
 
@@ -165,9 +164,8 @@ test('merges uploaded content into an existing version atomically', async () => 
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
   assert.ok(itemInsert.statement.includes('ON CONFLICT (standard_version_id, item_code) DO UPDATE'));
-  assert.deepEqual(itemInsert.values.slice(0, 8), [ 'version-1', 'chapter-existing', '8.1.1', null, '更新后的内容', null, false, '{}' ]);
-  const providerInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_provider_assignments '));
-  assert.deepEqual(providerInsert.values, [ 'item-existing', '云A' ]);
+  assert.deepEqual(itemInsert.values.slice(0, 8), [ 'version-1', 'chapter-existing', '8.1.1', null, '更新后的内容', null, false, '{"clauseAssignment":"火灾"}' ]);
+  assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
   const requirementInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_item_requirements '));
   assert.deepEqual(requirementInsert.values, [ 'item-existing', '统一策略', null, 'item-new', '', '制度文件' ]);
 });

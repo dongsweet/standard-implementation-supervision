@@ -3,7 +3,8 @@
 const Service = require('egg').Service;
 const ProjectRepository = require('../repository/project');
 
-const ANSWER_STATUSES = new Set([ 'unassessed', 'satisfied', 'partially_satisfied', 'not_satisfied', 'not_applicable' ]);
+const ANSWER_STATUSES = new Set([ 'unassessed', 'satisfied', 'partially_satisfied', 'not_satisfied' ]);
+const APPLICABILITIES = new Set([ 'unspecified', 'applicable', 'not_applicable' ]);
 
 class ProjectService extends Service {
   get repository() {
@@ -113,12 +114,19 @@ class ProjectService extends Service {
   }
 
   async saveAnswer(projectId, standardItemId, payload, ownerUserId) {
-    const status = String(payload.status || 'unassessed');
+    const applicability = String(payload.applicability || 'unspecified');
+    const status = applicability === 'not_applicable'
+      ? 'unassessed'
+      : String(payload.status || 'unassessed');
+    if (!APPLICABILITIES.has(applicability)) this.ctx.throw(400, '无效的适用性状态');
     if (!ANSWER_STATUSES.has(status)) this.ctx.throw(400, '无效的应答状态');
     return this.repository.saveAnswer({
       projectId,
       standardItemId,
+      applicability,
+      applicabilityScope: String(payload.applicabilityScope || '').trim() || null,
       status,
+      actualEvidence: String(payload.actualEvidence || '').trim() || null,
       measureDescription: payload.measureDescription,
       problemDescription: payload.problemDescription,
       ownerUserId,
