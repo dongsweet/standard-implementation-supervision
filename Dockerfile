@@ -1,5 +1,6 @@
 FROM node:26-alpine
 WORKDIR /app
+RUN apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-chi_sim tesseract-ocr-data-eng
 COPY package*.json ./
 COPY scripts ./scripts
 RUN npm install --omit=dev

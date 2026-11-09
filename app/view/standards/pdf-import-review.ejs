@@ -1,0 +1,134 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div class="text-secondary">PDF导入：<strong><%= job.standard_code %> · <%= job.standard_name %> · <%= job.version %></strong></div>
+  <a class="btn btn-sm btn-outline-secondary ms-auto" href="/standards/versions/<%= versionId %>">返回规范维护</a>
+</div>
+
+<% if ([ 'queued', 'processing' ].includes(job.status)) { %>
+  <div class="card" id="processingPanel"><div class="card-body py-5 text-center">
+    <h2 class="h5">正在识别PDF并构建章节树</h2>
+    <p class="text-secondary mb-3" id="processingMessage">已处理 <%= job.progress || 0 %>%<%= job.page_count ? '，共 ' + job.page_count + ' 页' : '' %></p>
+    <div class="progress mx-auto" style="max-width:560px;height:24px"><div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width:<%= job.progress || 0 %>%"><%= job.progress || 0 %>%</div></div>
+    <p class="small text-secondary mt-3 mb-0">扫描型PDF需要逐页 OCR；完成后会显示预览树，不会自动写入规范库。</p>
+  </div></div>
+<% } else if (job.status === 'failed') { %>
+  <div class="alert alert-danger"><strong>PDF解析失败：</strong><%= job.error_message || '未知错误' %></div>
+  <a class="btn btn-primary" href="/standards/versions/<%= versionId %>">返回并重新上传</a>
+<% } else if (job.status === 'completed') { %>
+  <div class="alert alert-success">该PDF导入任务已经完成，标准原文已写入规范库。</div>
+  <a class="btn btn-primary" href="/standards/versions/<%= versionId %>">返回规范维护</a>
+<% } else { %>
+  <div class="alert alert-info py-2"><strong>核对说明：</strong>OCR结果不会自动写库。请确认原文编号、章节范围与拆分粒度；默认跳过前言、附录和参考文献。</div>
+  <div class="card mb-3">
+    <div class="card-body row g-3 align-items-end">
+      <div class="col-12 col-xl-4"><label class="form-label" for="granularity">批量拆分粒度</label><select class="form-select" id="granularity">
+        <option value="leaf" selected>叶子条款（推荐，如 6.1.1 a）</option>
+        <option value="level3">三级要求（如 6.1.1）</option>
+        <option value="level2">二级标题（如 6.1）</option>
+        <option value="level1">大章（如 6）</option>
+      </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过。</div></div>
+      <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项</div></div>
+      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
+    </div>
+  </div>
+
+  <% (result.warnings || []).forEach(warning => { %><div class="alert alert-warning py-2"><%= warning %></div><% }) %>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center"><h3 class="card-title">识别结果预览</h3><span class="badge text-bg-secondary ms-auto"><%= result.nodes.length %> 个节点 · <%= result.pages %> 页</span></div>
+    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th style="width:7rem">原文编号</th><th>层级内容</th><th style="width:6rem">PDF页码</th><th style="width:6rem">OCR置信度</th><th style="width:10rem">导入角色</th></tr></thead>
+      <tbody>
+        <% result.nodes.forEach(node => { const depth = Math.max(0, (node.level || 1) - 1); %>
+          <tr data-node-id="<%= node.id %>">
+            <td><strong class="font-monospace"><%= node.originalNumber || '-' %></strong></td>
+            <td><div style="padding-left:<%= depth * 1.25 %>rem"><% if (node.title) { %><strong><%= node.title %></strong><% } else { %><span class="text-secondary">列表条款</span><% } %><details class="mt-1"><summary class="small text-secondary">查看原文</summary><div class="small mt-1" style="white-space:pre-wrap"><%= node.content || '（无后续正文）' %></div></details></div></td>
+            <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
+            <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
+            <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table></div>
+  </div>
+
+  <form id="applyPdfImport" method="post" action="/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/apply" data-confirm="确认将当前选择写入规范库？标准化编号会自动生成，原文编号保持不变。" data-confirm-title="确认PDF导入"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="selection" id="selectionInput"></form>
+
+  <script>
+    (() => {
+      const nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
+      const byId = new Map(nodes.map(node => [ node.id, node ]));
+      const isDescendant = (node, ancestorId) => {
+        let parentId = node.parentId;
+        const visited = new Set();
+        while (parentId && byId.has(parentId) && !visited.has(parentId)) {
+          if (parentId === ancestorId) return true;
+          visited.add(parentId);
+          parentId = byId.get(parentId).parentId;
+        }
+        return false;
+      };
+      const hasListDescendant = node => nodes.some(other => other.kind === 'list' && isDescendant(other, node.id));
+      const selects = () => Array.from(document.querySelectorAll('.node-role'));
+      const updateCount = () => {
+        document.getElementById('selectedCount').textContent = selects().filter(select => select.value === 'item').length;
+      };
+      const setRole = (id, role) => {
+        const select = document.querySelector('.node-role[data-node-id="' + id + '"]');
+        if (select) select.value = role;
+      };
+      const applyGranularity = value => {
+        for (const node of nodes) {
+          if (value === 'leaf') setRole(node.id, node.kind === 'list' || (node.kind === 'heading' && !hasListDescendant(node)) ? 'item' : 'container');
+          if (value === 'level3') setRole(node.id, node.kind === 'heading' && node.level === 3 ? 'item' : node.kind === 'list' ? 'skip' : 'container');
+          if (value === 'level2') setRole(node.id, node.kind === 'heading' && node.level === 2 ? 'item' : 'container');
+          if (value === 'level1') setRole(node.id, node.kind === 'heading' && node.level === 1 ? 'item' : 'container');
+        }
+        updateCount();
+      };
+      document.getElementById('granularity').addEventListener('change', event => applyGranularity(event.target.value));
+      document.getElementById('skipFrontMatter').addEventListener('click', () => {
+        for (const node of nodes) {
+          if (node.pageFrom <= 7 || /^(前言|引言|目次|目\s*录)$/.test(node.title || '')) setRole(node.id, 'skip');
+        }
+        updateCount();
+      });
+      selects().forEach(select => select.addEventListener('change', updateCount));
+      document.getElementById('applyPdfImport').addEventListener('submit', event => {
+        const items = selects().filter(select => select.value === 'item');
+        if (!items.length) {
+          event.preventDefault();
+          window.showAppNotice('请至少选择一个标准项。');
+          return;
+        }
+        document.getElementById('selectionInput').value = JSON.stringify(selects().map(select => ({ id: select.dataset.nodeId, role: select.value })));
+      });
+      applyGranularity('leaf');
+    })();
+  </script>
+<% } %>
+
+<% if ([ 'queued', 'processing' ].includes(job.status)) { %>
+<script>
+  (() => {
+    const url = '/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/status';
+    const poll = async () => {
+      try {
+        const response = await fetch(url, { headers: { accept: 'application/json' } });
+        if (!response.ok) throw new Error('状态读取失败');
+        const status = await response.json();
+        document.getElementById('progressBar').style.width = status.progress + '%';
+        document.getElementById('progressBar').textContent = status.progress + '%';
+        document.getElementById('processingMessage').textContent = '已处理 ' + status.progress + '%' + (status.pageCount ? '，共 ' + status.pageCount + ' 页' : '');
+        if (status.status === 'ready' || status.status === 'failed' || status.status === 'completed') {
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // A transient failure should not stop polling.
+      }
+      window.setTimeout(poll, 2000);
+    };
+    window.setTimeout(poll, 1500);
+  })();
+</script>
+<% } %>

@@ -7,7 +7,7 @@ module.exports = appInfo => {
   config.keys = process.env.EGG_KEYS || `${appInfo.name}_local_development_key`;
   config.cluster = { listen: { port: Number(process.env.PORT || 7001) } };
   config.bodyParser = { enable: true, jsonLimit: '2mb', formLimit: '2mb' };
-  config.multipart = { mode: 'file', fileSize: '15mb', fileExtensions: [ '.xlsx', '.tsv' ] };
+  config.multipart = { mode: 'file', fileSize: '50mb', fileExtensions: [ '.xlsx', '.tsv', '.pdf' ] };
   // Egg checks CSRF before multipart parsing, so file uploads use the same-origin
   // referer check while regular forms continue to use the token.
   config.security = { csrf: { enable: true, type: 'any' } };
@@ -23,6 +23,12 @@ module.exports = appInfo => {
     apiKey: process.env.AI_API_KEY || '',
     model: process.env.AI_MODEL || '',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 30000),
+  };
+  config.pdfImport = {
+    maxMb: Number(process.env.PDF_IMPORT_MAX_MB || 50),
+    dpi: Number(process.env.PDF_IMPORT_DPI || 160),
+    ocrLanguages: process.env.PDF_OCR_LANGUAGES || 'chi_sim+eng',
+    maxPages: Number(process.env.PDF_IMPORT_MAX_PAGES || 300),
   };
   config.storage = {
     driver: process.env.STORAGE_DRIVER || 'local',

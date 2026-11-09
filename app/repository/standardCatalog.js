@@ -253,11 +253,12 @@ class StandardCatalogRepository {
       WHERE sv.id = $1`, [ versionId ]);
     if (!versionResult.rowCount) return null;
     const chapters = await this.pool.query(`
-      SELECT sc.id, sc.code, sc.name, sc.sort_order,
+      SELECT sc.id, sc.code, sc.name, sc.sort_order, sc.standard_number,
              count(si.id)::integer AS item_count,
              COALESCE(json_agg(json_build_object(
-               'id', si.id, 'itemCode', si.item_code, 'title', si.title,
-               'content', si.content
+               'id', si.id, 'standardNumber', si.standard_number,
+               'itemCode', si.item_code, 'title', si.title, 'content', si.content,
+               'sourcePageFrom', si.source_page_from, 'sourcePageTo', si.source_page_to
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
       LEFT JOIN standard_items si ON si.chapter_id = sc.id

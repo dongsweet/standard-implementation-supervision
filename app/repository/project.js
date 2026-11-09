@@ -78,8 +78,10 @@ class ProjectRepository {
       SELECT $2, standard_version_id, snapshot_at FROM project_standard_versions
       WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
-      INSERT INTO project_standard_items (project_id, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at)
-      SELECT $2, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at
+      INSERT INTO project_standard_items (project_id, standard_item_id, standard_number_snapshot,
+        item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at)
+      SELECT $2, standard_item_id, standard_number_snapshot, item_code_snapshot,
+        content_snapshot, chapter_code_snapshot, snapshotted_at
       FROM project_standard_items WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
       INSERT INTO project_cloud_centers (project_id, cloud_center_id, owner_user_id)
@@ -153,7 +155,8 @@ class ProjectRepository {
       GROUP BY psv.project_id, psv.snapshot_at, sv.id, s.id
       ORDER BY s.code, sv.version`, [ projectId ]);
     const items = await this.pool.query(`
-      SELECT psi.standard_item_id, psi.item_code_snapshot, psi.content_snapshot, psi.chapter_code_snapshot,
+      SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
+             psi.content_snapshot, psi.chapter_code_snapshot,
              si.title,
              COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
@@ -269,8 +272,9 @@ class ProjectRepository {
         ON CONFLICT DO NOTHING`, [ projectId, standardVersionId ]);
       await client.query(`
         INSERT INTO project_standard_items
-          (project_id, standard_item_id, item_code_snapshot, content_snapshot, chapter_code_snapshot, snapshotted_at)
-        SELECT $1, si.id, si.item_code, si.content, sc.code, now()
+          (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
+           content_snapshot, chapter_code_snapshot, snapshotted_at)
+        SELECT $1, si.id, si.standard_number, si.item_code, si.content, sc.code, now()
         FROM standard_items si
         JOIN standard_chapters sc ON sc.id = si.chapter_id
         WHERE si.standard_version_id = $2

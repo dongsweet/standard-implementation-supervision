@@ -2,26 +2,27 @@
   <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong><span class="badge text-bg-light ms-2"><%= ({ national: '国家标准', industry: '行业标准', local: '地方标准', group: '团体标准', enterprise: '企业标准', internal: '企业内部制度/规范', regulatory: '监管要求', other: '其他' })[version.standard_type] || version.standard_type %></span></div>
 </div>
 
-<div class="alert alert-info py-2"><strong>维护说明：</strong>基本信息已创建后，可通过“仅导入内容”上传整份 Excel/TSV，一次导入章节和标准项。也可单独新增章节或按章节批量导入。</div>
+<div class="alert alert-info py-2"><strong>维护说明：</strong>推荐直接上传规范PDF。系统会 OCR 识别章节和条款，经人工选择粒度、跳过章节后写入；Excel/TSV 仍可用于结构化补录。标准化编号由系统自动生成，原文编号原样保留。</div>
 
 <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
   <a class="btn btn-outline-secondary" href="/public/standard-import-template.xlsx?v=3" download>下载标准原文模板</a>
-  <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#importVersionContentModal">仅导入内容</button>
-  <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button>
+  <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#importVersionContentModal">导入Excel/TSV</button>
+  <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#pdfImportModal">导入PDF并预览</button>
+  <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button>
 </div>
 
 <% if (!chapters.length) { %><div class="card"><div class="card-body text-center text-secondary py-5">暂无章节，请先添加章节。</div></div><% } %>
 <% chapters.forEach(chapter => { %>
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center">
-      <h3 class="card-title"><%= chapter.code %> · <%= chapter.name %> <span class="badge text-bg-light ms-2"><%= chapter.item_count %> 项</span></h3>
+      <h3 class="card-title"><%= chapter.code %> · <%= chapter.name %> <span class="badge text-bg-light ms-2"><%= chapter.standard_number || '' %></span><span class="badge text-bg-light ms-1"><%= chapter.item_count %> 项</span></h3>
       <button class="btn btn-sm btn-outline-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#itemModal-<%= chapter.id %>">新增标准项</button>
       <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#importModal-<%= chapter.id %>">批量导入</button>
     </div>
     <div class="table-responsive"><table class="table table-sm table-striped align-middle mb-0">
-      <thead><tr><th>标准项编号</th><th>标准项标题</th><th>标准内容</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { %><tr><td><strong><%= item.itemCode %></strong></td><td><%= item.title || '-' %></td><td><%= item.content %></td></tr><% }) %>
-        <% if (!chapter.items.length) { %><tr><td colspan="3" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
+      <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>标准内容</th><th>来源页</th></tr></thead><tbody>
+        <% (chapter.items || []).forEach(item => { %><tr><td><span class="font-monospace"><%= item.standardNumber %></span></td><td><strong><%= item.itemCode %></strong></td><td><%= item.title || '-' %></td><td><%= item.content %></td><td><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
+        <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>
 
@@ -45,6 +46,17 @@
     </form>
   </div></div></div>
 <% }) %>
+
+<div class="modal fade" id="pdfImportModal" tabindex="-1" aria-labelledby="pdfImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+  <form method="post" action="/standards/versions/<%= version.id %>/pdf-imports" enctype="multipart/form-data" data-confirm="将上传PDF并在后台执行OCR，完成后先进入预览，不会自动写入。确认继续？" data-confirm-title="导入规范PDF"><input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="pdfImportModalLabel">导入规范PDF</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-info py-2">系统使用本地中文 OCR 识别文字和层级，保留原文编号、页码和原文摘录。解析完成后，你可选择“叶子条款、三级要求、二级标题或大章”作为标准项，并逐节点跳过。</div>
+      <label class="form-label" for="pdfImportFile">PDF文件</label><input class="form-control" id="pdfImportFile" name="file" type="file" accept=".pdf,application/pdf" required><div class="form-text">最大 50MB、300 页。扫描版可以识别，但低清晰度页面需要人工核对。</div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">上传并开始识别</button></div>
+  </form>
+</div></div></div>
 
 <div class="modal fade" id="importVersionContentModal" tabindex="-1" aria-labelledby="importVersionContentModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/standards/versions/<%= version.id %>/import" enctype="multipart/form-data" data-confirm="将向当前版本导入章节和标准项，不修改规范基本信息。同编号章节和标准项会更新，文件中未包含的现有内容会保留。确认继续？" data-confirm-title="导入规范内容"><input type="hidden" name="_csrf" value="<%= csrf %>">
