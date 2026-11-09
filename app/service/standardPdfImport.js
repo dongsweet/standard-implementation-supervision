@@ -43,6 +43,7 @@ class StandardPdfImportService extends Service {
       const filePath = path.join(this.config.storage.localRoot, job.storage_key);
       const { tree, pageCount } = await ocrPdf(filePath, {
         dpi: this.config.pdfImport.dpi,
+        concurrency: this.config.pdfImport.concurrency,
         lang: this.config.pdfImport.ocrLanguages,
         maxPages: this.config.pdfImport.maxPages,
       }, async (page, totalPages) => {

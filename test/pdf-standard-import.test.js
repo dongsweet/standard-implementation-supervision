@@ -2,12 +2,31 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildStandardTree } = require('../app/lib/pdfStandardExtract');
+const { buildStandardTree, mapWithConcurrency } = require('../app/lib/pdfStandardExtract');
 const StandardImportJobRepository = require('../app/repository/standardImportJob');
 
 function line(text, top, left = 100) {
   return { text, top, left, width: 500, height: 20, confidence: 93, pageHeight: 1200 };
 }
+
+test('runs OCR pages concurrently while preserving input order', async () => {
+  let active = 0;
+  let peak = 0;
+  const progress = [];
+  const worker = async value => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    active -= 1;
+    return value * 2;
+  };
+  worker.progress = async (completed, total) => progress.push([ completed, total ]);
+  const result = await mapWithConcurrency([ 1, 2, 3, 4, 5, 6 ], 3, worker);
+  assert.deepEqual(result, [ 2, 4, 6, 8, 10, 12 ]);
+  assert.equal(peak, 3);
+  assert.equal(progress.length, 6);
+  assert.deepEqual(progress.at(-1), [ 6, 6 ]);
+});
 
 test('builds selectable leaf clauses and preserves the original numbering hierarchy', () => {
   const result = buildStandardTree([

@@ -26,7 +26,8 @@ module.exports = appInfo => {
   };
   config.pdfImport = {
     maxMb: Number(process.env.PDF_IMPORT_MAX_MB || 50),
-    dpi: Number(process.env.PDF_IMPORT_DPI || 160),
+    dpi: Number(process.env.PDF_IMPORT_DPI || 120),
+    concurrency: Number(process.env.PDF_IMPORT_CONCURRENCY || 4),
     ocrLanguages: process.env.PDF_OCR_LANGUAGES || 'chi_sim+eng',
     maxPages: Number(process.env.PDF_IMPORT_MAX_PAGES || 300),
   };

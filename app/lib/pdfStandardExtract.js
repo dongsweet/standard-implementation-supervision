@@ -7,8 +7,9 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_DPI = 160;
+const DEFAULT_DPI = 120;
 const MAX_PAGES = 300;
+const DEFAULT_CONCURRENCY = 4;
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 async function command(name, args, options = {}) {
@@ -16,6 +17,7 @@ async function command(name, args, options = {}) {
     maxBuffer: MAX_BUFFER,
     timeout: options.timeout || 120000,
     encoding: 'utf8',
+    env: options.env ? { ...process.env, ...options.env } : process.env,
   });
   return result.stdout;
 }
@@ -252,24 +254,45 @@ function buildStandardTree(pages) {
   };
 }
 
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  let completed = 0;
+  async function run() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+      completed += 1;
+      await worker.progress?.(completed, items.length, results[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+  return results;
+}
+
 async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
   const { pageCount } = await inspectPdf(filePath, Number(options.maxPages || MAX_PAGES));
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-pdf-'));
   const dpi = Math.max(100, Math.min(Number(options.dpi || DEFAULT_DPI), 220));
   const lang = options.lang || 'chi_sim+eng';
-  const pages = [];
+  const concurrency = Math.max(1, Math.min(Number(options.concurrency || DEFAULT_CONCURRENCY), 8));
   try {
-    for (let page = 1; page <= pageCount; page += 1) {
-      const prefix = path.join(directory, `page-${String(page).padStart(4, '0')}`);
-      await command('pdftoppm', [
-        '-f', String(page), '-l', String(page), '-r', String(dpi),
-        '-png', '-singlefile', filePath, prefix,
-      ], { timeout: 120000 });
-      const tsv = await command('tesseract', [ `${prefix}.png`, 'stdout', '-l', lang, '--psm', '6', 'tsv' ], { timeout: 180000 });
-      pages.push(parseTsv(tsv, page));
-      await fs.rm(`${prefix}.png`, { force: true });
-      await onProgress(page, pageCount);
-    }
+    await command('pdftoppm', [ '-r', String(dpi), '-jpeg', '-jpegopt', 'quality=85', filePath, path.join(directory, 'page') ], {
+      timeout: Math.max(120000, pageCount * 10000),
+    });
+    const pageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1);
+    const worker = async page => {
+      const prefix = path.join(directory, `page-${String(page).padStart(pageCount >= 1000 ? 4 : 3, '0')}`);
+      const tsv = await command('tesseract', [ `${prefix}.jpg`, 'stdout', '-l', lang, '--psm', '6', 'tsv' ], {
+        timeout: 180000,
+        env: { OMP_THREAD_LIMIT: '1' },
+      });
+      return parseTsv(tsv, page);
+    };
+    worker.progress = async (completed, total) => onProgress(completed, total);
+    const pages = await mapWithConcurrency(pageNumbers, concurrency, worker);
+    pages.sort((left, right) => left.page - right.page);
     return { tree: buildStandardTree(pages), pageCount };
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
@@ -279,6 +302,7 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
 module.exports = {
   buildStandardTree,
   inspectPdf,
+  mapWithConcurrency,
   ocrPdf,
   parseTsv,
 };
