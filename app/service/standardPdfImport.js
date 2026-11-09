@@ -7,6 +7,7 @@ const Service = require('egg').Service;
 const StandardImportJobRepository = require('../repository/standardImportJob');
 const { createStorageProvider } = require('../lib/storage');
 const { ocrPdf, progressForStage } = require('../lib/pdfStandardExtract');
+const { recalculateHierarchy } = require('../lib/standardOutline');
 
 class StandardPdfImportService extends Service {
   get repository() {
@@ -88,13 +89,18 @@ class StandardPdfImportService extends Service {
         this.ctx.throw(400, '标准项必须填写原文编号和标准内容');
       }
     }
-    const byId = new Map(nodes.map(node => [ node.id, node ]));
-    for (const node of nodes.filter(item => requested.get(item.id)?.role === 'item')) {
+    const editedById = new Map(selectedNodes.map(node => [ node.id, node ]));
+    const effectiveNodes = recalculateHierarchy(nodes.map(node => ({
+      ...node,
+      ...editedById.get(node.id),
+    })));
+    const byId = new Map(effectiveNodes.map(node => [ node.id, node ]));
+    for (const node of effectiveNodes.filter(item => requested.get(item.id)?.role === 'item')) {
       let parentId = node.parentId;
       const visited = new Set();
       while (parentId && byId.has(parentId) && !visited.has(parentId)) {
         visited.add(parentId);
-        if (selectedNodes.find(entry => entry.id === parentId)?.role === 'skip') {
+        if (byId.get(parentId).role === 'skip') {
           this.ctx.throw(400, `标准项${node.originalNumber || node.title}的上级章节已被跳过`);
         }
         parentId = byId.get(parentId).parentId;

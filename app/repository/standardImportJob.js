@@ -1,5 +1,7 @@
 'use strict';
 
+const { recalculateHierarchy } = require('../lib/standardOutline');
+
 class StandardImportJobRepository {
   constructor(pool) {
     this.pool = pool;
@@ -70,7 +72,7 @@ class StandardImportJobRepository {
       }
       const sourceNodes = jobResult.rows[0].result?.nodes || [];
       const requestedById = new Map(selectedNodes.map(node => [ node.id, node ]));
-      const effectiveNodes = sourceNodes.map(source => {
+      const effectiveNodes = recalculateHierarchy(sourceNodes.map(source => {
         const requested = requestedById.get(source.id);
         return {
           ...source,
@@ -80,7 +82,7 @@ class StandardImportJobRepository {
           title: typeof requested?.title === 'string' ? requested.title.trim() : source.title,
           content: typeof requested?.content === 'string' ? requested.content.trim() : source.content,
         };
-      });
+      }));
       const byId = new Map(effectiveNodes.map(node => [ node.id, node ]));
       const selection = new Map(selectedNodes.map(node => [ node.id, node.role ]));
       const children = new Map();

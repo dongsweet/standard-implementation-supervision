@@ -39,12 +39,12 @@
       <thead><tr><th style="width:7rem">原文编号</th><th>层级内容</th><th style="width:6rem">PDF页码</th><th style="width:6rem">OCR置信度</th><th style="width:10rem">导入角色</th></tr></thead>
       <tbody>
         <% result.nodes.forEach(node => { const depth = Math.max(0, (node.level || 1) - 1); %>
-          <tr data-node-id="<%= node.id %>">
+          <tr data-node-id="<%= node.id %>" data-level="<%= node.level %>">
             <td><input class="form-control form-control-sm font-monospace node-number" data-node-id="<%= node.id %>" value="<%= node.originalNumber || '' %>" aria-label="原文编号"></td>
-            <td><div style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><div class="small text-secondary mt-1">OCR 原文可直接修正；写入时使用修正后的内容。</div></div></td>
+            <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><div class="small text-secondary mt-1">OCR 原文可直接修正；写入时使用修正后的内容。</div></div></td>
             <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
             <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
-            <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select></td>
+            <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select><button class="btn btn-sm btn-outline-danger mt-1 w-100 skip-subtree" type="button" data-node-id="<%= node.id %>">跳过本节全部</button></td>
           </tr>
         <% }) %>
       </tbody>
@@ -55,8 +55,41 @@
 
   <script>
     (() => {
-      const nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
-      const byId = new Map(nodes.map(node => [ node.id, node ]));
+      let nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
+      let byId = new Map(nodes.map(node => [ node.id, node ]));
+      const inferLevel = node => {
+        const value = String(
+          document.querySelector('.node-number[data-node-id="' + node.id + '"]')?.value
+          || node.originalNumber
+          || ''
+        ).trim().normalize('NFKC');
+        const numbered = value.match(/^(\d{1,3}(?:\.\d{1,3}){0,3})(?:\s*(?:\(\d{1,3}\)|[A-Za-z][_)）]))?/);
+        if (numbered) return numbered[1].split('.').length + (numbered[0].length > numbered[1].length ? 1 : 0);
+        return node.kind === 'list' ? 4 : 1;
+      };
+      const recalculateHierarchy = () => {
+        const stack = [];
+        nodes = nodes.map(node => {
+          const level = inferLevel(node);
+          while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+          const recalculated = { ...node, level, parentId: stack.length ? stack[stack.length - 1].id : null };
+          stack.push(recalculated);
+          return recalculated;
+        });
+        byId = new Map(nodes.map(node => [ node.id, node ]));
+      };
+      const descendants = id => {
+        const result = [];
+        const queue = [ id ];
+        while (queue.length) {
+          const parentId = queue.shift();
+          for (const node of nodes.filter(item => item.parentId === parentId)) {
+            result.push(node);
+            queue.push(node.id);
+          }
+        }
+        return result;
+      };
       const isDescendant = (node, ancestorId) => {
         let parentId = node.parentId;
         const visited = new Set();
@@ -76,6 +109,16 @@
         const select = document.querySelector('.node-role[data-node-id="' + id + '"]');
         if (select) select.value = role;
       };
+      const refreshLayout = () => {
+        for (const node of nodes) {
+          const row = document.querySelector('tr[data-node-id="' + node.id + '"]');
+          const indent = document.querySelector('.node-indent[data-node-id="' + node.id + '"]');
+          const skipButton = document.querySelector('.skip-subtree[data-node-id="' + node.id + '"]');
+          if (row) row.dataset.level = String(node.level);
+          if (indent) indent.style.paddingLeft = Math.max(0, node.level - 1) * 1.25 + 'rem';
+          if (skipButton) skipButton.classList.toggle('d-none', descendants(node.id).length === 0);
+        }
+      };
       const applyGranularity = value => {
         for (const node of nodes) {
           if (value === 'leaf') setRole(node.id, node.kind === 'list' || (node.kind === 'heading' && !hasListDescendant(node)) ? 'item' : 'container');
@@ -92,7 +135,19 @@
         }
         updateCount();
       });
+      document.querySelectorAll('.node-number').forEach(input => input.addEventListener('input', () => {
+        recalculateHierarchy();
+        refreshLayout();
+      }));
+      document.querySelectorAll('.skip-subtree').forEach(button => button.addEventListener('click', () => {
+        const id = button.dataset.nodeId;
+        setRole(id, 'skip');
+        for (const child of descendants(id)) setRole(child.id, 'skip');
+        updateCount();
+      }));
       selects().forEach(select => select.addEventListener('change', updateCount));
+      recalculateHierarchy();
+      refreshLayout();
       document.getElementById('applyPdfImport').addEventListener('submit', event => {
         const items = selects().filter(select => select.value === 'item');
         if (!items.length) {
