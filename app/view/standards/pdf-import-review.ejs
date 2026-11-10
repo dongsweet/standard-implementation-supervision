@@ -6,7 +6,7 @@
 <% if ([ 'queued', 'processing' ].includes(job.status)) { %>
   <div class="card" id="processingPanel"><div class="card-body py-5 text-center">
     <h2 class="h5">正在识别PDF并构建章节树</h2>
-    <p class="text-secondary mb-3" id="processingMessage"><%= job.page_count ? (job.progress < 10 ? '正在将 ' + job.page_count + ' 页PDF转换为图像…' : '正在OCR识别，已完成 ' + job.progress + '%') : '正在读取PDF页数…' %></p>
+    <p class="text-secondary mb-3" id="processingMessage"><%= job.page_count ? (job.progress < 10 ? '正在检查PDF文本层或转换页面图像…' : '正在识别标准内容，已完成 ' + job.progress + '%') : '正在读取PDF页数…' %></p>
     <div class="progress mx-auto" style="max-width:560px;height:24px"><div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" style="width:<%= job.progress || 0 %>%"><%= job.progress || 0 %>%</div></div>
     <p class="small text-secondary mt-3 mb-0">扫描型PDF需要逐页 OCR；完成后会显示预览树，不会自动写入规范库。</p>
   </div></div>
@@ -34,7 +34,7 @@
   <% (result.warnings || []).forEach(warning => { %><div class="alert alert-warning py-2"><%= warning %></div><% }) %>
 
   <div class="card">
-    <div class="card-header d-flex align-items-center"><h3 class="card-title">识别结果预览</h3><span class="badge text-bg-secondary ms-auto"><%= result.nodes.length %> 个节点 · <%= result.pages %> 页</span></div>
+    <div class="card-header d-flex align-items-center"><h3 class="card-title">识别结果预览</h3><span class="badge <%= result.extractionMethod === 'text' ? 'text-bg-success' : 'text-bg-warning' %> ms-auto"><%= result.extractionMethod === 'text' ? 'PDF文本层直读' : 'OCR识别' %></span><span class="badge text-bg-secondary ms-2"><%= result.nodes.length %> 个节点 · <%= result.pages %> 页</span></div>
     <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
       <thead><tr><th style="width:7rem">原文编号</th><th>层级内容</th><th style="width:6rem">PDF页码</th><th style="width:6rem">OCR置信度</th><th style="width:10rem">导入角色</th></tr></thead>
       <tbody>
@@ -309,8 +309,8 @@
         document.getElementById('processingMessage').textContent = !status.pageCount
           ? '正在读取PDF页数…'
           : status.progress < 10
-            ? '正在将 ' + status.pageCount + ' 页PDF转换为图像…'
-            : '正在OCR识别，已完成 ' + status.progress + '%';
+            ? '正在检查PDF文本层或转换页面图像…'
+            : '正在识别标准内容，已完成 ' + status.progress + '%';
         if (status.status === 'ready' || status.status === 'failed' || status.status === 'completed') {
           window.location.reload();
           return;

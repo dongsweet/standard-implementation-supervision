@@ -293,9 +293,79 @@ function buildStandardTree(pages) {
 }
 
 function progressForStage(completed, total, stage) {
-  if (stage === 'render') return 3;
+  if (stage === 'text-check') return 2;
+  if (stage === 'text-done') return 95;
+  if (stage === 'render') return 4;
   if (!total) return 10;
   return Math.min(95, 10 + Math.round(completed / total * 85));
+}
+
+function layoutTextToPages(text, pageCount) {
+  const rawPages = String(text || '').split('\f');
+  if (rawPages.length > 1 && !rawPages[rawPages.length - 1].trim()) rawPages.pop();
+  return Array.from({ length: pageCount }, (_, pageIndex) => {
+    const content = rawPages[pageIndex] || '';
+    const rawLines = content.split(/\r?\n/);
+    const pageHeight = Math.max(rawLines.length * 20, 20);
+    return {
+      page: pageIndex + 1,
+      width: 1000,
+      height: pageHeight,
+      lines: rawLines.map((line, index) => ({
+        page: pageIndex + 1,
+        text: line,
+        left: 0,
+        top: index * 20,
+        width: 1000,
+        height: 18,
+        confidence: 100,
+        pageHeight,
+        pageWidth: 1000,
+      })).filter(line => line.text.trim()),
+    };
+  });
+}
+
+function assessTextLayer(pages) {
+  const allText = pages.flatMap(page => page.lines.map(line => line.text)).join('\n');
+  const compact = [ ...allText.replace(/\s/g, '') ];
+  const han = (allText.match(/\p{Script=Han}/gu) || []).length;
+  const letters = (allText.match(/\p{L}/gu) || []).length;
+  const digits = (allText.match(/\p{N}/gu) || []).length;
+  const punctuation = (allText.match(/[，。；：、（）《》“”‘’！？,.!?;:()\-—]/g) || []).length;
+  const odd = (allText.match(/[^\p{L}\p{N}\p{P}\p{S}\s]/gu) || []).length;
+  const readableCharacters = letters + digits + punctuation;
+  const readableRatio = compact.length ? readableCharacters / compact.length : 0;
+  const oddRatio = compact.length ? odd / compact.length : 0;
+  const minimumCharacters = pages.length * 80;
+  const hasChinese = han >= pages.length * 3;
+  const hasEnglish = letters >= pages.length * 40 && readableRatio >= 0.75 && oddRatio <= 0.01;
+  const usable = compact.length >= minimumCharacters && readableRatio >= 0.75 && oddRatio <= 0.02 && (hasChinese || hasEnglish);
+  return {
+    usable,
+    reasons: usable ? [] : [
+      compact.length < minimumCharacters ? '文本量不足' : null,
+      readableRatio < 0.75 ? '可读字符比例过低' : null,
+      oddRatio > 0.02 ? '存在大量异常字符' : null,
+      !hasChinese && !hasEnglish ? '未识别到可靠的中文或英文文本' : null,
+    ].filter(Boolean),
+    metrics: {
+      characters: compact.length,
+      han,
+      letters,
+      digits,
+      readableRatio: Math.round(readableRatio * 1000) / 1000,
+      oddRatio: Math.round(oddRatio * 1000) / 1000,
+    },
+  };
+}
+
+async function extractTextLayer(filePath, pageCount) {
+  const text = await command('pdftotext', [ '-layout', filePath, '-' ], {
+    timeout: Math.max(30000, pageCount * 2000),
+  });
+  const pages = layoutTextToPages(text, pageCount);
+  return { pages, quality: assessTextLayer(pages) };
 }
 
 async function listPdfImages(directory) {
@@ -323,6 +393,20 @@ async function mapWithConcurrency(items, concurrency, worker) {
 
 async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
   const { pageCount } = await inspectPdf(filePath, Number(options.maxPages || MAX_PAGES));
+  await onProgress(0, pageCount, 'text-check');
+  const textLayer = await extractTextLayer(filePath, pageCount);
+  if (textLayer.quality.usable) {
+    const tree = buildStandardTree(textLayer.pages);
+    tree.extractionMethod = 'text';
+    tree.textLayerMetrics = textLayer.quality.metrics;
+    tree.warnings = [
+      '已直接读取PDF文本层，未执行OCR。',
+      ...(tree.warnings || []),
+    ];
+    await onProgress(pageCount, pageCount, 'text-done');
+    return { tree, pageCount, method: 'text' };
+  }
+
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-pdf-'));
   const dpi = Math.max(100, Math.min(Number(options.dpi || DEFAULT_DPI), 220));
   const lang = options.lang || 'chi_sim+eng';
@@ -351,16 +435,27 @@ async function ocrPdf(filePath, options = {}, onProgress = () => {}) {
       worker
     );
     pages.sort((left, right) => left.page - right.page);
-    return { tree: buildStandardTree(pages), pageCount };
+    const tree = buildStandardTree(pages);
+    tree.extractionMethod = 'ocr';
+    tree.textLayerMetrics = textLayer.quality.metrics;
+    tree.textLayerFallbackReasons = textLayer.quality.reasons;
+    tree.warnings = [
+      `PDF文本层不可可靠使用（${textLayer.quality.reasons.join('、')}），已回退到OCR识别。`,
+      ...(tree.warnings || []),
+    ];
+    return { tree, pageCount, method: 'ocr' };
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
 }
 
 module.exports = {
+  assessTextLayer,
   buildStandardTree,
+  extractTextLayer,
   findBodyStartPage,
   inspectPdf,
+  layoutTextToPages,
   listPdfImages,
   mapWithConcurrency,
   ocrPdf,

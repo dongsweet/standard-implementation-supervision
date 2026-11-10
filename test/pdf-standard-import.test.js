@@ -5,18 +5,46 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { buildStandardTree, findBodyStartPage, listPdfImages, mapWithConcurrency, progressForStage } = require('../app/lib/pdfStandardExtract');
+const { assessTextLayer, buildStandardTree, findBodyStartPage, layoutTextToPages, listPdfImages, mapWithConcurrency, progressForStage } = require('../app/lib/pdfStandardExtract');
 const StandardImportJobRepository = require('../app/repository/standardImportJob');
 
 function line(text, top, left = 100) {
   return { text, top, left, width: 500, height: 20, confidence: 93, pageHeight: 1200 };
 }
 
-test('reports visible render and OCR progress stages', () => {
-  assert.equal(progressForStage(0, 77, 'render'), 3);
+test('reports text-layer, render, and OCR progress stages', () => {
+  assert.equal(progressForStage(0, 77, 'text-check'), 2);
+  assert.equal(progressForStage(77, 77, 'text-done'), 95);
+  assert.equal(progressForStage(0, 77, 'render'), 4);
   assert.equal(progressForStage(0, 77, 'ocr'), 10);
   assert.equal(progressForStage(38, 77, 'ocr'), 52);
   assert.equal(progressForStage(77, 77, 'ocr'), 95);
+});
+
+test('accepts readable text layers and rejects garbled pseudo-text layers', () => {
+  const readable = layoutTextToPages([
+    '1 范围',
+    '本文件规定了云计算服务安全能力要求。',
+    '2 规范性引用文件',
+    'GB/T 31167—2023 信息安全技术 云计算服务安全指南',
+    '6 系统开发与供应链安全',
+    '6.1 资源分配',
+    '6.1.1 一般要求',
+    '云服务商应：',
+    'a) 对保护信息系统和服务所需的资源进行详细分析，并确保这些资源的可用性；',
+  ].join('\n'), 1);
+  assert.equal(assessTextLayer(readable).usable, true);
+
+  const garbled = layoutTextToPages([
+    '!"# !""#$"%&%!',
+    'e¦zg,',
+    '&&&Ii¾R¹"SÄ+=>[\'95678,',
+    '&&&mÝu956¦O*',
+    'odÖë_ý«uP569234de9¦O+2defQª.563K+ïð/êlR)*uI',
+  ].join('\n'), 1);
+  const quality = assessTextLayer(garbled);
+  assert.equal(quality.usable, false);
+  assert.ok(quality.reasons.length > 0);
 });
 
 test('maps actual Poppler image filenames to page numbers without padding assumptions', async () => {
