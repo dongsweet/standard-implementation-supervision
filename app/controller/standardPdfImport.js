@@ -9,8 +9,10 @@ class StandardPdfImportController extends Controller {
     const versionId = this.ctx.params.versionId;
     try {
       requireGlobalWrite(this.ctx);
-      const file = (this.ctx.request.files || []).find(item => item.fieldname === 'file');
-      const job = await this.ctx.service.standardPdfImport.create(versionId, file, this.ctx.session.userId);
+      const files = this.ctx.request.files || [];
+      const file = files.find(item => item.fieldname === 'file');
+      const comparisonFile = files.find(item => item.fieldname === 'comparisonFile');
+      const job = await this.ctx.service.standardPdfImport.create(versionId, file, comparisonFile, this.ctx.session.userId);
       this.ctx.runInBackground(async backgroundCtx => {
         await backgroundCtx.service.standardPdfImport.process(job.id, versionId);
       });

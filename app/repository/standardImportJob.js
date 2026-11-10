@@ -7,12 +7,16 @@ class StandardImportJobRepository {
     this.pool = pool;
   }
 
-  async create({ versionId, originalFilename, storageKey, createdBy }) {
+  async create({ versionId, originalFilename, storageKey, comparisonFilename, comparisonStorageKey, createdBy }) {
     const result = await this.pool.query(`
       INSERT INTO standard_import_jobs
-        (standard_version_id, original_filename, storage_key, created_by)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *`, [ versionId, originalFilename, storageKey, createdBy || null ]);
+        (standard_version_id, original_filename, storage_key,
+         comparison_filename, comparison_storage_key, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *`, [
+      versionId, originalFilename, storageKey,
+      comparisonFilename || null, comparisonStorageKey || null, createdBy || null,
+    ]);
     return result.rows[0];
   }
 
@@ -40,13 +44,13 @@ class StandardImportJobRepository {
       WHERE id = $1 AND status = 'processing'`, [ jobId, progress, pageCount ]);
   }
 
-  async completeExtraction(jobId, { pageCount, result }) {
+  async completeExtraction(jobId, { pageCount, result, comparisonResult = null }) {
     const query = await this.pool.query(`
       UPDATE standard_import_jobs
       SET status = 'ready', progress = 100, page_count = $2, result = $3,
-          completed_at = now(), updated_at = now()
+          comparison_result = $4, completed_at = now(), updated_at = now()
       WHERE id = $1
-      RETURNING *`, [ jobId, pageCount, JSON.stringify(result) ]);
+      RETURNING *`, [ jobId, pageCount, JSON.stringify(result), comparisonResult ? JSON.stringify(comparisonResult) : null ]);
     return query.rows[0];
   }
 

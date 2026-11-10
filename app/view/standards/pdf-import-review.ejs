@@ -32,6 +32,7 @@
   </div>
 
   <% (result.warnings || []).forEach(warning => { %><div class="alert alert-warning py-2"><%= warning %></div><% }) %>
+  <% if (result.comparisonSummary) { %><div class="alert alert-info py-2"><strong>对照文本：</strong><%= job.comparison_filename %>，共 <%= result.comparisonSummary.comparisonCount %> 条。已按章节、行序和正文对齐，对照表内部编号不会覆盖PDF原文编号：高可信采用 <%= result.comparisonSummary.matchedCount %> 条，相似待核对 <%= result.comparisonSummary.reviewCount %> 条，PDF未匹配 <%= result.comparisonSummary.unmatchedCount %> 条，对照表未使用 <%= result.comparisonSummary.unusedComparisonCount %> 条。</div><% } %>
 
   <div class="card">
     <div class="card-header d-flex align-items-center"><h3 class="card-title">识别结果预览</h3><span class="badge <%= result.extractionMethod === 'text' ? 'text-bg-success' : 'text-bg-warning' %> ms-auto"><%= result.extractionMethod === 'text' ? 'PDF文本层直读' : 'OCR识别' %></span><span class="badge text-bg-secondary ms-2"><%= result.nodes.length %> 个节点 · <%= result.pages %> 页</span></div>
@@ -41,7 +42,7 @@
         <% result.nodes.forEach(node => { const depth = Math.max(0, (node.level || 1) - 1); %>
           <tr data-node-id="<%= node.id %>" data-level="<%= node.level %>">
             <td><input class="form-control form-control-sm font-monospace node-number" data-node-id="<%= node.id %>" value="<%= node.originalNumber || '' %>" aria-label="原文编号"></td>
-            <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><div class="small text-secondary mt-1">OCR 原文可直接修正；写入时使用修正后的内容。</div></div></td>
+            <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><% if (node.comparisonMatch) { %><div class="d-flex align-items-center gap-2 mt-1"><span class="badge <%= node.comparisonMatch === 'matched' ? 'text-bg-success' : node.comparisonMatch === 'review' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= node.comparisonMatch === 'matched' ? '已采用对照文本' : '对照文本待核对' %></span><span class="small text-secondary">匹配度 <%= Math.round((node.comparisonSimilarity || 0) * 100) %>% · 对照表内部编号 <%= node.comparisonItemCode %></span><% if (node.comparisonMatch !== 'matched') { %><button class="btn btn-sm btn-outline-primary use-comparison" type="button" data-node-id="<%= node.id %>">采用对照正文</button><% } %></div><% } %><div class="small text-secondary mt-1">编号、标题和正文可直接修正；写入时使用当前内容。</div></div></td>
             <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
             <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
             <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select><button class="btn btn-sm btn-outline-danger mt-1 w-100 skip-subtree" type="button" data-node-id="<%= node.id %>">跳过本节全部</button></td>
@@ -149,6 +150,16 @@
       document.querySelectorAll('.node-number').forEach(input => input.addEventListener('input', () => {
         recalculateHierarchy();
         refreshLayout();
+      }));
+      document.querySelectorAll('.use-comparison').forEach(button => button.addEventListener('click', () => {
+        const node = byId.get(button.dataset.nodeId);
+        if (!node?.comparisonContent) return;
+        const textarea = document.querySelector('.node-content[data-node-id="' + node.id + '"]');
+        if (textarea) textarea.value = node.comparisonContent;
+        node.content = node.comparisonContent;
+        node.comparisonMatch = 'matched';
+        button.closest('.d-flex')?.querySelector('.badge')?.replaceChildren('已采用对照文本');
+        button.remove();
       }));
       document.querySelectorAll('.skip-subtree').forEach(button => button.addEventListener('click', () => {
         const id = button.dataset.nodeId;

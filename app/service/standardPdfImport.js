@@ -7,6 +7,7 @@ const Service = require('egg').Service;
 const StandardImportJobRepository = require('../repository/standardImportJob');
 const { createStorageProvider } = require('../lib/storage');
 const { ocrPdf, progressForStage } = require('../lib/pdfStandardExtract');
+const { mergeComparisonIntoTree, parseComparisonFile } = require('../lib/standardComparison');
 const { recalculateHierarchy } = require('../lib/standardOutline');
 
 class StandardPdfImportService extends Service {
@@ -18,20 +19,35 @@ class StandardPdfImportService extends Service {
     return createStorageProvider(this.config.storage);
   }
 
-  async create(versionId, file, userId) {
+  async create(versionId, file, comparisonFile, userId) {
     if (!file) this.ctx.throw(400, '请选择PDF文件');
-    if (path.extname(file.filename || '').toLowerCase() !== '.pdf') this.ctx.throw(400, '仅支持PDF文件');
+    if (path.extname(file.filename || '').toLowerCase() !== '.pdf') this.ctx.throw(400, 'PDF文件格式无效');
+    const supportedComparison = new Set([ '.xlsx', '.tsv', '.csv', '.txt' ]);
+    if (comparisonFile && !supportedComparison.has(path.extname(comparisonFile.filename || '').toLowerCase())) {
+      this.ctx.throw(400, '对照文本支持 .xlsx、.tsv、.csv 或制表符分隔的 .txt');
+    }
     const version = await this.ctx.app.db.query('SELECT id FROM standard_versions WHERE id = $1', [ versionId ]);
     if (!version.rowCount) this.ctx.throw(404, '规范版本不存在');
-    const buffer = await fs.readFile(file.filepath);
     const maxBytes = Number(this.config.pdfImport.maxMb || 50) * 1024 * 1024;
-    if (buffer.length > maxBytes) this.ctx.throw(400, `PDF不能超过${this.config.pdfImport.maxMb}MB`);
-    const storageKey = `standard-imports/${versionId}/${randomUUID()}.pdf`;
-    await this.storage.put(storageKey, buffer);
+    const pdfBuffer = await fs.readFile(file.filepath);
+    if (pdfBuffer.length > maxBytes) this.ctx.throw(400, `PDF不能超过${this.config.pdfImport.maxMb}MB`);
+    const suffix = randomUUID();
+    const storageKey = `standard-imports/${versionId}/${suffix}.pdf`;
+    await this.storage.put(storageKey, pdfBuffer);
+
+    let comparisonStorageKey = null;
+    if (comparisonFile) {
+      const comparisonBuffer = await fs.readFile(comparisonFile.filepath);
+      if (comparisonBuffer.length > maxBytes) this.ctx.throw(400, `对照文件不能超过${this.config.pdfImport.maxMb}MB`);
+      comparisonStorageKey = `standard-imports/${versionId}/${suffix}-comparison${path.extname(comparisonFile.filename).toLowerCase()}`;
+      await this.storage.put(comparisonStorageKey, comparisonBuffer);
+    }
     return this.repository.create({
       versionId,
       originalFilename: file.filename,
       storageKey,
+      comparisonFilename: comparisonFile?.filename || null,
+      comparisonStorageKey,
       createdBy: userId,
     });
   }
@@ -42,6 +58,17 @@ class StandardPdfImportService extends Service {
       const job = await this.repository.find(versionId, jobId);
       if (!job) throw new Error('PDF导入任务不存在');
       const filePath = path.join(this.config.storage.localRoot, job.storage_key);
+      let comparisonResult = null;
+      let parsedComparison = null;
+      if (job.comparison_storage_key) {
+        const comparisonPath = path.join(this.config.storage.localRoot, job.comparison_storage_key);
+        parsedComparison = await parseComparisonFile(comparisonPath, job.comparison_filename);
+        comparisonResult = {
+          fileName: job.comparison_filename,
+          itemCount: parsedComparison.itemCount,
+          chapterCount: parsedComparison.chapters.length,
+        };
+      }
       const { tree, pageCount } = await ocrPdf(filePath, {
         dpi: this.config.pdfImport.dpi,
         concurrency: this.config.pdfImport.concurrency,
@@ -51,7 +78,10 @@ class StandardPdfImportService extends Service {
         const progress = progressForStage(completed, totalPages, stage);
         await this.repository.updateProgress(jobId, progress, totalPages);
       });
-      await this.repository.completeExtraction(jobId, { pageCount, result: tree });
+      if (comparisonResult) {
+        comparisonResult.summary = mergeComparisonIntoTree(tree, parsedComparison);
+      }
+      await this.repository.completeExtraction(jobId, { pageCount, result: tree, comparisonResult });
     } catch (error) {
       this.ctx.logger.error('PDF standard import failed', error);
       await this.repository.fail(jobId, error.message);

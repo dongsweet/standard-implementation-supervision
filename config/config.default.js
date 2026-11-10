@@ -7,7 +7,7 @@ module.exports = appInfo => {
   config.keys = process.env.EGG_KEYS || `${appInfo.name}_local_development_key`;
   config.cluster = { listen: { port: Number(process.env.PORT || 7001) } };
   config.bodyParser = { enable: true, jsonLimit: '2mb', formLimit: '2mb' };
-  config.multipart = { mode: 'file', fileSize: '50mb', fileExtensions: [ '.xlsx', '.tsv', '.pdf' ] };
+  config.multipart = { mode: 'file', fileSize: '50mb', fileExtensions: [ '.xlsx', '.tsv', '.csv', '.txt', '.pdf' ] };
   // Egg checks CSRF before multipart parsing, so file uploads use the same-origin
   // referer check while regular forms continue to use the token.
   config.security = { csrf: { enable: true, type: 'any' } };

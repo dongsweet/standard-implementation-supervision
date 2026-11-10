@@ -51,8 +51,9 @@
   <form method="post" action="/standards/versions/<%= version.id %>/pdf-imports" enctype="multipart/form-data" data-confirm="将上传PDF并在后台执行OCR，完成后先进入预览，不会自动写入。确认继续？" data-confirm-title="导入规范PDF"><input type="hidden" name="_csrf" value="<%= csrf %>">
     <div class="modal-header"><h2 class="modal-title fs-5" id="pdfImportModalLabel">导入规范PDF</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body">
-      <div class="alert alert-info py-2">系统使用本地中文 OCR 识别文字和层级，保留原文编号、页码和原文摘录。解析完成后，你可选择“叶子条款、三级要求、二级标题或大章”作为标准项，并逐节点跳过。</div>
-      <label class="form-label" for="pdfImportFile">PDF文件</label><input class="form-control" id="pdfImportFile" name="file" type="file" accept=".pdf,application/pdf" required><div class="form-text">最大 50MB、300 页。扫描版可以识别，但低清晰度页面需要人工核对。</div>
+      <div class="alert alert-info py-2">系统使用本地中文 OCR 识别PDF并保留页码；如同时上传自有结构化对照表，系统会优先采用可可靠匹配的对照正文，并标出未匹配和需核对项。</div>
+      <div class="mb-3"><label class="form-label" for="pdfImportFile">PDF文件</label><input class="form-control" id="pdfImportFile" name="file" type="file" accept=".pdf,application/pdf" required><div class="form-text">最大 50MB、300 页。扫描版可以识别，但低清晰度页面需要人工核对。</div></div>
+      <div><label class="form-label" for="comparisonFile">对照文本或Excel（可选）</label><input class="form-control" id="comparisonFile" name="comparisonFile" type="file" accept=".xlsx,.tsv,.csv,.txt"><div class="form-text">列名需包含编号和“标准内容”。内部编号可以是6001等自有序号，系统按章节、行序和正文相似度对齐PDF原文，内部编号不会覆盖原文编号。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">上传并开始识别</button></div>
   </form>
