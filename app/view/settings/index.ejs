@@ -1,0 +1,50 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <p class="text-secondary mb-0">系统级集成配置仅系统管理员可维护。AI 服务用于监督定义去重复核和 PDF 导入结果的辅助校对。</p>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">AI 服务</h3><span class="badge <%= ai.enabled ? 'text-bg-success' : 'text-bg-secondary' %> ms-auto"><%= ai.enabled ? '已启用' : '未启用' %></span></div>
+  <form method="post" action="/settings/ai">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <div class="card-body row g-3">
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="aiEnabled" name="enabled" <%= ai.enabled ? 'checked' : '' %>><label class="form-check-label" for="aiEnabled">启用 AI 服务</label></div></div>
+      <div class="col-12 col-lg-7"><label class="form-label" for="aiBaseUrl">接口地址</label><input class="form-control" id="aiBaseUrl" name="baseUrl" value="<%= ai.baseUrl %>" placeholder="例如：https://api.example.com/v1"><div class="form-text">填写到版本路径为止，系统会调用 <code>/chat/completions</code>；如果填写了完整的 <code>/chat/completions</code>，系统不会重复拼接。</div></div>
+      <div class="col-12 col-lg-5"><label class="form-label" for="aiModel">模型名称</label><input class="form-control" id="aiModel" name="model" value="<%= ai.model %>" maxlength="200" placeholder="例如：qwen-plus"></div>
+      <div class="col-12 col-lg-7"><label class="form-label" for="aiApiKey">API Key</label><input class="form-control" id="aiApiKey" name="apiKey" type="password" autocomplete="new-password" placeholder="<%= ai.apiKeyConfigured ? '已配置；留空保持不变' : '请输入 API Key' %>"><div class="form-text">密钥使用应用密钥加密后保存，页面不会回显明文。</div></div>
+      <div class="col-12 col-lg-5"><label class="form-label" for="aiTimeout">超时时间（毫秒）</label><input class="form-control" id="aiTimeout" name="timeoutMs" type="number" min="5000" max="180000" step="1000" value="<%= ai.timeoutMs %>"></div>
+      <% if (ai.apiKeyConfigured) { %><div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="clearApiKey" name="clearApiKey" value="on"><label class="form-check-label text-danger" for="clearApiKey">清除已保存的 API Key</label></div></div><% } %>
+    </div>
+    <div class="card-footer d-flex gap-2 justify-content-end"><button class="btn btn-outline-primary" type="button" id="testAiButton">测试连接</button><button class="btn btn-primary" type="submit">保存配置</button></div>
+  </form>
+</div>
+
+<script>
+  (() => {
+    const button = document.getElementById('testAiButton');
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = '测试中…';
+      try {
+        const response = await fetch('/settings/ai/test', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>', accept: 'application/json' },
+          body: JSON.stringify({
+            baseUrl: document.getElementById('aiBaseUrl').value,
+            model: document.getElementById('aiModel').value,
+            apiKey: document.getElementById('aiApiKey').value,
+            timeoutMs: document.getElementById('aiTimeout').value
+          })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.message || '连接测试失败');
+        window.showAppNotice('连接成功，模型返回：' + (body.data.content || 'OK'), 'AI 连接测试');
+      } catch (error) {
+        window.showAppNotice(error.message, 'AI 连接测试失败');
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  })();
+</script>

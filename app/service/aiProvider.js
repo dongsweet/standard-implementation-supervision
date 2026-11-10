@@ -4,13 +4,24 @@ const Service = require('egg').Service;
 const { AiProvider } = require('../lib/aiProvider');
 
 class AiProviderService extends Service {
-  get provider() {
-    if (!this._provider) this._provider = new AiProvider(this.config.ai);
-    return this._provider;
+  async getProvider() {
+    const config = await this.ctx.service.systemSetting.getAiConfig({ includeKey: true });
+    return new AiProvider(config);
   }
 
   async classifyPair(left, right) {
-    return this.provider.classifyPair(left, right);
+    const provider = await this.getProvider();
+    return provider.classifyPair(left, right);
+  }
+
+  async testConnection() {
+    const provider = await this.getProvider();
+    return provider.testConnection();
+  }
+
+  async correctStandardNodes(nodes, context) {
+    const provider = await this.getProvider();
+    return provider.correctStandardNodes(nodes, context);
   }
 }
 

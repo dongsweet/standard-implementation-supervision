@@ -23,18 +23,19 @@ class DedupeService extends Service {
     if (!candidate.rowCount) this.ctx.throw(400, 'AI 仅复核规则层产生的候选定义');
     const inputPair = [ normalizeDefinition(left).normalizedHash, normalizeDefinition(right).normalizedHash ].sort();
     const inputHash = crypto.createHash('sha256').update(JSON.stringify(inputPair)).digest('hex');
-    const provider = this.ctx.service.aiProvider;
+    const aiService = this.ctx.service.aiProvider;
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
     const job = await repository.createAiJob({
       leftId,
       rightId,
       inputHash,
       algorithmVersion: 'trigram-weighted-v1',
       promptVersion: 'dedupe-v1',
-      modelName: this.config.ai.model || 'unconfigured',
+      modelName: aiConfig.model || 'unconfigured',
     });
     if (job.status === 'completed' && job.result) return job;
     try {
-      const result = await provider.classifyPair(left, right);
+      const result = await aiService.classifyPair(left, right);
       if (result.result.recommendedCanonicalId && ![ left.id, right.id ].includes(result.result.recommendedCanonicalId)) {
         result.result.recommendedCanonicalId = null;
       }

@@ -27,6 +27,7 @@ module.exports = app => {
   router.post('/standards/versions/:versionId/pdf-imports', controller.standardPdfImport.create);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId', controller.standardPdfImport.show);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId/status', controller.standardPdfImport.status);
+  router.post('/standards/versions/:versionId/pdf-imports/:jobId/ai-review', controller.standardPdfImport.aiReview);
   router.post('/standards/versions/:versionId/pdf-imports/:jobId/apply', controller.standardPdfImport.apply);
   router.post('/standards/versions/:versionId/import', controller.standardCatalog.importVersionContent);
   router.post('/standards/versions/:versionId/chapters', controller.standardCatalog.createChapter);
@@ -44,6 +45,9 @@ module.exports = app => {
   router.post('/projects/:projectId/chapters/:chapterId/responsibilities', controller.project.saveChapterResponsibilities);
   router.post('/projects/:projectId/standard-versions', controller.project.addStandardVersion);
   router.post('/projects/:projectId/cloud-centers', controller.project.saveCloudCenters);
+  router.get('/settings', controller.systemSetting.index);
+  router.post('/settings/ai', controller.systemSetting.saveAi);
+  router.post('/settings/ai/test', controller.systemSetting.testAi);
   router.get('/users', controller.user.index);
   router.post('/users', controller.user.create);
   router.post('/users/:userId/active', controller.user.toggleActive);

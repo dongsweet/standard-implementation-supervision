@@ -27,7 +27,7 @@
         <option value="level1">大章（如 6）</option>
       </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过。</div></div>
       <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项</div></div>
-      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
+      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
     </div>
   </div>
 
@@ -51,11 +51,22 @@
     </table></div>
   </div>
 
+  <div class="modal fade" id="aiCorrectionsModal" tabindex="-1" aria-labelledby="aiCorrectionsModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="aiCorrectionsModalLabel">AI 校验建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-warning py-2">AI 仅根据 OCR 文本和上下文提供修改建议，可能出错。请逐项核对，勾选后再应用；未勾选的内容不会变化。</div>
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th style="width:3rem">应用</th><th>标准项</th><th>修改前</th><th>AI修改建议</th><th>理由/置信度</th></tr></thead><tbody id="aiCorrectionsBody"></tbody></table></div>
+      <div class="text-secondary small mt-2" id="aiCorrectionSummary"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="applyAiCorrections">应用勾选建议</button></div>
+  </div></div></div>
+
   <form id="applyPdfImport" method="post" action="/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/apply" data-confirm="确认将当前选择写入规范库？标准化编号会自动生成，原文编号保持不变。" data-confirm-title="确认PDF导入"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="selection" id="selectionInput"></form>
 
   <script>
     (() => {
       let nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
+      let aiCorrections = [];
       let byId = new Map(nodes.map(node => [ node.id, node ]));
       const inferLevel = node => {
         const value = String(
@@ -145,6 +156,122 @@
         for (const child of descendants(id)) setRole(child.id, 'skip');
         updateCount();
       }));
+      const itemPayload = select => {
+        const node = byId.get(select.dataset.nodeId);
+        return {
+          id: select.dataset.nodeId,
+          originalNumber: document.querySelector('.node-number[data-node-id="' + select.dataset.nodeId + '"]')?.value || '',
+          title: document.querySelector('.node-title[data-node-id="' + select.dataset.nodeId + '"]')?.value || '',
+          content: document.querySelector('.node-content[data-node-id="' + select.dataset.nodeId + '"]')?.value || node?.content || ''
+        };
+      };
+      const appendText = (cell, text) => {
+        const pre = document.createElement('pre');
+        pre.className = 'small mb-0 text-wrap';
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.textContent = text;
+        cell.appendChild(pre);
+      };
+      const renderAiCorrections = corrections => {
+        const body = document.getElementById('aiCorrectionsBody');
+        body.replaceChildren();
+        corrections.forEach((correction, index) => {
+          const row = document.createElement('tr');
+          const selectCell = document.createElement('td');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'form-check-input ai-correction-checkbox';
+          checkbox.dataset.index = String(index);
+          checkbox.checked = true;
+          selectCell.appendChild(checkbox);
+          row.appendChild(selectCell);
+          const itemCell = document.createElement('td');
+          const before = correction.before;
+          appendText(itemCell, (before.originalNumber || '-') + (before.title ? '\n' + before.title : ''));
+          row.appendChild(itemCell);
+          const beforeCell = document.createElement('td');
+          appendText(beforeCell, before.content || '');
+          row.appendChild(beforeCell);
+          const afterCell = document.createElement('td');
+          appendText(afterCell, [
+            correction.originalNumber,
+            correction.title,
+            correction.content
+          ].filter(Boolean).join('\n'));
+          row.appendChild(afterCell);
+          const reasonCell = document.createElement('td');
+          appendText(reasonCell, (correction.reason || '-') + '\n置信度 ' + Math.round(correction.confidence * 100) + '%');
+          row.appendChild(reasonCell);
+          body.appendChild(row);
+        });
+        document.getElementById('aiCorrectionSummary').textContent = '共 ' + corrections.length + ' 条建议。';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('aiCorrectionsModal')).show();
+      };
+      document.getElementById('aiReviewButton').addEventListener('click', async event => {
+        const button = event.currentTarget;
+        const items = selects().filter(select => select.value === 'item').map(itemPayload);
+        if (!items.length) {
+          window.showAppNotice('请先选择需要AI校验的标准项。');
+          return;
+        }
+        const chunks = [];
+        for (let index = 0; index < items.length; index += 10) chunks.push(items.slice(index, index + 10));
+        const corrections = [];
+        const originalText = button.textContent;
+        button.disabled = true;
+        try {
+          for (let index = 0; index < chunks.length; index += 1) {
+            button.textContent = 'AI校验 ' + (index + 1) + '/' + chunks.length;
+            const response = await fetch('/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/ai-review', {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-csrf-token': '<%= csrf %>',
+                accept: 'application/json'
+              },
+              body: JSON.stringify({ nodes: chunks[index] })
+            });
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.message || 'AI校验失败');
+            corrections.push(...(body.data.corrections || []));
+          }
+          aiCorrections = corrections;
+          if (!corrections.length) {
+            window.showAppNotice('AI没有发现足够明确的OCR错误。');
+            return;
+          }
+          renderAiCorrections(corrections);
+        } catch (error) {
+          window.showAppNotice(error.message, 'AI校验失败');
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      });
+      document.getElementById('applyAiCorrections').addEventListener('click', () => {
+        const selectedIndices = Array.from(document.querySelectorAll('.ai-correction-checkbox:checked'))
+          .map(checkbox => Number(checkbox.dataset.index));
+        for (const index of selectedIndices) {
+          const correction = aiCorrections[index];
+          const number = document.querySelector('.node-number[data-node-id="' + correction.nodeId + '"]');
+          const title = document.querySelector('.node-title[data-node-id="' + correction.nodeId + '"]');
+          const content = document.querySelector('.node-content[data-node-id="' + correction.nodeId + '"]');
+          if (number) number.value = correction.originalNumber;
+          if (title) title.value = correction.title;
+          if (content) content.value = correction.content;
+          const node = byId.get(correction.nodeId);
+          if (node) {
+            node.originalNumber = correction.originalNumber;
+            node.title = correction.title;
+            node.content = correction.content;
+          }
+        }
+        recalculateHierarchy();
+        refreshLayout();
+        updateCount();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('aiCorrectionsModal')).hide();
+        window.showAppNotice('已应用 ' + selectedIndices.length + ' 条AI修改建议。');
+      });
       selects().forEach(select => select.addEventListener('change', updateCount));
       recalculateHierarchy();
       refreshLayout();
