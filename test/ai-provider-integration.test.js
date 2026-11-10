@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { AiProvider } = require('../app/lib/aiProvider');
+const { AiProvider, friendlyAiError } = require('../app/lib/aiProvider');
 
 function createServer(handler) {
   return new Promise(resolve => {
@@ -11,6 +11,19 @@ function createServer(handler) {
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
 }
+
+test('maps network, authentication, endpoint, and rate-limit errors to actionable messages', () => {
+  const timeout = new Error('fetch failed');
+  timeout.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' };
+  assert.deepEqual(friendlyAiError(timeout, 'https://ai.example.com/v1'), {
+    statusCode: 504,
+    code: 'AI_CONNECT_TIMEOUT',
+    message: '连接AI服务 ai.example.com 超时，请检查服务地址、网络访问和防火墙。',
+  });
+  assert.equal(friendlyAiError({ providerStatus: 401 }, 'https://ai.example.com').code, 'AI_AUTH_ERROR');
+  assert.equal(friendlyAiError({ providerStatus: 404 }, 'https://ai.example.com').code, 'AI_ENDPOINT_NOT_FOUND');
+  assert.equal(friendlyAiError({ providerStatus: 429 }, 'https://ai.example.com').code, 'AI_RATE_LIMIT');
+});
 
 test('tests an OpenAI-compatible endpoint and validates standard correction suggestions', async () => {
   const requests = [];

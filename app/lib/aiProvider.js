@@ -1,5 +1,48 @@
 'use strict';
 
+function aiError(message, code, extra = {}) {
+  const error = new Error(message);
+  error.aiCode = code;
+  Object.assign(error, extra);
+  return error;
+}
+
+function providerHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return '配置的AI地址';
+  }
+}
+
+function friendlyAiError(error, baseUrl = '') {
+  const code = error.aiCode || error.cause?.code || error.code || '';
+  const host = providerHost(baseUrl);
+  const status = error.providerStatus || error.status;
+  if (code === 'AI_CONFIG_ERROR') return { statusCode: 400, code, message: error.message };
+  if ([ 'UND_ERR_CONNECT_TIMEOUT', 'ETIMEDOUT', 'AI_TIMEOUT' ].includes(code)) {
+    return { statusCode: 504, code: 'AI_CONNECT_TIMEOUT', message: `连接AI服务 ${host} 超时，请检查服务地址、网络访问和防火墙。` };
+  }
+  if (code === 'ENOTFOUND') return { statusCode: 502, code, message: `无法解析AI服务域名 ${host}，请检查地址或DNS。` };
+  if ([ 'ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH' ].includes(code)) {
+    return { statusCode: 502, code, message: `无法连接AI服务 ${host}（${code}），请确认服务已启动且网络可达。` };
+  }
+  if (/certificate|CERT_|TLS|SSL/i.test(String(code)) || /certificate|TLS|SSL/i.test(error.message)) {
+    return { statusCode: 502, code: 'AI_TLS_ERROR', message: `连接AI服务 ${host} 时证书校验失败，请检查HTTPS证书。` };
+  }
+  if (status === 401 || status === 403) {
+    return { statusCode: 502, code: 'AI_AUTH_ERROR', message: 'AI服务拒绝了当前API Key，请检查密钥、模型权限和账户状态。' };
+  }
+  if (status === 404) return { statusCode: 502, code: 'AI_ENDPOINT_NOT_FOUND', message: 'AI接口返回404，请确认接口地址是否需要包含或省略 /v1、/chat/completions。' };
+  if (status === 429) return { statusCode: 502, code: 'AI_RATE_LIMIT', message: 'AI服务请求过于频繁或额度不足，请稍后重试或检查账户额度。' };
+  if (status && status >= 500) return { statusCode: 502, code: 'AI_UPSTREAM_ERROR', message: `AI服务暂时不可用（HTTP ${status}），请稍后重试。` };
+  if (code === 'AI_INVALID_RESPONSE') return { statusCode: 502, code, message: error.message };
+  if (error.message === 'fetch failed' || code.startsWith?.('UND_ERR')) {
+    return { statusCode: 502, code: 'AI_NETWORK_ERROR', message: `无法连接AI服务 ${host}，请检查网络连通性。` };
+  }
+  return { statusCode: 502, code: 'AI_REQUEST_FAILED', message: error.message || 'AI服务请求失败' };
+}
+
 class AiProvider {
   constructor(config) {
     this.config = config;
@@ -14,7 +57,7 @@ class AiProvider {
     const hostname = url.hostname.toLowerCase();
     const isLoopback = [ 'localhost', '127.0.0.1', '::1' ].includes(hostname);
     if (url.protocol === 'http:' && !isLoopback && process.env.NODE_ENV === 'production') {
-      throw new Error('生产环境的AI接口必须使用HTTPS；内网HTTP地址仅允许localhost回环地址');
+      throw aiError('生产环境的AI接口必须使用HTTPS；内网HTTP地址仅允许localhost回环地址', 'AI_CONFIG_ERROR');
     }
   }
 
@@ -50,13 +93,16 @@ class AiProvider {
         } catch {
           // Keep the HTTP status when the provider response is not readable.
         }
-        const error = new Error(`AI HTTP ${response.status}${detail ? ': ' + detail : ''}`);
-        error.providerStatus = response.status;
-        throw error;
+        throw aiError(`AI HTTP ${response.status}${detail ? ': ' + detail : ''}`, 'AI_HTTP_ERROR', { providerStatus: response.status });
       }
-      const body = await response.json();
+      let body;
+      try {
+        body = await response.json();
+      } catch {
+        throw aiError('AI接口返回的内容不是JSON，请确认接口地址指向兼容的Chat Completions服务。', 'AI_INVALID_RESPONSE');
+      }
       const content = body.choices?.[0]?.message?.content;
-      if (typeof content !== 'string' || !content.trim()) throw new Error('AI 返回内容为空');
+      if (typeof content !== 'string' || !content.trim()) throw aiError('AI返回内容为空', 'AI_INVALID_RESPONSE');
       return {
         content,
         providerStatus: response.status,
@@ -64,6 +110,8 @@ class AiProvider {
       };
     } catch (error) {
       error.durationMs = Date.now() - startedAt;
+      error.baseUrl = this.config.baseUrl;
+      if (!error.aiCode && error.name === 'AbortError') error.aiCode = 'AI_TIMEOUT';
       throw error;
     } finally {
       clearTimeout(timer);
@@ -80,7 +128,7 @@ class AiProvider {
   }
 
   async testConnection() {
-    if (!this.enabled) throw new Error('AI 服务未完整配置');
+    if (!this.enabled) throw aiError('AI服务未完整配置', 'AI_CONFIG_ERROR');
     const response = await this.request([
       { role: 'system', content: '只返回 JSON，不要附加说明。' },
       { role: 'user', content: '请返回 {"status":"ok"}。' },
@@ -89,14 +137,14 @@ class AiProvider {
     try {
       json = parseJsonContent(response.content);
     } catch {
-      throw new Error('AI 返回的不是有效JSON');
+      throw aiError('AI返回的不是有效JSON', 'AI_INVALID_RESPONSE');
     }
-    if (json.status !== 'ok') throw new Error('AI 返回格式不符合预期');
+    if (json.status !== 'ok') throw aiError('AI返回格式不符合预期', 'AI_INVALID_RESPONSE');
     return { content: JSON.stringify(json), providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
   async correctStandardNodes(nodes, context = {}) {
-    if (!this.enabled) throw new Error('AI 服务未配置或未启用');
+    if (!this.enabled) throw aiError('AI服务未配置或未启用', 'AI_CONFIG_ERROR');
     const response = await this.request([
       {
         role: 'system',
@@ -128,8 +176,14 @@ class AiProvider {
         }),
       },
     ]);
+    let corrections;
+    try {
+      corrections = parseStandardCorrections(response.content, new Set(nodes.map(node => node.id)));
+    } catch {
+      throw aiError('AI返回的校对结果格式无效', 'AI_INVALID_RESPONSE');
+    }
     return {
-      corrections: parseStandardCorrections(response.content, new Set(nodes.map(node => node.id))),
+      corrections,
       providerStatus: response.providerStatus,
       durationMs: response.durationMs,
     };
@@ -182,4 +236,4 @@ function parseAiResult(content) {
   };
 }
 
-module.exports = { AiProvider, parseAiResult, parseStandardCorrections };
+module.exports = { AiProvider, friendlyAiError, parseAiResult, parseStandardCorrections };
