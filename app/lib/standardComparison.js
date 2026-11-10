@@ -30,14 +30,29 @@ function normalizeNumber(value) {
     .replace(/[：:]/g, '');
 }
 
+const OCR_PHRASE_REPAIRS = [
+  [ /溥洞|漪洞|漏泂|漏润/g, '漏洞' ],
+  [ /掀施|措旅/g, '措施' ],
+  [ /纳人/g, '纳入' ],
+  [ /出人/g, '出入' ],
+  [ /人侵/g, '入侵' ],
+  [ /箱改|筠改|篙改/g, '篡改' ],
+  [ /赞品|鹰品/g, '赝品' ],
+  [ /资任/g, '责任' ],
+  [ /要汪/g, '要求' ],
+  [ /椿据/g, '根据' ],
+];
+
 function normalizeText(value) {
-  return String(value || '')
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[\s，。；：、,.!?！？;:'"“”‘’()（）\[\]【】《》<>—_-]/g, '');
+  let text = String(value || '').normalize('NFKC').toLowerCase();
+  for (const [ pattern, replacement ] of OCR_PHRASE_REPAIRS) text = text.replace(pattern, replacement);
+  return text
+    .replace(/gbt?\s*\d{5}\s*[-—]?\s*\d{4}/gi, '')
+    .replace(/云服务商应(?:满足以下要求)?[：:]?/g, '')
+    .replace(/[\s，。；：、,.!?！？;:'"“”‘’()（）\[\]【】《》<>—_\-\/|\\]/g, '');
 }
 
-function grams(text, size = 3) {
+function grams(text, size) {
   const chars = [ ...text ];
   if (chars.length < size) return new Set(chars);
   const result = new Set();
@@ -47,16 +62,54 @@ function grams(text, size = 3) {
   return result;
 }
 
-function diceSimilarity(left, right) {
-  const a = normalizeText(left);
-  const b = normalizeText(right);
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  const aGrams = grams(a);
-  const bGrams = grams(b);
+function diceForSize(a, b, size) {
+  const aGrams = grams(a, size);
+  const bGrams = grams(b, size);
   let overlap = 0;
   for (const value of aGrams) if (bGrams.has(value)) overlap += 1;
-  return (2 * overlap) / (aGrams.size + bGrams.size);
+  return {
+    dice: (2 * overlap) / (aGrams.size + bGrams.size),
+    containment: overlap / Math.max(1, Math.min(aGrams.size, bGrams.size)),
+  };
+}
+
+function textMetrics(left, right) {
+  const a = normalizeText(left);
+  const b = normalizeText(right);
+  if (!a || !b) return { similarity: 0, bigram: 0, trigram: 0, containment: 0, lengthRatio: 0 };
+  if (a === b) return { similarity: 1, bigram: 1, trigram: 1, containment: 1, lengthRatio: 1 };
+  const bigram = diceForSize(a, b, 2);
+  const trigram = diceForSize(a, b, 3);
+  const lengthRatio = Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  const similarity = Math.max(trigram.dice, bigram.dice * 0.98);
+  return {
+    similarity,
+    bigram: bigram.dice,
+    trigram: trigram.dice,
+    containment: Math.max(trigram.containment, bigram.containment),
+    lengthRatio,
+  };
+}
+
+function diceSimilarity(left, right) {
+  return textMetrics(left, right).similarity;
+}
+
+function listMarkerFromNumber(value) {
+  const matches = [ ...String(value || '').normalize('NFKC').matchAll(/(?:^|\s)([a-z])[)）]/gi) ];
+  return matches.length ? matches[matches.length - 1][1].toLowerCase() : '';
+}
+
+function listMarkerFromText(value) {
+  const match = String(value || '').normalize('NFKC').match(/(?:^|\n)\s*([a-z])[)）]/i);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function markerConflict(node, row) {
+  const nodeMarker = listMarkerFromNumber(node.originalNumber);
+  if (!nodeMarker) return false;
+  const rowMarker = listMarkerFromText(row.content);
+  return Boolean(rowMarker && rowMarker !== nodeMarker);
 }
 
 function comparisonRows(parsed) {
@@ -159,20 +212,66 @@ function mergeComparisonIntoTree(tree, parsed) {
   const matchedNodeIds = new Set();
   const matches = [];
 
+  const chapterTitleSimilarity = (node, row) => {
+    let best = 0;
+    let current = node;
+    const visited = new Set();
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      if (current.kind === 'heading') {
+        best = Math.max(
+          best,
+          diceSimilarity(current.title, row.chapterName),
+          diceSimilarity(current.originalNumber, row.chapterCode)
+        );
+      }
+      current = current.parentId ? byId.get(current.parentId) : null;
+    }
+    return best;
+  };
+
   const assign = (node, row, method, similarity) => {
     if (!node || !row || usedRows.has(row) || matchedNodeIds.has(node.id)) return;
     usedRows.add(row);
     matchedNodeIds.add(node.id);
+    const metrics = textMetrics(node.content, row.content);
     const sameContent = normalizeText(node.content) === normalizeText(row.content);
-    const highConfidence = sameContent || similarity >= 0.9;
-    const status = highConfidence ? 'matched' : similarity >= 0.45 ? 'review' : 'unmatched';
+    const conflict = markerConflict(node, row);
+    const nodeKey = rootChapterKey(nodeChapterCode(node, byId));
+    const rowKey = rootChapterKey(row.chapterCode);
+    const sameChapter = nodeKey === rowKey || chapterTitleSimilarity(node, row) >= 0.55;
+    const sequenceHigh = method === 'sequence'
+      && metrics.lengthRatio >= 0.5
+      && metrics.bigram >= 0.85;
+    const contentHigh = method === 'content'
+      && metrics.lengthRatio >= 0.5
+      && metrics.bigram >= (sameChapter ? 0.87 : 0.92);
+    const containmentHigh = metrics.lengthRatio >= 0.55
+      && metrics.containment >= 0.95
+      && metrics.bigram >= (sameChapter ? 0.78 : 0.88);
+    const highConfidence = !conflict && (
+      sameContent
+      || sequenceHigh
+      || contentHigh
+      || containmentHigh
+    );
+    const score = Math.max(similarity, metrics.similarity);
+    const status = highConfidence
+      ? 'matched'
+      : !conflict && score >= 0.45
+        ? 'review'
+        : 'unmatched';
     node.ocrContent = node.ocrContent ?? node.content;
     node.comparisonContent = row.content;
     node.comparisonItemCode = row.itemCode;
     node.comparisonChapterCode = row.chapterCode;
     node.comparisonChapterName = row.chapterName;
     node.comparisonTitle = row.title;
-    node.comparisonSimilarity = Math.round(similarity * 1000) / 1000;
+    node.comparisonSimilarity = Math.round(score * 1000) / 1000;
+    node.comparisonBigram = Math.round(metrics.bigram * 1000) / 1000;
+    node.comparisonContainment = Math.round(metrics.containment * 1000) / 1000;
+    node.comparisonMarkerConflict = conflict;
+    node.comparisonSameChapter = sameChapter;
     node.comparisonMatch = status;
     node.comparisonMethod = method;
     if (highConfidence) {
@@ -180,7 +279,7 @@ function mergeComparisonIntoTree(tree, parsed) {
       if (!node.title && row.title) node.title = row.title;
       node.contentSource = 'comparison';
     }
-    matches.push({ nodeId: node.id, row, method, similarity, status });
+    matches.push({ nodeId: node.id, row, method, similarity: score, status, conflict });
   };
 
   const itemNodes = nodes.filter(node => (node.kind === 'list' || node.kind === 'heading') && normalizeText(node.content));
@@ -249,18 +348,24 @@ function mergeComparisonIntoTree(tree, parsed) {
     assign(candidate.node, candidate.row, 'content', candidate.similarity);
   }
 
+  const matchedCount = matches.filter(item => item.status === 'matched').length;
+  const reviewCount = matches.filter(item => item.status === 'review').length;
   const summary = {
     comparisonCount: rows.length,
-    matchedCount: matches.filter(item => item.status === 'matched').length,
-    reviewCount: matches.filter(item => item.status === 'review').length,
+    matchedCount,
+    reviewCount,
     unmatchedCount: itemNodes.filter(node => !matchedNodeIds.has(node.id)).length,
     unusedComparisonCount: rows.length - usedRows.size,
+    assignedCount: usedRows.size,
+    markerConflictCount: matches.filter(item => item.conflict).length,
+    autoMatchRate: Math.round(matchedCount / Math.max(1, rows.length) * 1000) / 10,
+    assignedRate: Math.round(usedRows.size / Math.max(1, rows.length) * 1000) / 10,
     internalNumbering: true,
   };
   tree.comparisonSummary = summary;
   tree.comparisonMatchedNodes = matchedNodeIds.size;
   tree.warnings = [
-    `已按章节顺序和正文相似度加载对照表：${summary.comparisonCount} 条；高可信采用 ${summary.matchedCount} 条，需要核对 ${summary.reviewCount} 条。内部编号不会覆盖PDF原文编号。`,
+    `已按章节顺序和正文相似度加载对照表：${summary.comparisonCount} 条；自动采用 ${summary.matchedCount} 条（${summary.autoMatchRate}%），待核对 ${summary.reviewCount} 条。内部编号不会覆盖PDF原文编号。`,
     ...(tree.warnings || []),
   ];
   return summary;
@@ -269,8 +374,12 @@ function mergeComparisonIntoTree(tree, parsed) {
 module.exports = {
   comparisonRows,
   diceSimilarity,
+  listMarkerFromNumber,
+  listMarkerFromText,
+  markerConflict,
   mergeComparisonIntoTree,
   normalizeNumber,
   normalizeText,
   parseComparisonFile,
+  textMetrics,
 };

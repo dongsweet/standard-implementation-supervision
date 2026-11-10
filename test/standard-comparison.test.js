@@ -14,6 +14,30 @@ test('measures Chinese OCR text similarity deterministically', () => {
   assert.equal(diceSimilarity('应建立账号管理制度', '检查机房温湿度'), 0);
 });
 
+test('normalizes frequent OCR phrase errors and does not cross clause markers', () => {
+  assert.equal(
+    diceSimilarity('根据扫描结果及时修复溥洞并采取有关掀施', '根据扫描结果及时修复漏洞并采取有关措施'),
+    1
+  );
+  const tree = {
+    nodes: [
+      { id: 'h', kind: 'heading', level: 1, originalNumber: '8', title: '访问控制', content: '', parentId: null },
+      { id: 'n', kind: 'list', originalNumber: '8.1.1 a)', content: '对用户进行唯一标识和鉴别', parentId: 'h' },
+    ],
+    warnings: [],
+  };
+  const result = mergeComparisonIntoTree(tree, parsed([
+    {
+      code: '访问控制', name: '访问控制', items: [
+        { itemCode: '8001', content: 'b）对用户进行唯一标识和鉴别' },
+      ],
+    },
+  ]));
+  assert.equal(tree.nodes[1].comparisonMarkerConflict, true);
+  assert.equal(tree.nodes[1].comparisonMatch, 'unmatched');
+  assert.equal(result.matchedCount, 0);
+});
+
 test('aligns internal 6001-style numbering by chapter, sequence, and content', () => {
   const tree = {
     nodes: [
