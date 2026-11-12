@@ -166,7 +166,7 @@ test('writes mapped standard fields inside one database transaction', async () =
   assert.equal(result.itemCount, 1);
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
-  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求' ]);
+  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', 1, '1-8.1-0001' ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
 });
@@ -205,6 +205,9 @@ test('merges uploaded content into an existing version atomically', async () => 
       if (statement === 'SELECT id FROM standard_versions WHERE id = $1 FOR UPDATE') {
         return { rows: [ { id: 'version-1' } ], rowCount: 1 };
       }
+      if (statement === 'SELECT s.code FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id WHERE sv.id = $1') {
+        return { rows: [ { code: 'GB/T 31168' } ], rowCount: 1 };
+      }
       if (statement === 'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1') {
         return { rows: [ { id: 'chapter-existing', code: '8.1' } ], rowCount: 1 };
       }
@@ -239,8 +242,8 @@ test('merges uploaded content into an existing version atomically', async () => 
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
   assert.ok(itemInsert.statement.includes('ON CONFLICT (standard_version_id, item_code) DO UPDATE'));
   assert.deepEqual(itemInsert.values, [
-    'version-1', 'chapter-existing', '8.1.1', '账号管理', '更新后的内容',
-    'version-1', 'chapter-existing', '8.1.2', null, '新增内容',
+    'version-1', 'chapter-existing', '8.1.1', '账号管理', '更新后的内容', 1, '31168-8.1-0001',
+    'version-1', 'chapter-existing', '8.1.2', null, '新增内容', 2, '31168-8.1-0002',
   ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);

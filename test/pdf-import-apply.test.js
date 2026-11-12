@@ -18,11 +18,11 @@ test('applies selected OCR leaves under section 6.1 with standardized numbers ge
       const statement = sql.replace(/\s+/g, ' ').trim();
       queries.push({ statement, values });
       if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: null };
-      if (statement.startsWith('SELECT id, result FROM standard_import_jobs')) {
-        return { rows: [ { id: 'job-1', result: { nodes: sourceNodes } } ], rowCount: 1 };
+      if (statement.startsWith('SELECT j.id, j.result, s.code AS standard_code')) {
+        return { rows: [ { id: 'job-1', standard_code: 'GB/T 31168', result: { nodes: sourceNodes } } ], rowCount: 1 };
       }
       if (statement.startsWith('INSERT INTO standard_chapters ')) {
-        return { rows: [ { id: 'chapter-1', standard_number: 'SC-00000001' } ], rowCount: 1 };
+        return { rows: [ { id: 'chapter-1', standard_number: '31168-6.1' } ], rowCount: 1 };
       }
       return { rows: [], rowCount: 1 };
     },
@@ -39,13 +39,17 @@ test('applies selected OCR leaves under section 6.1 with standardized numbers ge
 
   assert.deepEqual(result, { itemCount: 2, chapterCount: 1 });
   const chapterInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_chapters '));
-  assert.deepEqual(chapterInsert.values, [ 'version-1', '6.1', '资源分配', 0 ]);
+  assert.deepEqual(chapterInsert.values, [ 'version-1', '6.1', '资源分配', 0, '31168-6.1' ]);
   const itemInserts = queries.filter(query => query.statement.startsWith('INSERT INTO standard_items '));
   assert.equal(itemInserts.length, 2);
   assert.equal(itemInserts[0].values[2], '6.1.1 a)');
   assert.match(itemInserts[0].values[4], /云服务商应：\n分析资源并确保可用性。/);
   assert.deepEqual(itemInserts[0].values.slice(5, 7), [ 14, 14 ]);
+  assert.equal(itemInserts[0].values[9], 1);
+  assert.equal(itemInserts[0].values[10], '31168-6.1-0001');
   assert.equal(itemInserts[1].values[2], '6.1.1 b)');
+  assert.equal(itemInserts[1].values[9], 2);
+  assert.equal(itemInserts[1].values[10], '31168-6.1-0002');
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   assert.ok(queries.some(query => query.statement.startsWith('INSERT INTO audit_logs ')));
 });

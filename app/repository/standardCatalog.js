@@ -1,5 +1,7 @@
 'use strict';
 
+const { chapterStandardNumber, itemStandardNumber } = require('../lib/standardNumber');
+
 function normalizeCode(value) {
   return String(value || '').normalize('NFKC').toUpperCase();
 }
@@ -114,19 +116,22 @@ class StandardCatalogRepository {
       const chapterIds = new Map();
       for (const chapter of chapters) {
         const result = await client.query(
-          'INSERT INTO standard_chapters (standard_version_id, code, name, sort_order) VALUES ($1, $2, $3, $4) RETURNING id',
-          [ standardVersion.id, chapter.code, chapter.name, chapter.sortOrder ]
+          'INSERT INTO standard_chapters (standard_version_id, code, name, sort_order, standard_number) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+          [ standardVersion.id, chapter.code, chapter.name, chapter.sortOrder, chapterStandardNumber(standard.code, chapter.code) ]
         );
         chapterIds.set(chapter.code, result.rows[0].id);
       }
 
-      const items = chapters.flatMap(chapter => chapter.items.map(item => ({
+      const items = chapters.flatMap(chapter => chapter.items.map((item, index) => ({
         ...item, chapterId: chapterIds.get(chapter.code),
+        importOrder: index + 1,
+        standardNumber: itemStandardNumber(standard.code, chapter.code, index + 1),
       })));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'import_order', 'standard_number' ],
         items.map(item => [
           standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
+          item.importOrder, item.standardNumber,
         ]),
         { returning: 'id, item_code' });
       await client.query('COMMIT');
@@ -156,6 +161,11 @@ class StandardCatalogRepository {
         await client.query('ROLLBACK');
         return null;
       }
+      const standard = await client.query(`
+        SELECT s.code
+        FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
+        WHERE sv.id = $1`, [ versionId ]);
+      const standardCode = standard.rows[0].code;
 
       const existingChapters = await client.query(
         'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1',
@@ -165,37 +175,44 @@ class StandardCatalogRepository {
       const chapterByNormalizedCode = new Map(existingChapters.rows.map(chapter => [ normalizeCode(chapter.code), chapter ]));
       const chapterRows = chapters.map(chapter => {
         const existing = chapterByExactCode.get(chapter.code) || chapterByNormalizedCode.get(normalizeCode(chapter.code));
-        return [ versionId, existing ? existing.code : chapter.code, chapter.name, chapter.sortOrder ];
+        const code = existing ? existing.code : chapter.code;
+        return [ versionId, code, chapter.name, chapter.sortOrder, chapterStandardNumber(standardCode, code) ];
       });
       const savedChapters = await insertMany(client, 'standard_chapters',
-        [ 'standard_version_id', 'code', 'name', 'sort_order' ], chapterRows, {
-          onConflict: 'ON CONFLICT (standard_version_id, code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order',
+        [ 'standard_version_id', 'code', 'name', 'sort_order', 'standard_number' ], chapterRows, {
+          onConflict: 'ON CONFLICT (standard_version_id, code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order, standard_number = EXCLUDED.standard_number',
           returning: 'id, code',
         });
       const chapterIds = new Map(savedChapters.map(chapter => [ normalizeCode(chapter.code), chapter.id ]));
 
       const existingItems = await client.query(
-        'SELECT id, item_code FROM standard_items WHERE standard_version_id = $1',
+        'SELECT id, item_code, import_order FROM standard_items WHERE standard_version_id = $1',
         [ versionId ]
       );
       const itemByExactCode = new Map(existingItems.rows.map(item => [ item.item_code, item ]));
       const itemByNormalizedCode = new Map(existingItems.rows.map(item => [ normalizeCode(item.item_code), item ]));
-      const items = chapters.flatMap(chapter => chapter.items.map(item => {
+      const items = chapters.flatMap(chapter => chapter.items.map((item, index) => {
         const existing = itemByExactCode.get(item.itemCode) || itemByNormalizedCode.get(normalizeCode(item.itemCode));
+        const code = existing ? existing.item_code : item.itemCode;
+        const importOrder = index + 1;
         return {
           ...item,
           chapterId: chapterIds.get(normalizeCode(chapter.code)),
-          databaseItemCode: existing ? existing.item_code : item.itemCode,
+          databaseItemCode: code,
+          importOrder,
+          standardNumber: itemStandardNumber(standardCode, chapter.code, importOrder),
         };
       }));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'import_order', 'standard_number' ],
         items.map(item => [
           versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
+          item.importOrder, item.standardNumber,
         ]),
         {
           onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content`,
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
           returning: 'id, item_code',
         });
       await client.query('COMMIT');
@@ -259,7 +276,7 @@ class StandardCatalogRepository {
                'id', si.id, 'standardNumber', si.standard_number,
                'itemCode', si.item_code, 'title', si.title, 'content', si.content,
                'sourcePageFrom', si.source_page_from, 'sourcePageTo', si.source_page_to
-             ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
+             ) ORDER BY si.import_order, si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
       LEFT JOIN standard_items si ON si.chapter_id = sc.id
       WHERE sc.standard_version_id = $1
@@ -268,10 +285,66 @@ class StandardCatalogRepository {
     return { version: versionResult.rows[0], chapters: chapters.rows };
   }
 
+  async clearVersionContent({ versionId, actorId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const version = await client.query(`
+        SELECT sv.id, sv.version, s.code AS standard_code, s.name AS standard_name
+        FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
+        WHERE sv.id = $1 FOR UPDATE`, [ versionId ]);
+      if (!version.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const references = await client.query(`
+        SELECT
+          (SELECT count(*)::integer FROM project_standard_items psi JOIN standard_items si ON si.id = psi.standard_item_id WHERE si.standard_version_id = $1) AS project_items,
+          (SELECT count(*)::integer FROM project_standard_answers psa JOIN standard_items si ON si.id = psa.standard_item_id WHERE si.standard_version_id = $1) AS project_answers,
+          (SELECT count(*)::integer FROM supervision_definition_standard_items dsi JOIN standard_items si ON si.id = dsi.standard_item_id WHERE si.standard_version_id = $1) AS supervision_definitions,
+          (SELECT count(*)::integer FROM supervision_item_results sir JOIN standard_items si ON si.id = sir.standard_item_id WHERE si.standard_version_id = $1) AS supervision_results,
+          (SELECT count(*)::integer FROM chapter_responsibilities cr JOIN standard_chapters sc ON sc.id = cr.chapter_id WHERE sc.standard_version_id = $1) AS chapter_responsibilities`, [ versionId ]);
+      const blocked = Object.entries(references.rows[0]).filter(([, count ]) => Number(count) > 0);
+      if (blocked.length) {
+        const error = new Error('当前规范版本已被项目或监督记录引用，不能清空内容；请先解除相关引用');
+        error.code = 'STANDARD_CONTENT_REFERENCED';
+        error.references = Object.fromEntries(blocked);
+        throw error;
+      }
+
+      const deleted = await client.query(`
+        DELETE FROM standard_chapters
+        WHERE standard_version_id = $1
+        RETURNING id`, [ versionId ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'clear_standard_version_content', 'standard_version', $2, $3)`, [
+        actorId || null,
+        versionId,
+        JSON.stringify({ standardCode: version.rows[0].standard_code, chapterCount: deleted.rowCount }),
+      ]);
+      await client.query('COMMIT');
+      return { chapterCount: deleted.rowCount, standardCode: version.rows[0].standard_code, version: version.rows[0].version };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createChapter({ versionId, code, name, sortOrder }) {
+    const standard = await this.pool.query(`
+      SELECT s.code
+      FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
+      WHERE sv.id = $1`, [ versionId ]);
+    if (!standard.rowCount) return null;
     const result = await this.pool.query(`
-      INSERT INTO standard_chapters (standard_version_id, code, name, sort_order)
-      VALUES ($1, $2, $3, $4) RETURNING *`, [ versionId, code, name, sortOrder || 0 ]);
+      INSERT INTO standard_chapters (standard_version_id, code, name, sort_order, standard_number)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *`, [
+      versionId, code, name, sortOrder || 0, chapterStandardNumber(standard.rows[0].code, code),
+    ]);
     return result.rows[0];
   }
 
@@ -289,11 +362,29 @@ class StandardCatalogRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const chapter = await client.query(`
+        SELECT sc.code, s.code AS standard_code,
+               COALESCE(MAX(si.import_order), 0)::integer + 1 AS import_order
+        FROM standard_chapters sc
+        JOIN standard_versions sv ON sv.id = sc.standard_version_id
+        JOIN standards s ON s.id = sv.standard_id
+        LEFT JOIN standard_items si ON si.chapter_id = sc.id
+        WHERE sc.id = $1 AND sc.standard_version_id = $2
+        GROUP BY sc.id, sc.code, s.code`, [ chapterId, versionId ]);
+      if (!chapter.rowCount) {
+        const error = new Error('章节不存在');
+        error.code = 'MISSING_CHAPTER';
+        throw error;
+      }
       const result = await client.query(`
       INSERT INTO standard_items
-        (standard_version_id, chapter_id, item_code, title, content)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`, [ versionId, chapterId, itemCode, title || null, content ]);
+        (standard_version_id, chapter_id, item_code, title, content, import_order, standard_number)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *`, [
+        versionId, chapterId, itemCode, title || null, content,
+        chapter.rows[0].import_order,
+        itemStandardNumber(chapter.rows[0].standard_code, chapter.rows[0].code, chapter.rows[0].import_order),
+      ]);
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {
@@ -309,14 +400,27 @@ class StandardCatalogRepository {
     let count = 0;
     try {
       await client.query('BEGIN');
-      for (const row of rows) {
+      const chapter = await client.query(`
+        SELECT sc.code, s.code AS standard_code
+        FROM standard_chapters sc
+        JOIN standard_versions sv ON sv.id = sc.standard_version_id
+        JOIN standards s ON s.id = sv.standard_id
+        WHERE sc.id = $1 AND sc.standard_version_id = $2`, [ chapterId, versionId ]);
+      if (!chapter.rowCount) {
+        const error = new Error('章节不存在');
+        error.code = 'MISSING_CHAPTER';
+        throw error;
+      }
+      for (const [ index, row ] of rows.entries()) {
         await client.query(`
           INSERT INTO standard_items
-            (standard_version_id, chapter_id, item_code, title, content)
-          VALUES ($1, $2, $3, $4, $5)
+            (standard_version_id, chapter_id, item_code, title, content, import_order, standard_number)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content`,
-        [ versionId, chapterId, row.itemCode, row.title || null, row.content ]);
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
+        [ versionId, chapterId, row.itemCode, row.title || null, row.content, index + 1,
+          itemStandardNumber(chapter.rows[0].standard_code, chapter.rows[0].code, index + 1) ]);
         count += 1;
       }
       await client.query('COMMIT');

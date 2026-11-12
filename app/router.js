@@ -24,6 +24,7 @@ module.exports = app => {
   router.post('/standards/:standardId/versions/:versionId', controller.standardCatalog.updateStandard);
   router.post('/standards/:standardId/versions', controller.standardCatalog.createVersion);
   router.get('/standards/versions/:versionId', controller.standardCatalog.version);
+  router.post('/standards/versions/:versionId/clear-content', controller.standardCatalog.clearVersionContent);
   router.post('/standards/versions/:versionId/pdf-imports', controller.standardPdfImport.create);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId', controller.standardPdfImport.show);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId/status', controller.standardPdfImport.status);

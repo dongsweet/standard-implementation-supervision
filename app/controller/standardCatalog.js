@@ -64,6 +64,21 @@ class StandardCatalogController extends Controller {
     await this.ctx.render('standards/version', { title: `${detail.version.standard_code} · ${detail.version.version}`, ...detail, csrf: this.ctx.csrf });
   }
 
+  async clearVersionContent() {
+    const versionId = this.ctx.params.versionId;
+    try {
+      requireGlobalWrite(this.ctx);
+      const result = await this.ctx.service.standardCatalog.clearVersionContent(versionId, this.ctx.session.userId);
+      this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent(`规范内容已清空：${result.chapterCount}个章节`));
+    } catch (error) {
+      if ([ 404, 409 ].includes(error.status)) {
+        this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent('清空失败：' + error.message));
+        return;
+      }
+      throw error;
+    }
+  }
+
   async importVersionContent() {
     const versionId = this.ctx.params.versionId;
     try {
