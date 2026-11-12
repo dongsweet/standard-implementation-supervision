@@ -13,6 +13,7 @@ const {
   buildAiCandidates,
   buildRuleRecommendations,
   findAfterIndex,
+  findScopeEndIndex,
   trivialReason,
 } = require('../lib/standardReview');
 
@@ -162,18 +163,19 @@ class StandardPdfImportService extends Service {
       ...(incomingById.get(String(source.id)) || {}),
     })));
     const afterIndex = findAfterIndex(workingNodes, payload.afterOriginalNumber);
+    const scopeEndIndex = findScopeEndIndex(workingNodes, payload.afterOriginalNumber, afterIndex);
     const requestedIds = Array.isArray(payload.nodeIds) ? new Set(payload.nodeIds.map(String)) : null;
-    const scopedNodes = requestedIds
-      ? workingNodes.filter(node => requestedIds.has(String(node.id)))
-      : workingNodes;
+    const scopedNodes = workingNodes.filter((node, index) => index >= Math.max(0, afterIndex + 1)
+      && index < scopeEndIndex
+      && (!requestedIds || requestedIds.has(String(node.id))));
     const scopedSet = new Set(scopedNodes.map(node => node.id));
-    const rules = buildRuleRecommendations(workingNodes, { afterIndex })
+    const rules = buildRuleRecommendations(workingNodes, { afterIndex, endIndex: scopeEndIndex })
       .filter(item => !requestedIds || scopedSet.has(item.nodeId))
       .map(item => ({
         ...item,
         source: workingNodes.find(node => node.id === item.nodeId) || null,
       }));
-    const candidates = buildAiCandidates(workingNodes, { afterIndex })
+    const candidates = buildAiCandidates(workingNodes, { afterIndex, endIndex: scopeEndIndex })
       .filter(item => !requestedIds || scopedSet.has(item.id));
     const aiSuggestions = [];
     let aiUnavailable = null;
@@ -205,6 +207,7 @@ class StandardPdfImportService extends Service {
     const sourceById = new Map(workingNodes.map(node => [ node.id, node ]));
     return {
       afterOriginalNumber: payload.afterOriginalNumber || '',
+      scopeEndIndex,
       rules,
       ai: aiSuggestions.map(suggestion => ({
         ...suggestion,
@@ -216,7 +219,7 @@ class StandardPdfImportService extends Service {
         ruleSkipCount: rules.filter(item => item.action === 'skip').length,
         aiCount: aiSuggestions.length,
         unresolvedCount: candidates.length,
-        trivialCount: workingNodes.slice(Math.max(0, afterIndex + 1)).filter(node => trivialReason(node.content)).length,
+        trivialCount: workingNodes.slice(Math.max(0, afterIndex + 1), scopeEndIndex).filter(node => trivialReason(node.content)).length,
       },
       aiUnavailable,
       providerStatus,

@@ -6,6 +6,7 @@ const {
   buildAiCandidates,
   buildRuleRecommendations,
   findAfterIndex,
+  findScopeEndIndex,
   trivialReason,
 } = require('../app/lib/standardReview');
 
@@ -18,6 +19,10 @@ test('builds deterministic container and skip recommendations after a checkpoint
     { id: 'n5', originalNumber: '6.7.2 a)', kind: 'list', role: 'item', content: '有效条款', parentId: 'n4' },
   ];
   const afterIndex = findAfterIndex(nodes, '6.6.3');
+  assert.equal(findScopeEndIndex([
+    ...nodes,
+    { id: 'n6', originalNumber: '7', kind: 'heading' },
+  ], '6.6.3', afterIndex), 5);
   const result = buildRuleRecommendations(nodes, { afterIndex });
   assert.deepEqual(result.map(item => [ item.nodeId, item.action ]), [
     [ 'n2', 'container' ],

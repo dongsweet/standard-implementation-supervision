@@ -74,7 +74,7 @@
       <div class="alert alert-info py-2">系统先按确定性规则识别章节/容器和“无、默认无、页眉噪声”等跳过项，再把未匹配、待复核和疑似拼接条款交给AI生成建议。建议只会展示在下一步，不会自动写入草稿。</div>
       <label class="form-label" for="smartReviewAfter">已核对到的原文编号（可选）</label>
       <input class="form-control" id="smartReviewAfter" placeholder="例如：6.6.3">
-      <div class="form-text">填写后，编号及其之前的节点不会送入本次智能复核；当前页面尚未保存的修改也会随请求一并分析。</div>
+      <div class="form-text">填写后，编号及其之前的节点不会送入本次智能复核，并且默认只处理该编号所在章节的剩余内容；当前页面尚未保存的修改也会随请求一并分析。</div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-warning" id="startSmartReview">开始生成建议</button></div>
   </div></div></div>

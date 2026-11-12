@@ -43,10 +43,10 @@ function reviewableNode(node) {
   return Boolean(node && (node.kind === 'heading' || node.kind === 'list'));
 }
 
-function buildRuleRecommendations(nodes, { afterIndex = -1 } = {}) {
+function buildRuleRecommendations(nodes, { afterIndex = -1, endIndex = (nodes || []).length } = {}) {
   const children = buildChildren(nodes);
   const recommendations = [];
-  for (let index = Math.max(0, afterIndex + 1); index < (nodes || []).length; index += 1) {
+  for (let index = Math.max(0, afterIndex + 1); index < Math.min(endIndex, (nodes || []).length); index += 1) {
     const node = nodes[index];
     if (!reviewableNode(node)) continue;
     const descendant = hasDescendants(children, node.id);
@@ -83,10 +83,10 @@ function unresolvedNode(node) {
   );
 }
 
-function buildAiCandidates(nodes, { afterIndex = -1 } = {}) {
+function buildAiCandidates(nodes, { afterIndex = -1, endIndex = (nodes || []).length } = {}) {
   const children = buildChildren(nodes);
   const result = [];
-  for (let index = Math.max(0, afterIndex + 1); index < (nodes || []).length; index += 1) {
+  for (let index = Math.max(0, afterIndex + 1); index < Math.min(endIndex, (nodes || []).length); index += 1) {
     const node = nodes[index];
     if (!unresolvedNode(node)) continue;
     if (hasDescendants(children, node.id)) continue;
@@ -116,10 +116,27 @@ function findAfterIndex(nodes, afterOriginalNumber) {
   return index;
 }
 
+function rootChapterNumber(value) {
+  const match = String(value || '').normalize('NFKC').match(/^(\d{1,3})(?:\.|$)/);
+  return match ? match[1] : '';
+}
+
+function findScopeEndIndex(nodes, afterOriginalNumber, afterIndex) {
+  if (afterIndex < 0 || !String(afterOriginalNumber || '').trim()) return (nodes || []).length;
+  const root = rootChapterNumber(afterOriginalNumber);
+  if (!root) return (nodes || []).length;
+  for (let index = afterIndex + 1; index < (nodes || []).length; index += 1) {
+    const nodeRoot = rootChapterNumber(nodes[index]?.originalNumber);
+    if (nodeRoot && nodeRoot !== root) return index;
+  }
+  return (nodes || []).length;
+}
+
 module.exports = {
   buildAiCandidates,
   buildRuleRecommendations,
   findAfterIndex,
+  findScopeEndIndex,
   normalizeReviewText,
   trivialReason,
 };
