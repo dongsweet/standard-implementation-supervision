@@ -10,7 +10,7 @@ function numberPrefix(value) {
 function chapterPart(value) {
   return String(value || '').normalize('NFKC').trim()
     .replace(/\s+/g, '')
-    .replace(/[^0-9A-Z._-]+/gi, '-')
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/^-+|-+$/g, '') || 'CHAPTER';
 }
 

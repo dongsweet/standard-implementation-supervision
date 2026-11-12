@@ -24,7 +24,8 @@ exports.up = pgm => {
   pgm.sql('ALTER TABLE standard_items ALTER COLUMN import_order SET NOT NULL');
   pgm.sql(`
     WITH chapter_base AS (
-      SELECT sc.id,
+      SELECT sc.id, sc.code, sc.standard_version_id,
+             row_number() OVER (PARTITION BY sc.standard_version_id ORDER BY sc.sort_order, sc.code, sc.id)::integer AS chapter_order,
              trim(both '-' from regexp_replace(regexp_replace(upper(s.code), '[^0-9A-Z]+', '-', 'g'), '^[^0-9]*', '')) AS prefix,
              trim(both '-' from regexp_replace(upper(sc.code), '[^0-9A-Z._-]+', '-', 'g')) AS chapter_part
       FROM standard_chapters sc
@@ -32,13 +33,17 @@ exports.up = pgm => {
       JOIN standards s ON s.id = sv.standard_id
     )
     UPDATE standard_chapters sc
-    SET standard_number = chapter_base.prefix || '-' || chapter_base.chapter_part
+    SET standard_number = chapter_base.prefix || '-' || CASE
+      WHEN chapter_base.code ~ '[0-9]' AND chapter_base.chapter_part <> '' THEN chapter_base.chapter_part
+      ELSE 'C' || lpad(chapter_base.chapter_order::text, 3, '0')
+    END
     FROM chapter_base
     WHERE chapter_base.id = sc.id
   `);
   pgm.sql(`
     WITH item_base AS (
-      SELECT si.id, si.import_order,
+      SELECT si.id, si.import_order, sc.code, sc.standard_version_id,
+             row_number() OVER (PARTITION BY sc.standard_version_id ORDER BY sc.sort_order, sc.code, sc.id)::integer AS chapter_order,
              trim(both '-' from regexp_replace(regexp_replace(upper(s.code), '[^0-9A-Z]+', '-', 'g'), '^[^0-9]*', '')) AS prefix,
              trim(both '-' from regexp_replace(upper(sc.code), '[^0-9A-Z._-]+', '-', 'g')) AS chapter_part
       FROM standard_items si
@@ -47,7 +52,10 @@ exports.up = pgm => {
       JOIN standards s ON s.id = sv.standard_id
     )
     UPDATE standard_items si
-    SET standard_number = item_base.prefix || '-' || item_base.chapter_part || '-' || lpad(item_base.import_order::text, 4, '0')
+    SET standard_number = item_base.prefix || '-' || CASE
+      WHEN item_base.code ~ '[0-9]' AND item_base.chapter_part <> '' THEN item_base.chapter_part
+      ELSE 'C' || lpad(item_base.chapter_order::text, 3, '0')
+    END || '-' || lpad(item_base.import_order::text, 4, '0')
     FROM item_base
     WHERE item_base.id = si.id
   `);
