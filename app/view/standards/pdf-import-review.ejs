@@ -25,8 +25,8 @@
         <option value="level3">三级要求（如 6.1.1）</option>
         <option value="level2">二级标题（如 6.1）</option>
         <option value="level1">大章（如 6）</option>
-      </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过。</div></div>
-      <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项<div class="small text-secondary mt-1" id="draftStatus">尚未修改</div></div></div>
+      </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过；正文仅3个字以内或类似“默认：无”的节点默认跳过，可手工改回。</div></div>
+      <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项<div class="small text-secondary mt-1" id="draftStatus">尚未修改</div><div class="small text-secondary mt-1">草稿允许暂存不完整条款，正式写入前再校验。</div></div></div>
       <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-secondary" type="button" id="addNodeButton">新增条款</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-outline-success" type="button" id="saveDraftButton">保存草稿</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
     </div>
   </div>
@@ -144,6 +144,12 @@
         return false;
       };
       const hasListDescendant = node => nodes.some(other => other.kind === 'list' && isDescendant(other, node.id));
+      const shouldSkipByDefault = node => {
+        const normalized = String(node?.content || '')
+          .normalize('NFKC')
+          .replace(/[\s\u3000:：，。；、,.!?！？;:'"“”‘’()（）\[\]【】《》<>—_\-\/|\\]/g, '');
+        return Boolean(normalized) && normalized.length <= 3;
+      };
       const selects = () => Array.from(document.querySelectorAll('.node-role'));
       const updateCount = () => {
         document.getElementById('selectedCount').textContent = selects().filter(select => select.value === 'item').length;
@@ -343,6 +349,10 @@
       };
       const applyGranularity = value => {
         for (const node of nodes) {
+          if (shouldSkipByDefault(node)) {
+            setRole(node.id, 'skip');
+            continue;
+          }
           if (value === 'leaf') setRole(node.id, node.kind === 'list' || (node.kind === 'heading' && !hasListDescendant(node)) ? 'item' : 'container');
           if (value === 'level3') setRole(node.id, node.kind === 'heading' && node.level === 3 ? 'item' : node.kind === 'list' ? 'skip' : 'container');
           if (value === 'level2') setRole(node.id, node.kind === 'heading' && node.level === 2 ? 'item' : 'container');

@@ -166,9 +166,8 @@ class StandardPdfImportService extends Service {
       const originalNumber = String(input.originalNumber ?? source?.originalNumber ?? '').trim();
       const title = String(input.title ?? source?.title ?? '').trim();
       const content = String(input.content ?? source?.content ?? '').trim();
-      if (role === 'item' && (!originalNumber || !content)) {
-        this.ctx.throw(400, `标准项“${originalNumber || title || id}”缺少原文编号或标准内容`);
-      }
+      // 草稿允许保留未完成节点，便于先保存排序、角色和部分文字修改。
+      // 原文编号和标准内容的完整性只在最终“确认并写入规范库”时校验。
       return {
         ...(source || {}),
         ...input,
