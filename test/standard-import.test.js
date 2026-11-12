@@ -92,6 +92,36 @@ test('parses a TSV upload with quoted fields', async () => {
   }
 });
 
+let ExcelJS;
+try {
+  ExcelJS = require('exceljs');
+} catch {
+  ExcelJS = null;
+}
+
+test('parses xlsx workbooks with full-column data validations', { skip: !ExcelJS }, async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-import-xlsx-'));
+  const filePath = path.join(directory, 'source.xlsx');
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('标准条款');
+    worksheet.addRow([ '章节编号', '章节名称', '标准项编号', '标准内容' ]);
+    worksheet.addRow([ '8.1', '用户标识与鉴别', '8.1.1', '应建立账号管理要求' ]);
+    worksheet.dataValidations.add('B2:B1048576', {
+      type: 'list',
+      allowBlank: true,
+      formulae: [ '"是,否"' ],
+    });
+    await workbook.xlsx.writeFile(filePath);
+
+    const result = await parseStandardImportFile(filePath, 'source.xlsx');
+    assert.equal(result.itemCount, 1);
+    assert.equal(result.chapters[0].items[0].itemCode, '8.1.1');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('writes mapped standard fields inside one database transaction', async () => {
   const queries = [];
   const client = {

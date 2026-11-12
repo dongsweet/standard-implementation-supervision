@@ -221,9 +221,15 @@ async function parseStandardImportFile(filePath, fileName) {
   const ExcelJS = require('exceljs');
   const workbook = new ExcelJS.Workbook();
   try {
-    await workbook.xlsx.readFile(filePath);
-  } catch {
-    throw importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
+    // Data validation rules are workbook UI metadata. Some operational
+    // workbooks apply them to entire Excel columns (up to row 1,048,576),
+    // which makes ExcelJS expand millions of addresses while parsing.
+    // The importer only needs cell values, so skip that metadata node.
+    await workbook.xlsx.readFile(filePath, { ignoreNodes: [ 'dataValidations' ] });
+  } catch (error) {
+    const wrapped = importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
+    wrapped.cause = error;
+    throw wrapped;
   }
   if (workbook.worksheets.length > MAX_SHEETS) throw importError('工作簿最多支持' + MAX_SHEETS + '个工作表');
   const sheets = workbook.worksheets.map(worksheet => {
