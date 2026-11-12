@@ -145,6 +145,52 @@ class StandardPdfImportService extends Service {
     };
   }
 
+  async saveDraft(versionId, jobId, payload, actorId) {
+    const job = await this.find(versionId, jobId);
+    if (job.status !== 'ready') this.ctx.throw(409, '只有待确认的PDF导入任务可以保存草稿');
+    const requested = Array.isArray(payload.nodes) ? payload.nodes : [];
+    if (!requested.length) this.ctx.throw(400, '草稿至少需要保留一个节点');
+    if (requested.length > 20000) this.ctx.throw(400, '草稿节点数量超出限制');
+    const sourceNodes = job.result?.nodes || [];
+    const sourceById = new Map(sourceNodes.map(node => [ String(node.id), node ]));
+    const seen = new Set();
+    const roles = new Set([ 'container', 'item', 'skip' ]);
+    const nodes = requested.map((input, index) => {
+      const id = String(input?.id || '').trim();
+      if (!id || seen.has(id)) this.ctx.throw(400, `草稿第${index + 1}个节点编号无效或重复`);
+      seen.add(id);
+      const source = sourceById.get(id);
+      const role = String(input.role || source?.role || 'container');
+      if (!roles.has(role)) this.ctx.throw(400, `节点${id}的导入角色无效`);
+      const kind = String(input.kind || source?.kind || 'list');
+      const originalNumber = String(input.originalNumber ?? source?.originalNumber ?? '').trim();
+      const title = String(input.title ?? source?.title ?? '').trim();
+      const content = String(input.content ?? source?.content ?? '').trim();
+      if (role === 'item' && (!originalNumber || !content)) {
+        this.ctx.throw(400, `标准项“${originalNumber || title || id}”缺少原文编号或标准内容`);
+      }
+      return {
+        ...(source || {}),
+        ...input,
+        id,
+        kind,
+        role,
+        originalNumber,
+        title,
+        content,
+        pageFrom: Number.isFinite(Number(input.pageFrom ?? source?.pageFrom)) ? Number(input.pageFrom ?? source?.pageFrom) : null,
+        pageTo: Number.isFinite(Number(input.pageTo ?? source?.pageTo)) ? Number(input.pageTo ?? source?.pageTo) : null,
+      };
+    });
+    const result = { ...(job.result || {}), nodes: recalculateHierarchy(nodes) };
+    try {
+      return await this.repository.saveDraft(jobId, versionId, result, actorId);
+    } catch (error) {
+      if (error.code === 'INVALID_IMPORT_JOB') this.ctx.throw(409, error.message);
+      throw error;
+    }
+  }
+
   async apply(versionId, jobId, payload, actorId) {
     const job = await this.find(versionId, jobId);
     if (job.status !== 'ready') this.ctx.throw(409, 'PDF尚未完成解析或已经应用');

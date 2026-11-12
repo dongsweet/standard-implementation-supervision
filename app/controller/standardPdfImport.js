@@ -80,6 +80,30 @@ class StandardPdfImportController extends Controller {
     }
   }
 
+  async saveDraft() {
+    requireGlobalWrite(this.ctx);
+    const payload = { ...(this.ctx.request.body || {}) };
+    if (typeof payload.nodes === 'string') {
+      try {
+        payload.nodes = JSON.parse(payload.nodes);
+      } catch {
+        this.ctx.throw(400, '草稿保存请求格式无效');
+      }
+    }
+    try {
+      const result = await this.ctx.service.standardPdfImport.saveDraft(
+        this.ctx.params.versionId,
+        this.ctx.params.jobId,
+        payload,
+        this.ctx.session.userId
+      );
+      this.ctx.body = { data: { updatedAt: result.updated_at, message: '草稿已保存' } };
+    } catch (error) {
+      if (error.status) throw error;
+      throw error;
+    }
+  }
+
   async apply() {
     requireGlobalWrite(this.ctx);
     const versionId = this.ctx.params.versionId;

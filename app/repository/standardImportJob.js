@@ -31,6 +31,17 @@ class StandardImportJobRepository {
     return result.rows[0] || null;
   }
 
+  async listByVersion(versionId, limit = 10) {
+    const result = await this.pool.query(`
+      SELECT id, original_filename, comparison_filename, status, progress, page_count,
+             error_message, created_at, updated_at, completed_at
+      FROM standard_import_jobs
+      WHERE standard_version_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2`, [ versionId, limit ]);
+    return result.rows;
+  }
+
   async markProcessing(jobId) {
     await this.pool.query(`
       UPDATE standard_import_jobs
@@ -60,6 +71,37 @@ class StandardImportJobRepository {
       UPDATE standard_import_jobs
       SET status = 'failed', error_message = $2, updated_at = now(), completed_at = now()
       WHERE id = $1`, [ jobId, String(message || '解析失败').slice(0, 2000) ]);
+  }
+
+  async saveDraft(jobId, versionId, result, actorId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const updated = await client.query(`
+        UPDATE standard_import_jobs
+        SET result = $3, status = 'ready', error_message = NULL, updated_at = now()
+        WHERE id = $1 AND standard_version_id = $2 AND status = 'ready'
+        RETURNING id, updated_at`, [ jobId, versionId, JSON.stringify(result) ]);
+      if (!updated.rowCount) {
+        const error = new Error('PDF导入任务不存在、尚未完成或已经写入规范库');
+        error.code = 'INVALID_IMPORT_JOB';
+        throw error;
+      }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'save_standard_pdf_import_draft', 'standard_import_job', $2, $3)`, [
+        actorId || null,
+        jobId,
+        JSON.stringify({ versionId, nodeCount: result.nodes?.length || 0 }),
+      ]);
+      await client.query('COMMIT');
+      return updated.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async apply(jobId, versionId, selectedNodes, actorId) {

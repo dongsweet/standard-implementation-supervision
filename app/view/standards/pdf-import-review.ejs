@@ -26,8 +26,8 @@
         <option value="level2">二级标题（如 6.1）</option>
         <option value="level1">大章（如 6）</option>
       </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过。</div></div>
-      <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项</div></div>
-      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
+      <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项<div class="small text-secondary mt-1" id="draftStatus">尚未修改</div></div></div>
+      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-secondary" type="button" id="addNodeButton">新增条款</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-outline-success" type="button" id="saveDraftButton">保存草稿</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
     </div>
   </div>
 
@@ -46,7 +46,7 @@
             <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><% if (node.comparisonMatch) { %><div class="d-flex flex-wrap align-items-center gap-2 mt-1"><span class="badge comparison-status-badge <%= node.comparisonMatch === 'matched' ? 'text-bg-success' : node.comparisonMatch === 'review' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= node.comparisonMatch === 'matched' ? '已采用对照文本' : '对照文本待核对' %></span><span class="small text-secondary">匹配度 <%= Math.round((node.comparisonSimilarity || 0) * 100) %>% · 对照表内部编号 <%= node.comparisonItemCode %></span><% if (node.comparisonMatch !== 'matched') { %><button class="btn btn-sm btn-outline-primary use-comparison" type="button" data-node-id="<%= node.id %>">对比/采用对照正文</button><% } %></div><% } %><div class="small text-secondary mt-1">编号、标题和正文可直接修正；写入时使用当前内容。</div></div></td>
             <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
             <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
-            <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select><button class="btn btn-sm btn-outline-danger mt-1 w-100 skip-subtree" type="button" data-node-id="<%= node.id %>">跳过本节全部</button></td>
+            <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select><button class="btn btn-sm btn-outline-danger mt-1 w-100 skip-subtree" type="button" data-node-id="<%= node.id %>">跳过本节全部</button><div class="btn-group btn-group-sm mt-1 w-100" role="group"><button class="btn btn-outline-secondary move-up" type="button" data-node-id="<%= node.id %>">上移</button><button class="btn btn-outline-secondary move-down" type="button" data-node-id="<%= node.id %>">下移</button></div><button class="btn btn-sm btn-outline-primary mt-1 w-100 add-after" type="button" data-node-id="<%= node.id %>">此后新增</button></td>
           </tr>
         <% }) %>
       </tbody>
@@ -61,6 +61,12 @@
   </div></div></div>
 
   <% if (result.comparisonSummary && result.comparisonSummary.unusedComparisonRows && result.comparisonSummary.unusedComparisonRows.length) { %><div class="modal fade" id="unusedComparisonModal" tabindex="-1" aria-labelledby="unusedComparisonModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="unusedComparisonModalLabel">对照表未使用项</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-danger py-2">这些对照表条款没有可靠匹配到PDF识别结果，可能是PDF漏识别、章节名称不一致、拆分粒度不同或对照表本身存在额外条款，请逐项确认。</div><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th style="width:8rem">内部编号</th><th style="width:14rem">章节</th><th style="width:14rem">标题</th><th>标准内容</th></tr></thead><tbody id="unusedComparisonBody"></tbody></table></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div><% } %>
+
+  <div class="modal fade" id="addNodeModal" tabindex="-1" aria-labelledby="addNodeModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="addNodeModalLabel">新增标准项</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3"><div class="col-md-4"><label class="form-label" for="newNodeNumber">原文编号</label><input class="form-control" id="newNodeNumber" required placeholder="例如：6.1.1 a)"></div><div class="col-md-8"><label class="form-label" for="newNodeTitle">条款标题</label><input class="form-control" id="newNodeTitle"></div><div class="col-12"><label class="form-label" for="newNodeContent">标准内容</label><textarea class="form-control" id="newNodeContent" rows="6" required></textarea></div><div class="col-12"><div class="form-text" id="newNodePositionHint">新条款将追加到当前列表末尾；也可以从某一行的“此后新增”进入。</div></div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="createNodeButton">加入复核草稿</button></div>
+  </div></div></div>
 
   <div class="modal fade" id="aiCorrectionsModal" tabindex="-1" aria-labelledby="aiCorrectionsModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title fs-5" id="aiCorrectionsModalLabel">AI 校验建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
@@ -83,6 +89,17 @@
       let comparisonPreviewNodeId = null;
       let currentPage = 1;
       let pageSize = 20;
+      let dirty = false;
+      let addAfterNodeId = null;
+      const markDirty = () => {
+        dirty = true;
+        const status = document.getElementById('draftStatus');
+        if (status) status.textContent = '有未保存修改';
+      };
+      const setDraftStatus = text => {
+        const status = document.getElementById('draftStatus');
+        if (status) status.textContent = text;
+      };
       const inferLevel = node => {
         const value = String(
           document.querySelector('.node-number[data-node-id="' + node.id + '"]')?.value
@@ -190,9 +207,128 @@
         document.getElementById('pageInfo').textContent = '第 ' + currentPage + ' / ' + totalPages + ' 页';
         renderPagination(totalPages, currentPage);
       };
+      const makeControl = (tag, className, text = '') => {
+        const control = document.createElement(tag);
+        if (className) control.className = className;
+        if (text) control.textContent = text;
+        return control;
+      };
+      const createNodeRow = node => {
+        const row = document.createElement('tr');
+        row.dataset.nodeId = node.id;
+        row.dataset.level = String(node.level || 1);
+        row.dataset.nodeKind = node.kind || 'list';
+        row.dataset.comparisonMatch = node.comparisonMatch || '';
+        row.dataset.comparisonConflict = node.comparisonMarkerConflict ? '1' : '0';
+
+        const numberCell = makeControl('td');
+        const number = makeControl('input', 'form-control form-control-sm font-monospace node-number');
+        number.dataset.nodeId = node.id;
+        number.value = node.originalNumber || '';
+        number.setAttribute('aria-label', '原文编号');
+        numberCell.appendChild(number);
+
+        const contentCell = makeControl('td');
+        const indent = makeControl('div', 'node-indent');
+        indent.dataset.nodeId = node.id;
+        indent.style.paddingLeft = Math.max(0, (node.level || 1) - 1) * 1.25 + 'rem';
+        const title = makeControl('input', 'form-control form-control-sm node-title mb-1');
+        title.dataset.nodeId = node.id;
+        title.value = node.title || '';
+        title.placeholder = '条款标题（列表项可留空）';
+        title.setAttribute('aria-label', '条款标题');
+        const content = makeControl('textarea', 'form-control form-control-sm node-content');
+        content.dataset.nodeId = node.id;
+        content.rows = Math.min(6, Math.max(2, Math.ceil(String(node.content || '').length / 80)));
+        content.setAttribute('aria-label', '标准原文');
+        content.value = node.content || '';
+        indent.append(title, content);
+        const note = makeControl('div', 'small text-secondary mt-1', '编号、标题和正文可直接修正；写入时使用当前内容。');
+        indent.appendChild(note);
+        contentCell.appendChild(indent);
+
+        const pageCell = makeControl('td', '', node.pageFrom && node.pageTo && node.pageFrom !== node.pageTo ? `${node.pageFrom}-${node.pageTo}` : (node.pageFrom || '-'));
+        const confidenceCell = makeControl('td');
+        const confidence = makeControl('span', 'badge text-bg-success', `${node.confidence ?? 100}%`);
+        confidenceCell.appendChild(confidence);
+        const actionCell = makeControl('td');
+        const role = makeControl('select', 'form-select form-select-sm node-role');
+        role.dataset.nodeId = node.id;
+        [ [ 'container', '章节/容器' ], [ 'item', '标准项' ], [ 'skip', '跳过' ] ].forEach(([ value, label ]) => {
+          const option = makeControl('option', '', label);
+          option.value = value;
+          option.selected = (node.role || 'item') === value;
+          role.appendChild(option);
+        });
+        actionCell.appendChild(role);
+        const skip = makeControl('button', 'btn btn-sm btn-outline-danger mt-1 w-100', '跳过本节全部');
+        skip.type = 'button';
+        skip.dataset.nodeId = node.id;
+        skip.classList.toggle('d-none', descendants(node.id).length === 0);
+        skip.classList.add('skip-subtree');
+        actionCell.appendChild(skip);
+        const group = makeControl('div', 'btn-group btn-group-sm mt-1 w-100');
+        [ [ 'move-up', '上移' ], [ 'move-down', '下移' ] ].forEach(([ cls, label ]) => {
+          const button = makeControl('button', `btn btn-outline-secondary ${cls}`, label);
+          button.type = 'button';
+          button.dataset.nodeId = node.id;
+          group.appendChild(button);
+        });
+        actionCell.appendChild(group);
+        const add = makeControl('button', 'btn btn-sm btn-outline-primary mt-1 w-100 add-after', '此后新增');
+        add.type = 'button';
+        add.dataset.nodeId = node.id;
+        actionCell.appendChild(add);
+        row.append(numberCell, contentCell, pageCell, confidenceCell, actionCell);
+        return row;
+      };
+      const reorderDomRows = () => {
+        const tbody = tableRows()[0]?.parentElement;
+        if (!tbody) return;
+        for (const node of nodes) {
+          const row = document.querySelector('tr[data-node-id="' + node.id + '"]');
+          if (row) tbody.appendChild(row);
+        }
+      };
       const setRole = (id, role) => {
         const select = document.querySelector('.node-role[data-node-id="' + id + '"]');
         if (select) select.value = role;
+      };
+      const collectNodes = () => nodes.map(node => {
+        const id = node.id;
+        return {
+          ...node,
+          id,
+          originalNumber: document.querySelector('.node-number[data-node-id="' + id + '"]')?.value || '',
+          title: document.querySelector('.node-title[data-node-id="' + id + '"]')?.value || '',
+          content: document.querySelector('.node-content[data-node-id="' + id + '"]')?.value || '',
+          role: document.querySelector('.node-role[data-node-id="' + id + '"]')?.value || node.role || 'container',
+        };
+      });
+      const saveDraft = async () => {
+        const button = document.getElementById('saveDraftButton');
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = '保存中…';
+        try {
+          nodes = collectNodes();
+          recalculateHierarchy();
+          const response = await fetch('/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/save-draft', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>', accept: 'application/json' },
+            body: JSON.stringify({ nodes }),
+          });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.message || '草稿保存失败');
+          dirty = false;
+          setDraftStatus('已保存 ' + new Date().toLocaleTimeString('zh-CN'));
+          window.showAppNotice('复核草稿已保存。');
+        } catch (error) {
+          window.showAppNotice(error.message, '保存草稿失败');
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
       };
       const refreshLayout = () => {
         for (const node of nodes) {
@@ -214,15 +350,109 @@
         updateCount();
         renderTablePage();
       };
-      document.getElementById('granularity').addEventListener('change', event => applyGranularity(event.target.value));
+      document.getElementById('granularity').addEventListener('change', event => { applyGranularity(event.target.value); markDirty(); });
       document.getElementById('reviewFilter').addEventListener('change', () => { currentPage = 1; renderTablePage(); });
       document.getElementById('pageSize').addEventListener('change', event => { pageSize = Number(event.target.value) || 20; currentPage = 1; renderTablePage(); });
       document.getElementById('showReviewOnly')?.addEventListener('click', () => { document.getElementById('reviewFilter').value = 'review'; currentPage = 1; renderTablePage(); });
       document.getElementById('showUnmatchedOnly')?.addEventListener('click', () => { document.getElementById('reviewFilter').value = 'unmatched'; currentPage = 1; renderTablePage(); });
+      const addModal = document.getElementById('addNodeModal');
+      const openAddNodeModal = anchorId => {
+        addAfterNodeId = anchorId || null;
+        document.getElementById('newNodeNumber').value = '';
+        document.getElementById('newNodeTitle').value = '';
+        document.getElementById('newNodeContent').value = '';
+        document.getElementById('newNodePositionHint').textContent = anchorId
+          ? '新条款将插入到所选条款之后，保存草稿后仍可继续上移或下移。'
+          : '新条款将追加到当前列表末尾，保存草稿后仍可继续上移或下移。';
+        bootstrap.Modal.getOrCreateInstance(addModal).show();
+      };
+      document.getElementById('addNodeButton').addEventListener('click', () => openAddNodeModal(null));
+      document.getElementById('createNodeButton').addEventListener('click', () => {
+        const originalNumber = document.getElementById('newNodeNumber').value.trim();
+        const title = document.getElementById('newNodeTitle').value.trim();
+        const content = document.getElementById('newNodeContent').value.trim();
+        if (!originalNumber || !content) {
+          window.showAppNotice('新增条款必须填写原文编号和标准内容。');
+          return;
+        }
+        const id = 'draft-' + (window.crypto?.randomUUID?.() || Date.now() + '-' + Math.random().toString(16).slice(2));
+        const node = { id, kind: 'list', role: 'item', originalNumber, title, content, pageFrom: null, pageTo: null, confidence: 100 };
+        const anchorIndex = addAfterNodeId ? nodes.findIndex(item => item.id === addAfterNodeId) : -1;
+        nodes.splice(anchorIndex >= 0 ? anchorIndex + 1 : nodes.length, 0, node);
+        byId = new Map(nodes.map(item => [ item.id, item ]));
+        const tbody = tableRows()[0]?.parentElement;
+        const row = createNodeRow(node);
+        if (tbody && anchorIndex >= 0) {
+          const anchorRow = document.querySelector('tr[data-node-id="' + addAfterNodeId + '"]');
+          if (anchorRow?.nextSibling) tbody.insertBefore(row, anchorRow.nextSibling); else tbody.appendChild(row);
+        } else if (tbody) tbody.appendChild(row);
+        recalculateHierarchy();
+        refreshLayout();
+        updateCount();
+        currentPage = 1;
+        renderTablePage();
+        markDirty();
+        bootstrap.Modal.getOrCreateInstance(addModal).hide();
+        window.showAppNotice('条款已加入复核草稿，请保存草稿。');
+      });
+      const tableBody = tableRows()[0]?.parentElement;
+      tableBody?.addEventListener('input', event => {
+        if (event.target.matches('.node-number, .node-title, .node-content')) {
+          markDirty();
+          if (event.target.matches('.node-number')) {
+            recalculateHierarchy();
+            refreshLayout();
+            renderTablePage();
+          }
+        }
+      });
+      tableBody?.addEventListener('change', event => {
+        if (event.target.matches('.node-role')) {
+          markDirty();
+          updateCount();
+          renderTablePage();
+        }
+      });
+      tableBody?.addEventListener('click', event => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        const id = button.dataset.nodeId;
+        if (button.classList.contains('add-after')) {
+          openAddNodeModal(id);
+          return;
+        }
+        if (button.classList.contains('skip-subtree')) {
+          setRole(id, 'skip');
+          for (const child of descendants(id)) setRole(child.id, 'skip');
+          markDirty();
+          updateCount();
+          renderTablePage();
+          return;
+        }
+        if (button.classList.contains('move-up') || button.classList.contains('move-down')) {
+          const index = nodes.findIndex(item => item.id === id);
+          const direction = button.classList.contains('move-up') ? -1 : 1;
+          const target = index + direction;
+          if (index < 0 || target < 0 || target >= nodes.length) return;
+          [ nodes[index], nodes[target] ] = [ nodes[target], nodes[index] ];
+          recalculateHierarchy();
+          reorderDomRows();
+          refreshLayout();
+          markDirty();
+          renderTablePage();
+        }
+      });
+      document.getElementById('saveDraftButton').addEventListener('click', saveDraft);
+      window.addEventListener('beforeunload', event => {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
       document.getElementById('skipFrontMatter').addEventListener('click', () => {
         for (const node of nodes) {
           if (node.pageFrom <= 7 || /^(前言|引言|目次|目\s*录)$/.test(node.title || '')) setRole(node.id, 'skip');
         }
+        markDirty();
         updateCount();
         renderTablePage();
       });
@@ -281,13 +511,6 @@
         bootstrap.Modal.getOrCreateInstance(modal).show();
       };
       document.getElementById('showUnusedComparison')?.addEventListener('click', showUnusedComparison);
-      document.querySelectorAll('.skip-subtree').forEach(button => button.addEventListener('click', () => {
-        const id = button.dataset.nodeId;
-        setRole(id, 'skip');
-        for (const child of descendants(id)) setRole(child.id, 'skip');
-        updateCount();
-        renderTablePage();
-      }));
       const itemPayload = select => {
         const node = byId.get(select.dataset.nodeId);
         return {
@@ -405,7 +628,6 @@
         bootstrap.Modal.getOrCreateInstance(document.getElementById('aiCorrectionsModal')).hide();
         window.showAppNotice('已应用 ' + selectedIndices.length + ' 条AI修改建议。');
       });
-      selects().forEach(select => select.addEventListener('change', () => { updateCount(); renderTablePage(); }));
       recalculateHierarchy();
       refreshLayout();
       document.getElementById('applyPdfImport').addEventListener('submit', event => {

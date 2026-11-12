@@ -2,6 +2,7 @@
 
 const Service = require('egg').Service;
 const StandardCatalogRepository = require('../repository/standardCatalog');
+const StandardImportJobRepository = require('../repository/standardImportJob');
 const { STANDARD_TYPES, STANDARD_TYPE_LABELS } = require('../lib/standardTypes');
 const { parseStandardImportFile } = require('../lib/standardImport');
 
@@ -111,6 +112,7 @@ class StandardCatalogService extends Service {
   async getVersionDetail(versionId) {
     const result = await this.repository.getVersionDetail(versionId);
     if (!result) this.ctx.throw(404, '规范版本不存在');
+    result.importJobs = await new StandardImportJobRepository(this.ctx.app.db).listByVersion(versionId);
     return result;
   }
 

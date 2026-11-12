@@ -53,3 +53,26 @@ test('applies selected OCR leaves under section 6.1 with standardized numbers ge
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   assert.ok(queries.some(query => query.statement.startsWith('INSERT INTO audit_logs ')));
 });
+
+test('saves an import review draft without applying it to the standard catalog', async () => {
+  const queries = [];
+  const client = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      queries.push({ statement, values });
+      if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: null };
+      if (statement.startsWith('UPDATE standard_import_jobs ')) return { rows: [ { id: 'job-1', updated_at: '2026-11-12T00:00:00.000Z' } ], rowCount: 1 };
+      return { rows: [], rowCount: 1 };
+    },
+    release() {},
+  };
+  const repository = new StandardImportJobRepository({ connect: async () => client });
+  const result = await repository.saveDraft('job-1', 'version-1', {
+    nodes: [ { id: 'draft-1', role: 'item', originalNumber: '6.1.1 a)', content: '新增条款' } ],
+  }, 'user-1');
+
+  assert.equal(result.id, 'job-1');
+  assert.ok(queries.some(query => query.statement.startsWith('UPDATE standard_import_jobs ')));
+  assert.ok(queries.some(query => query.statement.startsWith('INSERT INTO audit_logs ')));
+  assert.ok(queries.some(query => query.statement === 'COMMIT'));
+});
