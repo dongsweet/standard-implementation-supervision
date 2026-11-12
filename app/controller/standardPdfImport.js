@@ -2,7 +2,6 @@
 
 const Controller = require('egg').Controller;
 const { requireGlobalRead, requireGlobalWrite } = require('../lib/authorization');
-const { friendlyAiError } = require('../lib/aiProvider');
 
 class StandardPdfImportController extends Controller {
   async create() {
@@ -51,33 +50,6 @@ class StandardPdfImportController extends Controller {
       pageCount: job.page_count,
       errorMessage: job.error_message,
     };
-  }
-
-  async aiReview() {
-    requireGlobalWrite(this.ctx);
-    const payload = { ...(this.ctx.request.body || {}) };
-    if (typeof payload.nodes === 'string') {
-      try {
-        payload.nodes = JSON.parse(payload.nodes);
-      } catch {
-        this.ctx.throw(400, 'AI校验请求格式无效');
-      }
-    }
-    try {
-      this.ctx.body = {
-        data: await this.ctx.service.standardPdfImport.aiReview(
-          this.ctx.params.versionId,
-          this.ctx.params.jobId,
-          payload
-        ),
-      };
-    } catch (error) {
-      if (error.status) throw error;
-      const friendly = friendlyAiError(error, error.baseUrl);
-      this.ctx.status = friendly.statusCode;
-      this.ctx.body = { error: friendly.code, message: friendly.message };
-      this.ctx.logger.warn('AI PDF review failed: %s (%s)', friendly.code, error.message);
-    }
   }
 
   async smartReview() {

@@ -25,7 +25,7 @@ test('maps network, authentication, endpoint, and rate-limit errors to actionabl
   assert.equal(friendlyAiError({ providerStatus: 429 }, 'https://ai.example.com').code, 'AI_RATE_LIMIT');
 });
 
-test('tests an OpenAI-compatible endpoint and validates standard correction suggestions', async () => {
+test('tests an OpenAI-compatible endpoint and validates smart review suggestions', async () => {
   const requests = [];
   const server = await createServer((request, response) => {
     let body = '';
@@ -47,16 +47,7 @@ test('tests an OpenAI-compatible endpoint and validates standard correction sugg
                 content: '对照正文',
                 reason: '对照正文与OCR正文属于同一条款',
               }],
-            } : {
-              corrections: [{
-                nodeId: 'n1',
-                originalNumber: '6.1.1 a)',
-                title: '',
-                content: '对保护信息系统和服务所需的资源进行详细分析。',
-                confidence: 0.95,
-                reason: '修正跨行空格',
-              }],
-            }),
+            } : { status: 'ok' }),
           },
         }],
       }));
@@ -73,14 +64,6 @@ test('tests an OpenAI-compatible endpoint and validates standard correction sugg
     });
     const connection = await provider.testConnection();
     assert.equal(connection.content, '{"status":"ok"}');
-    const result = await provider.correctStandardNodes([{
-      id: 'n1',
-      originalNumber: '6.1.1 a)',
-      title: '',
-      content: '对保护信息系统和服务所需的资源进行详细分析。',
-    }], { standardCode: 'GB/T 31168', version: '2023' });
-    assert.equal(result.corrections.length, 1);
-    assert.equal(result.corrections[0].nodeId, 'n1');
     const review = await provider.reviewStandardNodes([{
       id: 'n1',
       originalNumber: '6.1.1 a)',
@@ -90,7 +73,7 @@ test('tests an OpenAI-compatible endpoint and validates standard correction sugg
       comparisonItemCode: '6001',
     }], { standardCode: 'GB/T 31168', version: '2023' });
     assert.equal(review.suggestions[0].action, 'adopt_comparison');
-    assert.equal(requests.length, 3);
+    assert.equal(requests.length, 2);
     assert.equal(requests[0].authorization, 'Bearer test-key');
     assert.equal(requests[0].data.model, 'test-model');
     assert.equal(requests[1].data.max_tokens, 2000);

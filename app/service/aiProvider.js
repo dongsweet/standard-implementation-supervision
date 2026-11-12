@@ -19,11 +19,6 @@ class AiProviderService extends Service {
     return provider.testConnection();
   }
 
-  async correctStandardNodes(nodes, context) {
-    const provider = await this.getProvider();
-    return provider.correctStandardNodes(nodes, context);
-  }
-
   async reviewStandardNodes(nodes, context) {
     const provider = await this.getProvider();
     return provider.reviewStandardNodes(nodes, context);

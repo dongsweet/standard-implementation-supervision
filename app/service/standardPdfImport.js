@@ -102,56 +102,6 @@ class StandardPdfImportService extends Service {
     return job;
   }
 
-  async aiReview(versionId, jobId, payload) {
-    const job = await this.find(versionId, jobId);
-    if (job.status !== 'ready') this.ctx.throw(409, '只有待确认的PDF导入任务可以进行AI校验');
-    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: true });
-    if (!aiConfig.enabled || !aiConfig.baseUrl || !aiConfig.model || !aiConfig.apiKey) {
-      this.ctx.throw(409, 'AI服务尚未启用或配置不完整，请先在系统配置中完成设置');
-    }
-    const sourceNodes = job.result?.nodes || [];
-    const sourceById = new Map(sourceNodes.map(node => [ node.id, node ]));
-    const requested = Array.isArray(payload.nodes) ? payload.nodes : [];
-    if (!requested.length) this.ctx.throw(400, '请选择需要AI校验的标准项');
-    if (requested.length > 20) this.ctx.throw(400, '一次最多校验20个标准项，请分批提交');
-    const selected = requested.map(input => {
-      const source = sourceById.get(String(input.id || ''));
-      if (!source) this.ctx.throw(400, '包含不存在的标准项');
-      return {
-        id: source.id,
-        originalNumber: String(input.originalNumber ?? source.originalNumber ?? '').trim(),
-        title: String(input.title ?? source.title ?? '').trim(),
-        content: String(input.content ?? source.content ?? '').trim(),
-      };
-    }).filter(node => node.content);
-    if (!selected.length) this.ctx.throw(400, '所选标准项没有可校验的正文');
-    const result = await this.ctx.service.aiProvider.correctStandardNodes(selected, {
-      standardCode: job.standard_code,
-      standardName: job.standard_name,
-      version: job.version,
-    });
-    const beforeById = new Map(selected.map(node => [ node.id, node ]));
-    const corrections = result.corrections.map(correction => {
-      const before = beforeById.get(correction.nodeId);
-      const changedFields = [ 'originalNumber', 'title', 'content' ]
-        .filter(field => (before[field] || '') !== (correction[field] || ''));
-      return {
-        ...correction,
-        before: {
-          originalNumber: before.originalNumber,
-          title: before.title,
-          content: before.content,
-        },
-        changedFields,
-      };
-    }).filter(correction => correction.changedFields.length);
-    return {
-      corrections,
-      providerStatus: result.providerStatus,
-      durationMs: result.durationMs,
-    };
-  }
-
   async smartReview(versionId, jobId, payload = {}) {
     const job = await this.find(versionId, jobId);
     if (job.status !== 'ready') this.ctx.throw(409, '只有待确认的PDF导入任务可以进行智能复核');

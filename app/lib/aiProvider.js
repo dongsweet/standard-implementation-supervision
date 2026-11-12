@@ -143,52 +143,6 @@ class AiProvider {
     return { content: JSON.stringify(json), providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
-  async correctStandardNodes(nodes, context = {}) {
-    if (!this.enabled) throw aiError('AI服务未配置或未启用', 'AI_CONFIG_ERROR');
-    const response = await this.request([
-      {
-        role: 'system',
-        content: [
-          '你是标准文档OCR校对助手。任务只是修正明显的文字识别错误，不是改写标准。',
-          '严格规则：',
-          '1. 保持原意、编号体系和条款完整性，禁止总结、扩写、删减或语义润色。',
-          '2. 只修正明显OCR错误：错字、漏空格、全角/半角标点、跨行断字和可确认的形近字。',
-          '3. 无法确认的内容必须保持原样，不得猜测或补写缺失文本。',
-          '4. 原文编号原则上保持不变；只有明显OCR噪声且上下文能唯一确认时才修正。',
-          '5. 必须返回JSON：{"corrections":[{"nodeId":"...","originalNumber":"...","title":"...","content":"...","confidence":0到1,"reason":"不超过80字"}]}。',
-          '6. 只返回确实需要修改的节点；没有把握返回空数组。',
-        ].join('\n'),
-      },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          context: {
-            standardCode: context.standardCode || '',
-            standardName: context.standardName || '',
-            version: context.version || '',
-          },
-          nodes: nodes.map(node => ({
-            nodeId: node.id,
-            originalNumber: node.originalNumber,
-            title: node.title || '',
-            content: node.content || '',
-          })),
-        }),
-      },
-    ]);
-    let corrections;
-    try {
-      corrections = parseStandardCorrections(response.content, new Set(nodes.map(node => node.id)));
-    } catch {
-      throw aiError('AI返回的校对结果格式无效', 'AI_INVALID_RESPONSE');
-    }
-    return {
-      corrections,
-      providerStatus: response.providerStatus,
-      durationMs: response.durationMs,
-    };
-  }
-
   async reviewStandardNodes(nodes, context = {}) {
     if (!this.enabled) throw aiError('AI服务未配置或未启用', 'AI_CONFIG_ERROR');
     const response = await this.request([
@@ -245,31 +199,6 @@ function parseJsonContent(content) {
   return JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
 }
 
-function parseStandardCorrections(content, validNodeIds) {
-  const json = parseJsonContent(content);
-  if (!Array.isArray(json.corrections)) throw new Error('AI corrections 格式无效');
-  const result = [];
-  for (const item of json.corrections) {
-    const nodeId = String(item?.nodeId || '').trim();
-    if (!validNodeIds.has(nodeId)) continue;
-    const originalNumber = String(item.originalNumber || '').trim();
-    const title = String(item.title || '').trim();
-    const correctedContent = String(item.content || '').trim();
-    const confidence = Number(item.confidence);
-    if (!originalNumber || originalNumber.length > 100 || title.length > 500 || !correctedContent) continue;
-    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) continue;
-    result.push({
-      nodeId,
-      originalNumber,
-      title,
-      content: correctedContent,
-      confidence,
-      reason: String(item.reason || '').trim().slice(0, 500),
-    });
-  }
-  return result;
-}
-
 function parseStandardReviewSuggestions(content, sourceById) {
   const json = parseJsonContent(content);
   if (!Array.isArray(json.suggestions)) throw new Error('AI suggestions 格式无效');
@@ -315,6 +244,5 @@ module.exports = {
   AiProvider,
   friendlyAiError,
   parseAiResult,
-  parseStandardCorrections,
   parseStandardReviewSuggestions,
 };

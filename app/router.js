@@ -28,7 +28,6 @@ module.exports = app => {
   router.post('/standards/versions/:versionId/pdf-imports', controller.standardPdfImport.create);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId', controller.standardPdfImport.show);
   router.get('/standards/versions/:versionId/pdf-imports/:jobId/status', controller.standardPdfImport.status);
-  router.post('/standards/versions/:versionId/pdf-imports/:jobId/ai-review', controller.standardPdfImport.aiReview);
   router.post('/standards/versions/:versionId/pdf-imports/:jobId/smart-review', controller.standardPdfImport.smartReview);
   router.post('/standards/versions/:versionId/pdf-imports/:jobId/save-draft', controller.standardPdfImport.saveDraft);
   router.post('/standards/versions/:versionId/pdf-imports/:jobId/apply', controller.standardPdfImport.apply);
