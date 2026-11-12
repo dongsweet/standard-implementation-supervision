@@ -2,11 +2,32 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { diceSimilarity, mergeComparisonIntoTree } = require('../app/lib/standardComparison');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const { diceSimilarity, mergeComparisonIntoTree, parseComparisonFile } = require('../app/lib/standardComparison');
 
 function parsed(chapters) {
   return { chapters };
 }
+
+test('comparison parser accepts duplicate item codes across workbook rows', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-comparison-'));
+  const filePath = path.join(directory, 'comparison.tsv');
+  try {
+    await fs.writeFile(filePath, [
+      '章节编号\t章节名称\t标准项编号\t标准内容',
+      '6.1\t系统开发与供应链安全\t6011\t第一条内容',
+      '6.1\t系统开发与供应链安全\t6011\t第二条内容',
+    ].join('\n'), 'utf8');
+    const result = await parseComparisonFile(filePath, 'comparison.tsv');
+    assert.equal(result.itemCount, 1);
+    assert.equal(result.duplicateItemCount, 1);
+    assert.equal(result.chapters[0].items[0].content, '第一条内容');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('measures Chinese OCR text similarity deterministically', () => {
   assert.equal(diceSimilarity('应建立账号管理制度。', '应建立账号管理制度'), 1);

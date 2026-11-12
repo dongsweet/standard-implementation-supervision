@@ -67,6 +67,7 @@ class StandardPdfImportService extends Service {
           fileName: job.comparison_filename,
           itemCount: parsedComparison.itemCount,
           chapterCount: parsedComparison.chapters.length,
+          duplicateItemCount: parsedComparison.duplicateItemCount || 0,
         };
       }
       const { tree, pageCount } = await ocrPdf(filePath, {

@@ -83,6 +83,18 @@ test('rejects duplicate item codes across sheets after Unicode normalization', (
   assert.throws(() => parseStandardRows(sheets), /标准项编号重复/);
 });
 
+test('comparison mode keeps the first duplicate item and reports skipped rows', () => {
+  const header = [ '章节编号', '章节名称', '标准项编号', '标准内容' ];
+  const result = parseStandardRows([
+    { name: '持续监督检查问题清单', rows: [ header, [ '6.1', '系统开发与供应链安全', '6011', '第一条内容' ] ] },
+    { name: '系统开发与供应链安全', rows: [ header, [ '6.1', '系统开发与供应链安全', '6011', '第二条内容' ], [ '6.1', '系统开发与供应链安全', '6012', '另一条内容' ] ] },
+  ], { allowDuplicateItemCodes: true });
+  assert.equal(result.itemCount, 2);
+  assert.equal(result.duplicateItemCount, 1);
+  assert.deepEqual(result.chapters[0].items.map(item => item.itemCode), [ '6011', '6012' ]);
+  assert.equal(result.chapters[0].items[0].content, '第一条内容');
+});
+
 test('parses a TSV upload with quoted fields', async () => {
   const quote = String.fromCharCode(34);
   assert.deepEqual(parseDelimitedRows('A' + tab + 'B' + newline + 'x' + tab + quote + 'with' + tab + 'tab' + quote, tab), [ [ 'A', 'B' ], [ 'x', 'with' + tab + 'tab' ] ]);

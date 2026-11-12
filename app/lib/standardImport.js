@@ -100,13 +100,15 @@ function splitChapter(value) {
   return { code: text, name: text };
 }
 
-function parseStandardRows(sheets) {
+function parseStandardRows(sheets, options = {}) {
+  const { allowDuplicateItemCodes = false } = options;
   const chapters = [];
   const chaptersByCode = new Map();
   const itemCodes = new Set();
   let importedSheetCount = 0;
   let skippedSheetCount = 0;
   let itemCount = 0;
+  let duplicateItemCount = 0;
 
   for (const sheet of sheets) {
     const rows = sheet.rows || [];
@@ -128,7 +130,11 @@ function parseStandardRows(sheets) {
       if (!itemCode) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行缺少标准项编号');
       if (!content) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行缺少标准内容');
       const normalizedItemCode = itemCode.normalize('NFKC').toUpperCase();
-      if (itemCodes.has(normalizedItemCode)) throw importError('工作簿中标准项编号重复：' + itemCode);
+      if (itemCodes.has(normalizedItemCode)) {
+        if (!allowDuplicateItemCodes) throw importError('工作簿中标准项编号重复：' + itemCode);
+        duplicateItemCount += 1;
+        continue;
+      }
       itemCodes.add(normalizedItemCode);
       if (itemCode.length > 100) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项编号不能超过100个字符');
       if (value('itemTitle').length > 500) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项标题不能超过500个字符');
@@ -168,7 +174,7 @@ function parseStandardRows(sheets) {
     }
   }
   if (!itemCount) throw importError('未找到可导入的标准项；请确认文件包含“标准项编号”和“标准内容”列');
-  return { chapters, itemCount, importedSheetCount, skippedSheetCount };
+  return { chapters, itemCount, importedSheetCount, skippedSheetCount, duplicateItemCount };
 }
 
 function parseDelimitedRows(text, delimiter) {
@@ -208,14 +214,14 @@ function parseDelimitedRows(text, delimiter) {
   return rows;
 }
 
-async function parseStandardImportFile(filePath, fileName) {
+async function parseStandardImportFile(filePath, fileName, options = {}) {
   const extension = path.extname(fileName || filePath).toLowerCase();
   if (![ '.xlsx', '.tsv' ].includes(extension)) throw importError('仅支持 .xlsx 或 .tsv 文件');
   const stat = await fs.stat(filePath);
   if (stat.size > MAX_FILE_SIZE) throw importError('导入文件不能超过15MB');
   if (extension === '.tsv') {
     const text = await fs.readFile(filePath, 'utf8');
-    return parseStandardRows([ { name: path.basename(fileName || filePath), rows: parseDelimitedRows(text, '\t') } ]);
+    return parseStandardRows([ { name: path.basename(fileName || filePath), rows: parseDelimitedRows(text, '\t') } ], options);
   }
 
   const ExcelJS = require('exceljs');
@@ -242,7 +248,7 @@ async function parseStandardImportFile(filePath, fileName) {
     });
     return { name: worksheet.name, rows };
   });
-  return parseStandardRows(sheets);
+  return parseStandardRows(sheets, options);
 }
 
 module.exports = { parseDelimitedRows, parseStandardImportFile, parseStandardRows };

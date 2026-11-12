@@ -7,7 +7,7 @@ const { parseDelimitedRows, parseStandardImportFile, parseStandardRows } = requi
 async function parseComparisonFile(filePath, fileName) {
   const extension = path.extname(fileName || filePath).toLowerCase();
   if ([ '.xlsx', '.tsv' ].includes(extension)) {
-    return parseStandardImportFile(filePath, fileName);
+    return parseStandardImportFile(filePath, fileName, { allowDuplicateItemCodes: true });
   }
   if ([ '.csv', '.txt' ].includes(extension)) {
     const text = await fs.readFile(filePath, 'utf8');
@@ -15,7 +15,7 @@ async function parseComparisonFile(filePath, fileName) {
     return parseStandardRows([ {
       name: path.basename(fileName || filePath),
       rows: parseDelimitedRows(text, delimiter),
-    } ]);
+    } ], { allowDuplicateItemCodes: true });
   }
   throw Object.assign(new Error('对照文件支持 .xlsx、.tsv、.csv 或制表符分隔的 .txt'), { status: 400 });
 }
@@ -352,6 +352,7 @@ function mergeComparisonIntoTree(tree, parsed) {
   const reviewCount = matches.filter(item => item.status === 'review').length;
   const summary = {
     comparisonCount: rows.length,
+    duplicateItemCount: parsed.duplicateItemCount || 0,
     matchedCount,
     reviewCount,
     unmatchedCount: itemNodes.filter(node => !matchedNodeIds.has(node.id)).length,
