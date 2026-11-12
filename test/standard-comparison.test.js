@@ -96,6 +96,7 @@ test('aligns internal 6001-style numbering by chapter, sequence, and content', (
   assert.equal(result.reviewCount, 1);
   assert.equal(result.unmatchedCount, 1);
   assert.equal(result.unusedComparisonCount, 0);
+  assert.deepEqual(result.unusedComparisonRows, []);
   assert.equal(result.internalNumbering, true);
 });
 
@@ -118,4 +119,5 @@ test('handles comparison workbooks with more rows than OCR nodes', () => {
   assert.equal(tree.nodes[1].comparisonMatch, 'matched');
   assert.equal(tree.nodes[1].comparisonItemCode, '8001');
   assert.equal(result.unusedComparisonCount, 1);
+  assert.deepEqual(result.unusedComparisonRows.map(row => row.itemCode), [ '8002' ]);
 });

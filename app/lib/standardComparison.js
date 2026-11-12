@@ -357,6 +357,13 @@ function mergeComparisonIntoTree(tree, parsed) {
     reviewCount,
     unmatchedCount: itemNodes.filter(node => !matchedNodeIds.has(node.id)).length,
     unusedComparisonCount: rows.length - usedRows.size,
+    unusedComparisonRows: rows.filter(row => !usedRows.has(row)).map(row => ({
+      chapterCode: row.chapterCode,
+      chapterName: row.chapterName,
+      itemCode: row.itemCode,
+      title: row.title,
+      content: row.content,
+    })),
     assignedCount: usedRows.size,
     markerConflictCount: matches.filter(item => item.conflict).length,
     autoMatchRate: Math.round(matchedCount / Math.max(1, rows.length) * 1000) / 10,

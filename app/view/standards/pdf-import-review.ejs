@@ -32,17 +32,18 @@
   </div>
 
   <% (result.warnings || []).forEach(warning => { %><div class="alert alert-warning py-2"><%= warning %></div><% }) %>
-  <% if (result.comparisonSummary) { %><div class="alert alert-info py-2"><strong>对照文本：</strong><%= job.comparison_filename %>，共 <%= result.comparisonSummary.comparisonCount %> 条。系统按章节、顺序和正文相似度对齐，内部编号不会覆盖PDF原文编号：自动采用 <strong><%= result.comparisonSummary.matchedCount %> 条（<%= result.comparisonSummary.autoMatchRate %>%）</strong>，待核对 <%= result.comparisonSummary.reviewCount %> 条，条款标号冲突 <%= result.comparisonSummary.markerConflictCount %> 条，PDF未匹配 <%= result.comparisonSummary.unmatchedCount %> 条，对照表未使用 <%= result.comparisonSummary.unusedComparisonCount %> 条。<% if (result.comparisonSummary.duplicateItemCount) { %>已跳过重复标准项 <%= result.comparisonSummary.duplicateItemCount %> 条（保留首次出现记录）。<% } %></div><% } %>
+  <% if (result.comparisonSummary) { %><div class="alert alert-info py-2"><strong>对照文本：</strong><%= job.comparison_filename %>，共 <%= result.comparisonSummary.comparisonCount %> 条。系统按章节、顺序和正文相似度对齐，内部编号不会覆盖PDF原文编号：自动采用 <strong><%= result.comparisonSummary.matchedCount %> 条（<%= result.comparisonSummary.autoMatchRate %>%）</strong>，待核对 <strong><%= result.comparisonSummary.reviewCount %> 条</strong>，条款标号冲突 <%= result.comparisonSummary.markerConflictCount %> 条，PDF未匹配 <strong><%= result.comparisonSummary.unmatchedCount %> 条</strong>，对照表未使用 <strong><%= result.comparisonSummary.unusedComparisonCount %> 条</strong>。<% if (result.comparisonSummary.duplicateItemCount) { %>已跳过重复标准项 <%= result.comparisonSummary.duplicateItemCount %> 条（保留首次出现记录）。<% } %><div class="mt-2 d-flex flex-wrap gap-2"><button class="btn btn-sm btn-outline-warning" type="button" id="showReviewOnly">只看待复核项</button><button class="btn btn-sm btn-outline-danger" type="button" id="showUnmatchedOnly">查看PDF未匹配项</button><% if (result.comparisonSummary.unusedComparisonCount) { %><button class="btn btn-sm btn-outline-secondary" type="button" id="showUnusedComparison">查看对照表未使用项</button><% } %></div></div><% } %>
 
   <div class="card">
     <div class="card-header d-flex align-items-center"><h3 class="card-title">识别结果预览</h3><span class="badge <%= result.extractionMethod === 'text' ? 'text-bg-success' : 'text-bg-warning' %> ms-auto"><%= result.extractionMethod === 'text' ? 'PDF文本层直读' : 'OCR识别' %></span><span class="badge text-bg-secondary ms-2"><%= result.nodes.length %> 个节点 · <%= result.pages %> 页</span></div>
+    <div class="card-body border-bottom py-2"><div class="row g-2 align-items-center"><div class="col-12 col-md-4"><label class="form-label small mb-1" for="reviewFilter">查看范围</label><select class="form-select form-select-sm" id="reviewFilter"><option value="all">全部节点</option><option value="review">需要复核</option><option value="unmatched">PDF未匹配</option><option value="matched">已匹配对照</option><option value="items">当前标准项</option></select></div><div class="col-12 col-md-3"><label class="form-label small mb-1" for="pageSize">每页条数</label><select class="form-select form-select-sm" id="pageSize"><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option></select></div><div class="col-12 col-md-5 text-md-end"><span class="small text-secondary" id="filterSummary"></span></div></div></div>
     <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
       <thead><tr><th style="width:7rem">原文编号</th><th>层级内容</th><th style="width:6rem">PDF页码</th><th style="width:6rem">OCR置信度</th><th style="width:10rem">导入角色</th></tr></thead>
       <tbody>
         <% result.nodes.forEach(node => { const depth = Math.max(0, (node.level || 1) - 1); %>
-          <tr data-node-id="<%= node.id %>" data-level="<%= node.level %>">
+          <tr data-node-id="<%= node.id %>" data-level="<%= node.level %>" data-node-kind="<%= node.kind %>" data-comparison-match="<%= node.comparisonMatch || '' %>" data-comparison-conflict="<%= node.comparisonMarkerConflict ? '1' : '0' %>">
             <td><input class="form-control form-control-sm font-monospace node-number" data-node-id="<%= node.id %>" value="<%= node.originalNumber || '' %>" aria-label="原文编号"></td>
-            <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><% if (node.comparisonMatch) { %><div class="d-flex align-items-center gap-2 mt-1"><span class="badge <%= node.comparisonMatch === 'matched' ? 'text-bg-success' : node.comparisonMatch === 'review' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= node.comparisonMatch === 'matched' ? '已采用对照文本' : '对照文本待核对' %></span><span class="small text-secondary">匹配度 <%= Math.round((node.comparisonSimilarity || 0) * 100) %>% · 对照表内部编号 <%= node.comparisonItemCode %></span><% if (node.comparisonMatch !== 'matched') { %><button class="btn btn-sm btn-outline-primary use-comparison" type="button" data-node-id="<%= node.id %>">采用对照正文</button><% } %></div><% } %><div class="small text-secondary mt-1">编号、标题和正文可直接修正；写入时使用当前内容。</div></div></td>
+            <td><div class="node-indent" data-node-id="<%= node.id %>" style="padding-left:<%= depth * 1.25 %>rem"><input class="form-control form-control-sm node-title mb-1" data-node-id="<%= node.id %>" value="<%= node.title || '' %>" placeholder="条款标题（列表项可留空）" aria-label="条款标题"><textarea class="form-control form-control-sm node-content" data-node-id="<%= node.id %>" rows="<%= Math.min(6, Math.max(2, Math.ceil((node.content || '').length / 80))) %>" aria-label="标准原文"><%= node.content || '' %></textarea><% if (node.comparisonMatch) { %><div class="d-flex flex-wrap align-items-center gap-2 mt-1"><span class="badge comparison-status-badge <%= node.comparisonMatch === 'matched' ? 'text-bg-success' : node.comparisonMatch === 'review' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= node.comparisonMatch === 'matched' ? '已采用对照文本' : '对照文本待核对' %></span><span class="small text-secondary">匹配度 <%= Math.round((node.comparisonSimilarity || 0) * 100) %>% · 对照表内部编号 <%= node.comparisonItemCode %></span><% if (node.comparisonMatch !== 'matched') { %><button class="btn btn-sm btn-outline-primary use-comparison" type="button" data-node-id="<%= node.id %>">对比/采用对照正文</button><% } %></div><% } %><div class="small text-secondary mt-1">编号、标题和正文可直接修正；写入时使用当前内容。</div></div></td>
             <td><%= node.pageFrom === node.pageTo ? node.pageFrom : node.pageFrom + '-' + node.pageTo %></td>
             <td><span class="badge <%= node.confidence < 60 ? 'text-bg-danger' : node.confidence < 80 ? 'text-bg-warning' : 'text-bg-success' %>"><%= node.confidence %>%</span></td>
             <td><select class="form-select form-select-sm node-role" data-node-id="<%= node.id %>"><option value="container" <%= node.role === 'container' ? 'selected' : '' %>>章节/容器</option><option value="item" <%= node.role === 'item' ? 'selected' : '' %>>标准项</option><option value="skip" <%= node.role === 'skip' ? 'selected' : '' %>>跳过</option></select><button class="btn btn-sm btn-outline-danger mt-1 w-100 skip-subtree" type="button" data-node-id="<%= node.id %>">跳过本节全部</button></td>
@@ -50,7 +51,16 @@
         <% }) %>
       </tbody>
     </table></div>
+    <div class="card-footer d-flex flex-wrap gap-2 justify-content-between align-items-center"><span class="small text-secondary" id="pageInfo"></span><nav aria-label="识别结果分页"><ul class="pagination pagination-sm mb-0" id="tablePagination"></ul></nav></div>
   </div>
+
+  <div class="modal fade" id="comparisonPreviewModal" tabindex="-1" aria-labelledby="comparisonPreviewModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="comparisonPreviewModalLabel">对比对照正文</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body"><div class="alert alert-warning py-2" id="comparisonPreviewMeta"></div><div class="row g-3"><div class="col-12 col-lg-6"><h3 class="h6">当前PDF/OCR正文</h3><pre class="border rounded p-3 bg-body-tertiary small text-wrap" id="comparisonPdfText" style="min-height:12rem;white-space:pre-wrap"></pre></div><div class="col-12 col-lg-6"><h3 class="h6">对照表正文</h3><pre class="border rounded p-3 bg-body-tertiary small text-wrap" id="comparisonSourceText" style="min-height:12rem;white-space:pre-wrap"></pre></div></div><div class="small text-secondary mt-3">采用后会用右侧对照正文替换当前编辑框内容；系统不会自动修改原文编号。</div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">暂不采用</button><button type="button" class="btn btn-primary" id="adoptComparisonText">采用对照正文</button></div>
+  </div></div></div>
+
+  <% if (result.comparisonSummary && result.comparisonSummary.unusedComparisonRows && result.comparisonSummary.unusedComparisonRows.length) { %><div class="modal fade" id="unusedComparisonModal" tabindex="-1" aria-labelledby="unusedComparisonModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="unusedComparisonModalLabel">对照表未使用项</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-danger py-2">这些对照表条款没有可靠匹配到PDF识别结果，可能是PDF漏识别、章节名称不一致、拆分粒度不同或对照表本身存在额外条款，请逐项确认。</div><div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th style="width:8rem">内部编号</th><th style="width:14rem">章节</th><th style="width:14rem">标题</th><th>标准内容</th></tr></thead><tbody id="unusedComparisonBody"></tbody></table></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">关闭</button></div></div></div></div><% } %>
 
   <div class="modal fade" id="aiCorrectionsModal" tabindex="-1" aria-labelledby="aiCorrectionsModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title fs-5" id="aiCorrectionsModalLabel">AI 校验建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
@@ -67,8 +77,12 @@
   <script>
     (() => {
       let nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
+      const comparisonSummary = <%- JSON.stringify(result.comparisonSummary || null).replace(/</g, '\\u003c') %>;
       let aiCorrections = [];
       let byId = new Map(nodes.map(node => [ node.id, node ]));
+      let comparisonPreviewNodeId = null;
+      let currentPage = 1;
+      let pageSize = 20;
       const inferLevel = node => {
         const value = String(
           document.querySelector('.node-number[data-node-id="' + node.id + '"]')?.value
@@ -117,6 +131,65 @@
       const updateCount = () => {
         document.getElementById('selectedCount').textContent = selects().filter(select => select.value === 'item').length;
       };
+      const tableRows = () => Array.from(document.querySelectorAll('tbody tr[data-node-id]'));
+      const isReviewNode = node => node?.comparisonMatch === 'review' || Boolean(node?.comparisonMarkerConflict);
+      const isUnmatchedNode = node => Boolean(node && (node.kind === 'list' || node.kind === 'heading')
+        && String(node.content || '').trim()
+        && (!node.comparisonMatch || node.comparisonMatch === 'unmatched'));
+      const matchesFilter = node => {
+        const filter = document.getElementById('reviewFilter')?.value || 'all';
+        if (filter === 'review') return isReviewNode(node);
+        if (filter === 'unmatched') return isUnmatchedNode(node);
+        if (filter === 'matched') return node?.comparisonMatch === 'matched';
+        if (filter === 'items') return document.querySelector('.node-role[data-node-id="' + node.id + '"]')?.value === 'item';
+        return true;
+      };
+      const renderPagination = (totalPages, current) => {
+        const pagination = document.getElementById('tablePagination');
+        pagination.replaceChildren();
+        const appendButton = (label, page, disabled = false, active = false) => {
+          const li = document.createElement('li');
+          li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'page-link';
+          button.textContent = label;
+          button.disabled = disabled;
+          if (!disabled) button.addEventListener('click', () => { currentPage = page; renderTablePage(); });
+          li.appendChild(button);
+          pagination.appendChild(li);
+        };
+        appendButton('上一页', current - 1, current <= 1);
+        const pages = [];
+        for (let page = 1; page <= totalPages; page += 1) {
+          if (totalPages <= 7 || page === 1 || page === totalPages || Math.abs(page - current) <= 1) pages.push(page);
+        }
+        let previous = 0;
+        for (const page of pages) {
+          if (previous && page - previous > 1) {
+            const gap = document.createElement('li');
+            gap.className = 'page-item disabled';
+            gap.innerHTML = '<span class="page-link">…</span>';
+            pagination.appendChild(gap);
+          }
+          appendButton(String(page), page, false, page === current);
+          previous = page;
+        }
+        appendButton('下一页', current + 1, current >= totalPages);
+      };
+      const renderTablePage = () => {
+        const rows = tableRows();
+        const filtered = rows.filter(row => matchesFilter(byId.get(row.dataset.nodeId)));
+        const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+        currentPage = Math.min(Math.max(1, currentPage), totalPages);
+        rows.forEach(row => row.classList.add('d-none'));
+        const start = (currentPage - 1) * pageSize;
+        const pageRows = filtered.slice(start, start + pageSize);
+        pageRows.forEach(row => row.classList.remove('d-none'));
+        document.getElementById('filterSummary').textContent = '当前筛选 ' + filtered.length + ' 条，显示第 ' + (filtered.length ? start + 1 : 0) + '-' + Math.min(start + pageSize, filtered.length) + ' 条';
+        document.getElementById('pageInfo').textContent = '第 ' + currentPage + ' / ' + totalPages + ' 页';
+        renderPagination(totalPages, currentPage);
+      };
       const setRole = (id, role) => {
         const select = document.querySelector('.node-role[data-node-id="' + id + '"]');
         if (select) select.value = role;
@@ -139,33 +212,81 @@
           if (value === 'level1') setRole(node.id, node.kind === 'heading' && node.level === 1 ? 'item' : 'container');
         }
         updateCount();
+        renderTablePage();
       };
       document.getElementById('granularity').addEventListener('change', event => applyGranularity(event.target.value));
+      document.getElementById('reviewFilter').addEventListener('change', () => { currentPage = 1; renderTablePage(); });
+      document.getElementById('pageSize').addEventListener('change', event => { pageSize = Number(event.target.value) || 20; currentPage = 1; renderTablePage(); });
+      document.getElementById('showReviewOnly')?.addEventListener('click', () => { document.getElementById('reviewFilter').value = 'review'; currentPage = 1; renderTablePage(); });
+      document.getElementById('showUnmatchedOnly')?.addEventListener('click', () => { document.getElementById('reviewFilter').value = 'unmatched'; currentPage = 1; renderTablePage(); });
       document.getElementById('skipFrontMatter').addEventListener('click', () => {
         for (const node of nodes) {
           if (node.pageFrom <= 7 || /^(前言|引言|目次|目\s*录)$/.test(node.title || '')) setRole(node.id, 'skip');
         }
         updateCount();
+        renderTablePage();
       });
       document.querySelectorAll('.node-number').forEach(input => input.addEventListener('input', () => {
         recalculateHierarchy();
         refreshLayout();
       }));
-      document.querySelectorAll('.use-comparison').forEach(button => button.addEventListener('click', () => {
-        const node = byId.get(button.dataset.nodeId);
+      const comparisonModal = document.getElementById('comparisonPreviewModal');
+      const showComparisonPreview = node => {
+        if (!node?.comparisonContent || !comparisonModal) return;
+        comparisonPreviewNodeId = node.id;
+        document.getElementById('comparisonPreviewMeta').textContent = 'PDF编号 ' + (node.originalNumber || '-')
+          + ' · 对照表内部编号 ' + (node.comparisonItemCode || '-')
+          + ' · 匹配度 ' + Math.round((node.comparisonSimilarity || 0) * 100) + '%';
+        document.getElementById('comparisonPdfText').textContent = node.ocrContent || node.content || '';
+        document.getElementById('comparisonSourceText').textContent = node.comparisonContent;
+        bootstrap.Modal.getOrCreateInstance(comparisonModal).show();
+      };
+      const adoptComparisonText = () => {
+        const node = byId.get(comparisonPreviewNodeId);
         if (!node?.comparisonContent) return;
         const textarea = document.querySelector('.node-content[data-node-id="' + node.id + '"]');
         if (textarea) textarea.value = node.comparisonContent;
         node.content = node.comparisonContent;
         node.comparisonMatch = 'matched';
-        button.closest('.d-flex')?.querySelector('.badge')?.replaceChildren('已采用对照文本');
-        button.remove();
-      }));
+        node.comparisonMarkerConflict = false;
+        const row = document.querySelector('tr[data-node-id="' + node.id + '"]');
+        const badge = row?.querySelector('.comparison-status-badge');
+        if (badge) {
+          badge.classList.remove('text-bg-warning', 'text-bg-secondary');
+          badge.classList.add('text-bg-success');
+          badge.replaceChildren('已采用对照文本');
+        }
+        const button = row?.querySelector('.use-comparison');
+        button?.remove();
+        bootstrap.Modal.getOrCreateInstance(comparisonModal).hide();
+        renderTablePage();
+        window.showAppNotice('已采用对照正文，请继续确认其他条款。');
+      };
+      document.querySelectorAll('.use-comparison').forEach(button => button.addEventListener('click', () => showComparisonPreview(byId.get(button.dataset.nodeId))));
+      document.getElementById('adoptComparisonText')?.addEventListener('click', adoptComparisonText);
+      const showUnusedComparison = () => {
+        const modal = document.getElementById('unusedComparisonModal');
+        const body = document.getElementById('unusedComparisonBody');
+        if (!modal || !body) return;
+        body.replaceChildren();
+        for (const rowData of comparisonSummary?.unusedComparisonRows || []) {
+          const row = document.createElement('tr');
+          [ rowData.itemCode, (rowData.chapterCode || '') + ' ' + (rowData.chapterName || ''), rowData.title || '-', rowData.content || '' ].forEach(value => {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            row.appendChild(cell);
+          });
+          body.appendChild(row);
+        }
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+      };
+      document.getElementById('showUnusedComparison')?.addEventListener('click', showUnusedComparison);
       document.querySelectorAll('.skip-subtree').forEach(button => button.addEventListener('click', () => {
         const id = button.dataset.nodeId;
         setRole(id, 'skip');
         for (const child of descendants(id)) setRole(child.id, 'skip');
         updateCount();
+        renderTablePage();
       }));
       const itemPayload = select => {
         const node = byId.get(select.dataset.nodeId);
@@ -280,10 +401,11 @@
         recalculateHierarchy();
         refreshLayout();
         updateCount();
+        renderTablePage();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('aiCorrectionsModal')).hide();
         window.showAppNotice('已应用 ' + selectedIndices.length + ' 条AI修改建议。');
       });
-      selects().forEach(select => select.addEventListener('change', updateCount));
+      selects().forEach(select => select.addEventListener('change', () => { updateCount(); renderTablePage(); }));
       recalculateHierarchy();
       refreshLayout();
       document.getElementById('applyPdfImport').addEventListener('submit', event => {
