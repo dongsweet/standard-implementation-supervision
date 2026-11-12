@@ -149,6 +149,7 @@
         document.getElementById('selectedCount').textContent = selects().filter(select => select.value === 'item').length;
       };
       const tableRows = () => Array.from(document.querySelectorAll('tbody tr[data-node-id]'));
+      const getTableBody = () => document.querySelector('table.table tbody');
       const isReviewNode = node => Boolean(node?.comparisonMatch && node.comparisonMatch !== 'matched') || Boolean(node?.comparisonMarkerConflict);
       const isUnmatchedNode = node => Boolean(node && (node.kind === 'list' || node.kind === 'heading')
         && String(node.content || '').trim()
@@ -283,7 +284,7 @@
         return row;
       };
       const reorderDomRows = () => {
-        const tbody = tableRows()[0]?.parentElement;
+        const tbody = getTableBody();
         if (!tbody) return;
         for (const node of nodes) {
           const row = document.querySelector('tr[data-node-id="' + node.id + '"]');
@@ -380,7 +381,7 @@
         const anchorIndex = addAfterNodeId ? nodes.findIndex(item => item.id === addAfterNodeId) : -1;
         nodes.splice(anchorIndex >= 0 ? anchorIndex + 1 : nodes.length, 0, node);
         byId = new Map(nodes.map(item => [ item.id, item ]));
-        const tbody = tableRows()[0]?.parentElement;
+        const tbody = getTableBody();
         const row = createNodeRow(node);
         if (tbody && anchorIndex >= 0) {
           const anchorRow = document.querySelector('tr[data-node-id="' + addAfterNodeId + '"]');
@@ -395,7 +396,7 @@
         bootstrap.Modal.getOrCreateInstance(addModal).hide();
         window.showAppNotice('条款已加入复核草稿，请保存草稿。');
       });
-      const tableBody = tableRows()[0]?.parentElement;
+      const tableBody = getTableBody();
       tableBody?.addEventListener('input', event => {
         if (event.target.matches('.node-number, .node-title, .node-content')) {
           markDirty();
