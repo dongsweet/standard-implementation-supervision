@@ -132,7 +132,7 @@
         document.getElementById('selectedCount').textContent = selects().filter(select => select.value === 'item').length;
       };
       const tableRows = () => Array.from(document.querySelectorAll('tbody tr[data-node-id]'));
-      const isReviewNode = node => node?.comparisonMatch === 'review' || Boolean(node?.comparisonMarkerConflict);
+      const isReviewNode = node => Boolean(node?.comparisonMatch && node.comparisonMatch !== 'matched') || Boolean(node?.comparisonMarkerConflict);
       const isUnmatchedNode = node => Boolean(node && (node.kind === 'list' || node.kind === 'heading')
         && String(node.content || '').trim()
         && (!node.comparisonMatch || node.comparisonMatch === 'unmatched'));
