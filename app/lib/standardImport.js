@@ -10,10 +10,10 @@ const MAX_ITEMS = 12000;
 const FIELD_ALIASES = {
   chapterCode: [ '章节编号' ],
   chapterName: [ '章节名称' ],
-  sectionName: [ '标准名称' ],
-  itemCode: [ '标准项编号', '标准编号' ],
+  sectionName: [ '标准名称', '标准子类' ],
+  itemCode: [ '标准项编号', '标准编号', '对应标准号' ],
   itemTitle: [ '标准项标题' ],
-  content: [ '标准内容', '标准项内容' ],
+  content: [ '标准内容', '标准项内容', '标准要求' ],
 };
 const SECOND_HEADER_MARKERS = new Set([
   '多云统管体系具体要求', '统一规范实施证据列表', '满足情况',
@@ -94,7 +94,7 @@ function splitChapter(value) {
   }
   const prefix = text.slice(0, index);
   const following = text.slice(index);
-  if (hasDot && prefix && !expectDigit && (!following || !following[0].trim())) {
+  if (hasDot && prefix && !expectDigit) {
     return { code: prefix, name: following.trim() || text };
   }
   return { code: text, name: text };

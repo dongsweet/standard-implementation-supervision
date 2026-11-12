@@ -64,6 +64,16 @@ test('ignores instruction sheets whose adjacent labels share one column', () => 
   assert.deepEqual(result.chapters.map(chapter => chapter.name), [ '用户标识与鉴别' ]);
 });
 
+test('recognizes supervision workbook standard aliases', () => {
+  const result = parseStandardRows([ { name: '标准目录', rows: [
+    [ '标准编号', '标准子类', '级别', '标准要求' ],
+    [ 6001, '6.1资源分配', '一般要求', '云服务商应确保资源可用性' ],
+  ] } ]);
+  assert.equal(result.itemCount, 1);
+  assert.deepEqual([ result.chapters[0].code, result.chapters[0].name ], [ '6.1', '资源分配' ]);
+  assert.equal(result.chapters[0].items[0].itemCode, '6001');
+});
+
 test('rejects duplicate item codes across sheets after Unicode normalization', () => {
   const header = [ '章节编号', '章节名称', '标准项编号', '标准内容' ];
   const sheets = [
