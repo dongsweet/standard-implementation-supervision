@@ -9,6 +9,12 @@ const { createStorageProvider } = require('../lib/storage');
 const { ocrPdf, progressForStage } = require('../lib/pdfStandardExtract');
 const { mergeComparisonIntoTree, parseComparisonFile } = require('../lib/standardComparison');
 const { recalculateHierarchy } = require('../lib/standardOutline');
+const {
+  buildAiCandidates,
+  buildRuleRecommendations,
+  findAfterIndex,
+  trivialReason,
+} = require('../lib/standardReview');
 
 class StandardPdfImportService extends Service {
   get repository() {
@@ -142,6 +148,79 @@ class StandardPdfImportService extends Service {
       corrections,
       providerStatus: result.providerStatus,
       durationMs: result.durationMs,
+    };
+  }
+
+  async smartReview(versionId, jobId, payload = {}) {
+    const job = await this.find(versionId, jobId);
+    if (job.status !== 'ready') this.ctx.throw(409, '只有待确认的PDF导入任务可以进行智能复核');
+    const sourceNodes = job.result?.nodes || [];
+    const incomingNodes = Array.isArray(payload.nodes) ? payload.nodes : [];
+    const incomingById = new Map(incomingNodes.map(node => [ String(node?.id || ''), node ]));
+    const workingNodes = recalculateHierarchy(sourceNodes.map(source => ({
+      ...source,
+      ...(incomingById.get(String(source.id)) || {}),
+    })));
+    const afterIndex = findAfterIndex(workingNodes, payload.afterOriginalNumber);
+    const requestedIds = Array.isArray(payload.nodeIds) ? new Set(payload.nodeIds.map(String)) : null;
+    const scopedNodes = requestedIds
+      ? workingNodes.filter(node => requestedIds.has(String(node.id)))
+      : workingNodes;
+    const scopedSet = new Set(scopedNodes.map(node => node.id));
+    const rules = buildRuleRecommendations(workingNodes, { afterIndex })
+      .filter(item => !requestedIds || scopedSet.has(item.nodeId))
+      .map(item => ({
+        ...item,
+        source: workingNodes.find(node => node.id === item.nodeId) || null,
+      }));
+    const candidates = buildAiCandidates(workingNodes, { afterIndex })
+      .filter(item => !requestedIds || scopedSet.has(item.id));
+    const aiSuggestions = [];
+    let aiUnavailable = null;
+    let providerStatus = null;
+    let durationMs = 0;
+    if (candidates.length) {
+      const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: true });
+      if (!aiConfig.enabled || !aiConfig.baseUrl || !aiConfig.model || !aiConfig.apiKey) {
+        aiUnavailable = 'AI服务尚未启用或配置不完整；规则复核结果仍可使用。';
+      } else {
+        for (let index = 0; index < candidates.length; index += 10) {
+          const chunk = candidates.slice(index, index + 10);
+          try {
+            const result = await this.ctx.service.aiProvider.reviewStandardNodes(chunk, {
+              standardCode: job.standard_code,
+              standardName: job.standard_name,
+              version: job.version,
+            });
+            providerStatus = result.providerStatus;
+            durationMs += result.durationMs || 0;
+            aiSuggestions.push(...result.suggestions);
+          } catch (error) {
+            aiUnavailable = error.message || 'AI复核调用失败；请稍后重试。';
+            break;
+          }
+        }
+      }
+    }
+    const sourceById = new Map(workingNodes.map(node => [ node.id, node ]));
+    return {
+      afterOriginalNumber: payload.afterOriginalNumber || '',
+      rules,
+      ai: aiSuggestions.map(suggestion => ({
+        ...suggestion,
+        source: sourceById.get(suggestion.nodeId) || null,
+      })),
+      candidates: candidates.length,
+      summary: {
+        ruleContainerCount: rules.filter(item => item.action === 'container').length,
+        ruleSkipCount: rules.filter(item => item.action === 'skip').length,
+        aiCount: aiSuggestions.length,
+        unresolvedCount: candidates.length,
+        trivialCount: workingNodes.slice(Math.max(0, afterIndex + 1)).filter(node => trivialReason(node.content)).length,
+      },
+      aiUnavailable,
+      providerStatus,
+      durationMs,
     };
   }
 

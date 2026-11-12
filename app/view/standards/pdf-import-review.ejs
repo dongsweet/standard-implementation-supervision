@@ -27,7 +27,7 @@
         <option value="level1">大章（如 6）</option>
       </select><div class="form-text">应用粒度后仍可逐节点改成章节、标准项或跳过；正文仅3个字以内或类似“默认：无”的节点默认跳过，可手工改回。</div></div>
       <div class="col-12 col-xl-3"><div class="border rounded p-2 bg-body-tertiary"><div class="small text-secondary">当前选择</div><strong id="selectedCount">0</strong> 个标准项<div class="small text-secondary mt-1" id="draftStatus">尚未修改</div><div class="small text-secondary mt-1">草稿允许暂存不完整条款，正式写入前再校验。</div></div></div>
-      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-secondary" type="button" id="addNodeButton">新增条款</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-outline-success" type="button" id="saveDraftButton">保存草稿</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
+      <div class="col-12 col-xl-5 d-flex justify-content-end gap-2"><button class="btn btn-outline-secondary" type="button" id="skipFrontMatter">跳过前置内容</button><button class="btn btn-outline-secondary" type="button" id="addNodeButton">新增条款</button><button class="btn btn-outline-primary" type="button" id="aiReviewButton">AI校验选中项</button><button class="btn btn-outline-warning" type="button" id="smartReviewButton">智能复核剩余项</button><button class="btn btn-outline-success" type="button" id="saveDraftButton">保存草稿</button><button class="btn btn-primary" type="submit" form="applyPdfImport" id="applyButton">确认并写入规范库</button></div>
     </div>
   </div>
 
@@ -68,6 +68,23 @@
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-primary" id="createNodeButton">加入复核草稿</button></div>
   </div></div></div>
 
+  <div class="modal fade" id="smartReviewSetupModal" tabindex="-1" aria-labelledby="smartReviewSetupModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="smartReviewSetupModalLabel">智能复核剩余条款</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-info py-2">系统先按确定性规则识别章节/容器和“无、默认无、页眉噪声”等跳过项，再把未匹配、待复核和疑似拼接条款交给AI生成建议。建议只会展示在下一步，不会自动写入草稿。</div>
+      <label class="form-label" for="smartReviewAfter">已核对到的原文编号（可选）</label>
+      <input class="form-control" id="smartReviewAfter" placeholder="例如：6.6.3">
+      <div class="form-text">填写后，编号及其之前的节点不会送入本次智能复核；当前页面尚未保存的修改也会随请求一并分析。</div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-warning" id="startSmartReview">开始生成建议</button></div>
+  </div></div></div>
+
+  <div class="modal fade" id="smartReviewResultModal" tabindex="-1" aria-labelledby="smartReviewResultModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="smartReviewResultModalLabel">智能复核建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body"><div id="smartReviewNotice"></div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th style="width:3rem">应用</th><th style="width:8rem">原文编号</th><th style="width:8rem">建议</th><th>当前正文</th><th>建议正文/结果</th><th>理由</th></tr></thead><tbody id="smartReviewBody"></tbody></table></div><div class="text-secondary small mt-2" id="smartReviewSummary"></div></div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">暂不应用</button><button type="button" class="btn btn-warning" id="applySmartReview">应用勾选建议（仍需保存草稿）</button></div>
+  </div></div></div>
+
   <div class="modal fade" id="aiCorrectionsModal" tabindex="-1" aria-labelledby="aiCorrectionsModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
     <div class="modal-header"><h2 class="modal-title fs-5" id="aiCorrectionsModalLabel">AI 校验建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body">
@@ -85,6 +102,7 @@
       let nodes = <%- JSON.stringify(result.nodes).replace(/</g, '\\u003c') %>;
       const comparisonSummary = <%- JSON.stringify(result.comparisonSummary || null).replace(/</g, '\\u003c') %>;
       let aiCorrections = [];
+      let smartRecommendations = [];
       let byId = new Map(nodes.map(node => [ node.id, node ]));
       let comparisonPreviewNodeId = null;
       let currentPage = 1;
@@ -573,6 +591,133 @@
         document.getElementById('aiCorrectionSummary').textContent = '共 ' + corrections.length + ' 条建议。';
         bootstrap.Modal.getOrCreateInstance(document.getElementById('aiCorrectionsModal')).show();
       };
+      const smartActionLabel = action => ({
+        container: '章节/容器',
+        skip: '跳过',
+        adopt_comparison: '采用对照正文',
+        correct_ocr: '修正OCR正文',
+        keep_ocr: '保留当前正文',
+        split_required: '疑似拼接，人工拆分',
+        uncertain: '待人工确认',
+      }[action] || action);
+      const smartRecommendationNode = recommendation => recommendation.source || byId.get(recommendation.nodeId);
+      const renderSmartReview = data => {
+        const body = document.getElementById('smartReviewBody');
+        const notice = document.getElementById('smartReviewNotice');
+        body.replaceChildren();
+        notice.replaceChildren();
+        if (data.aiUnavailable) {
+          const warning = document.createElement('div');
+          warning.className = 'alert alert-warning py-2';
+          warning.textContent = data.aiUnavailable;
+          notice.appendChild(warning);
+        }
+        const recommendations = [
+          ...(data.rules || []).map(item => ({ ...item, nodeId: item.nodeId, source: item.source })),
+          ...(data.ai || []).map(item => ({ ...item, nodeId: item.nodeId, source: item.source })),
+        ];
+        smartRecommendations = recommendations;
+        recommendations.forEach((recommendation, index) => {
+          const node = smartRecommendationNode(recommendation) || {};
+          const row = document.createElement('tr');
+          const selectCell = document.createElement('td');
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'form-check-input smart-review-checkbox';
+          checkbox.dataset.index = String(index);
+          checkbox.checked = recommendation.action === 'container'
+            || recommendation.action === 'skip'
+            || (recommendation.confidence >= 0.85 && ![ 'split_required', 'uncertain', 'keep_ocr' ].includes(recommendation.action));
+          selectCell.appendChild(checkbox);
+          row.appendChild(selectCell);
+          const numberCell = document.createElement('td');
+          numberCell.textContent = node.originalNumber || '-';
+          row.appendChild(numberCell);
+          const actionCell = document.createElement('td');
+          actionCell.textContent = smartActionLabel(recommendation.action);
+          row.appendChild(actionCell);
+          const beforeCell = document.createElement('td');
+          appendText(beforeCell, node.content || '');
+          row.appendChild(beforeCell);
+          const afterCell = document.createElement('td');
+          appendText(afterCell, recommendation.content || (recommendation.action === 'container' ? '将此节点设为章节/容器' : '将此节点跳过'));
+          row.appendChild(afterCell);
+          const reasonCell = document.createElement('td');
+          appendText(reasonCell, (recommendation.reason || '-') + '\n置信度 ' + Math.round((recommendation.confidence || 0) * 100) + '%'
+            + (recommendation.issues?.length ? '\n问题：' + recommendation.issues.join('；') : ''));
+          row.appendChild(reasonCell);
+          body.appendChild(row);
+        });
+        document.getElementById('smartReviewSummary').textContent = recommendations.length
+          ? '共 ' + recommendations.length + ' 条建议；规则处理 ' + (data.rules || []).length + ' 条，AI返回 ' + (data.ai || []).length + ' 条。未勾选的建议不会改变当前草稿。'
+          : '没有生成新的建议。';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('smartReviewResultModal')).show();
+      };
+      document.getElementById('smartReviewButton').addEventListener('click', () => {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('smartReviewSetupModal')).show();
+      });
+      document.getElementById('startSmartReview').addEventListener('click', async event => {
+        const button = event.currentTarget;
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = '分析中…';
+        try {
+          const currentNodes = collectNodes().map(node => ({
+            id: node.id,
+            originalNumber: node.originalNumber,
+            title: node.title,
+            content: node.content,
+            role: node.role,
+          }));
+          const response = await fetch('/standards/versions/<%= versionId %>/pdf-imports/<%= job.id %>/smart-review', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-csrf-token': '<%= csrf %>',
+              accept: 'application/json',
+            },
+            body: JSON.stringify({
+              afterOriginalNumber: document.getElementById('smartReviewAfter').value.trim(),
+              nodes: currentNodes,
+            }),
+          });
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.message || '智能复核失败');
+          bootstrap.Modal.getOrCreateInstance(document.getElementById('smartReviewSetupModal')).hide();
+          renderSmartReview(body.data || {});
+        } catch (error) {
+          window.showAppNotice(error.message, '智能复核失败');
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      });
+      document.getElementById('applySmartReview').addEventListener('click', () => {
+        const selectedIndices = Array.from(document.querySelectorAll('.smart-review-checkbox:checked'))
+          .map(checkbox => Number(checkbox.dataset.index));
+        for (const index of selectedIndices) {
+          const recommendation = smartRecommendations[index];
+          const node = byId.get(recommendation.nodeId);
+          if (!node) continue;
+          const roleSelect = document.querySelector('.node-role[data-node-id="' + node.id + '"]');
+          const content = document.querySelector('.node-content[data-node-id="' + node.id + '"]');
+          if (recommendation.action === 'container' || recommendation.action === 'skip') {
+            if (roleSelect) roleSelect.value = recommendation.action;
+            node.role = recommendation.action;
+          }
+          if ([ 'adopt_comparison', 'correct_ocr' ].includes(recommendation.action) && recommendation.content) {
+            if (content) content.value = recommendation.content;
+            node.content = recommendation.content;
+          }
+        }
+        recalculateHierarchy();
+        refreshLayout();
+        updateCount();
+        renderTablePage();
+        markDirty();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('smartReviewResultModal')).hide();
+        window.showAppNotice('已应用 ' + selectedIndices.length + ' 条智能复核建议，请保存草稿并继续人工核对。');
+      });
       document.getElementById('aiReviewButton').addEventListener('click', async event => {
         const button = event.currentTarget;
         const items = selects().filter(select => select.value === 'item').map(itemPayload);

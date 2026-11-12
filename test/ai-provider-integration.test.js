@@ -32,12 +32,22 @@ test('tests an OpenAI-compatible endpoint and validates standard correction sugg
     request.on('data', chunk => { body += chunk; });
     request.on('end', () => {
       requests.push({ data: JSON.parse(body), authorization: request.headers.authorization });
-      const isTest = JSON.parse(body).messages?.[1]?.content === '请返回 {"status":"ok"}。';
+      const requestBody = JSON.parse(body);
+      const isTest = requestBody.messages?.[1]?.content === '请返回 {"status":"ok"}。';
+      const isSmartReview = requestBody.messages?.[0]?.content?.includes('标准规范导入复核助手');
       response.setHeader('content-type', 'application/json');
       response.end(JSON.stringify({
         choices: [{
           message: {
-            content: JSON.stringify(isTest ? { status: 'ok' } : {
+            content: JSON.stringify(isTest ? { status: 'ok' } : isSmartReview ? {
+              suggestions: [{
+                nodeId: 'n1',
+                action: 'adopt_comparison',
+                confidence: 0.94,
+                content: '对照正文',
+                reason: '对照正文与OCR正文属于同一条款',
+              }],
+            } : {
               corrections: [{
                 nodeId: 'n1',
                 originalNumber: '6.1.1 a)',
@@ -71,7 +81,16 @@ test('tests an OpenAI-compatible endpoint and validates standard correction sugg
     }], { standardCode: 'GB/T 31168', version: '2023' });
     assert.equal(result.corrections.length, 1);
     assert.equal(result.corrections[0].nodeId, 'n1');
-    assert.equal(requests.length, 2);
+    const review = await provider.reviewStandardNodes([{
+      id: 'n1',
+      originalNumber: '6.1.1 a)',
+      title: '',
+      content: '当前正文',
+      comparisonContent: '对照正文',
+      comparisonItemCode: '6001',
+    }], { standardCode: 'GB/T 31168', version: '2023' });
+    assert.equal(review.suggestions[0].action, 'adopt_comparison');
+    assert.equal(requests.length, 3);
     assert.equal(requests[0].authorization, 'Bearer test-key');
     assert.equal(requests[0].data.model, 'test-model');
     assert.equal(requests[1].data.max_tokens, 2000);

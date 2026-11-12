@@ -188,6 +188,56 @@ class AiProvider {
       durationMs: response.durationMs,
     };
   }
+
+  async reviewStandardNodes(nodes, context = {}) {
+    if (!this.enabled) throw aiError('AI服务未配置或未启用', 'AI_CONFIG_ERROR');
+    const response = await this.request([
+      {
+        role: 'system',
+        content: [
+          '你是标准规范导入复核助手。只对给定条款提供复核建议，不直接修改业务数据。',
+          '结合OCR正文、对照正文和条款编号判断：',
+          '1. comparisonContent可靠且与OCR表达同一条款时，建议 adopt_comparison；',
+          '2. 仅存在明确OCR错字、断字或标点错误时，建议 correct_ocr，并给出修正后的完整正文；',
+          '3. OCR疑似把多个字母条款拼接在一起、漏掉正文或编号冲突时，建议 split_required 或 uncertain，不要猜测补写；',
+          '4. 无法确认时建议 keep_ocr；不能决定章节层级，也不能判定业务满足情况；',
+          '5. 只返回JSON：{"suggestions":[{"nodeId":"...","action":"adopt_comparison|correct_ocr|keep_ocr|split_required|uncertain","confidence":0到1,"content":"完整正文或原文","reason":"不超过120字","issues":["..."]}]}。',
+          '6. 每个节点必须返回一条建议，content 必须是该节点当前完整正文，不得总结或扩写。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          context: {
+            standardCode: context.standardCode || '',
+            standardName: context.standardName || '',
+            version: context.version || '',
+          },
+          nodes: nodes.map(node => ({
+            nodeId: node.id,
+            originalNumber: node.originalNumber,
+            title: node.title || '',
+            ocrContent: node.ocrContent || node.content || '',
+            comparisonContent: node.comparisonContent || '',
+            comparisonItemCode: node.comparisonItemCode || '',
+            comparisonMatch: node.comparisonMatch || '',
+            comparisonMarkerConflict: Boolean(node.comparisonMarkerConflict),
+          })),
+        }),
+      },
+    ]);
+    let suggestions;
+    try {
+      suggestions = parseStandardReviewSuggestions(response.content, new Map(nodes.map(node => [ node.id, node ])));
+    } catch {
+      throw aiError('AI返回的复核结果格式无效', 'AI_INVALID_RESPONSE');
+    }
+    return {
+      suggestions,
+      providerStatus: response.providerStatus,
+      durationMs: response.durationMs,
+    };
+  }
 }
 
 function parseJsonContent(content) {
@@ -220,6 +270,31 @@ function parseStandardCorrections(content, validNodeIds) {
   return result;
 }
 
+function parseStandardReviewSuggestions(content, sourceById) {
+  const json = parseJsonContent(content);
+  if (!Array.isArray(json.suggestions)) throw new Error('AI suggestions 格式无效');
+  const actions = new Set([ 'adopt_comparison', 'correct_ocr', 'keep_ocr', 'split_required', 'uncertain' ]);
+  const result = [];
+  for (const item of json.suggestions) {
+    const nodeId = String(item?.nodeId || '').trim();
+    const source = sourceById.get(nodeId);
+    if (!source || !actions.has(item?.action)) continue;
+    const confidence = Number(item.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) continue;
+    const contentValue = String(item.content ?? source.content ?? '').trim();
+    if (!contentValue || contentValue.length > 20000) continue;
+    result.push({
+      nodeId,
+      action: item.action,
+      confidence,
+      content: contentValue,
+      reason: String(item.reason || '').trim().slice(0, 500),
+      issues: Array.isArray(item.issues) ? item.issues.map(String).slice(0, 10) : [],
+    });
+  }
+  return result;
+}
+
 function parseAiResult(content) {
   if (!content) throw new Error('AI 返回内容为空');
   const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
@@ -236,4 +311,10 @@ function parseAiResult(content) {
   };
 }
 
-module.exports = { AiProvider, friendlyAiError, parseAiResult, parseStandardCorrections };
+module.exports = {
+  AiProvider,
+  friendlyAiError,
+  parseAiResult,
+  parseStandardCorrections,
+  parseStandardReviewSuggestions,
+};
