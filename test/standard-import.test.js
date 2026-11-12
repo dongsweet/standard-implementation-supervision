@@ -92,6 +92,15 @@ test('parses a TSV upload with quoted fields', async () => {
   }
 });
 
+test('ignores invalid date values in unused workbook cells', () => {
+  const result = parseStandardRows([ { name: '含日期列', rows: [
+    [ '章节编号', '章节名称', '标准项编号', '标准内容', '检查日期' ],
+    [ '8.1', '用户标识与鉴别', '8.1.1', '应建立账号管理要求', new Date(Number.NaN) ],
+  ] } ]);
+  assert.equal(result.itemCount, 1);
+  assert.equal(result.chapters[0].items[0].itemCode, '8.1.1');
+});
+
 let ExcelJS;
 try {
   ExcelJS = require('exceljs');

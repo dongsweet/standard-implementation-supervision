@@ -28,7 +28,7 @@ function importError(message) {
 
 function cellText(value) {
   if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
   if (typeof value === 'object') {
     if (Array.isArray(value.richText)) return value.richText.map(part => part.text || '').join('').trim();
     if (Object.prototype.hasOwnProperty.call(value, 'text')) return String(value.text || '').trim();
