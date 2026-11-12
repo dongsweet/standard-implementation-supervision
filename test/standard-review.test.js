@@ -21,8 +21,9 @@ test('builds deterministic container and skip recommendations after a checkpoint
   const afterIndex = findAfterIndex(nodes, '6.6.3');
   assert.equal(findScopeEndIndex([
     ...nodes,
+    { id: 'noise', originalNumber: '1', kind: 'heading' },
     { id: 'n6', originalNumber: '7', kind: 'heading' },
-  ], '6.6.3', afterIndex), 5);
+  ], '6.6.3', afterIndex), 6);
   const result = buildRuleRecommendations(nodes, { afterIndex });
   assert.deepEqual(result.map(item => [ item.nodeId, item.action ]), [
     [ 'n2', 'container' ],

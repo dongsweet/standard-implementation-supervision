@@ -125,9 +125,10 @@ function findScopeEndIndex(nodes, afterOriginalNumber, afterIndex) {
   if (afterIndex < 0 || !String(afterOriginalNumber || '').trim()) return (nodes || []).length;
   const root = rootChapterNumber(afterOriginalNumber);
   if (!root) return (nodes || []).length;
+  const rootNumber = Number(root);
   for (let index = afterIndex + 1; index < (nodes || []).length; index += 1) {
     const nodeRoot = rootChapterNumber(nodes[index]?.originalNumber);
-    if (nodeRoot && nodeRoot !== root) return index;
+    if (nodeRoot && nodeRoot !== root && Number(nodeRoot) > rootNumber) return index;
   }
   return (nodes || []).length;
 }
