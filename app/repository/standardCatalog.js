@@ -160,9 +160,9 @@ class StandardCatalogRepository {
         standardNumber: itemStandardNumber(standard.code, version, chapter.code, index + 1),
       })));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'heading_path', 'import_order', 'standard_number' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'explanation', 'content', 'heading_path', 'import_order', 'standard_number' ],
         items.map(item => [
-          standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
+          standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.explanation || null, item.content,
           JSON.stringify(item.headingPath || []), item.importOrder, item.standardNumber,
         ]),
         { returning: 'id, item_code' });
@@ -239,14 +239,14 @@ class StandardCatalogRepository {
         };
       }));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'heading_path', 'import_order', 'standard_number' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'explanation', 'content', 'heading_path', 'import_order', 'standard_number' ],
         items.map(item => [
-          versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
+          versionId, item.chapterId, item.databaseItemCode, item.title || null, item.explanation || null, item.content,
           JSON.stringify(item.headingPath || []), item.importOrder, item.standardNumber,
         ]),
         {
           onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, explanation = EXCLUDED.explanation, content = EXCLUDED.content,
             heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
           returning: 'id, item_code',
@@ -312,7 +312,7 @@ class StandardCatalogRepository {
              count(si.id)::integer AS item_count,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'standardNumber', si.standard_number,
-             'itemCode', si.item_code, 'title', si.title, 'content', si.content, 'headingPath', si.heading_path,
+               'itemCode', si.item_code, 'title', si.title, 'explanation', si.explanation, 'content', si.content, 'headingPath', si.heading_path,
                'sourcePageFrom', si.source_page_from, 'sourcePageTo', si.source_page_to
              ) ORDER BY si.import_order, si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
@@ -468,13 +468,13 @@ class StandardCatalogRepository {
       for (const [ index, row ] of rows.entries()) {
         await client.query(`
           INSERT INTO standard_items
-            (standard_version_id, chapter_id, item_code, title, content, heading_path, import_order, standard_number)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            (standard_version_id, chapter_id, item_code, title, explanation, content, heading_path, import_order, standard_number)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, explanation = EXCLUDED.explanation, content = EXCLUDED.content,
             heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
-        [ versionId, chapterId, row.itemCode, row.title || null, row.content,
+        [ versionId, chapterId, row.itemCode, row.title || null, row.explanation || null, row.content,
           JSON.stringify(row.headingPath || []), index + 1, `TEMP-${versionId}-${row.itemCode}` ]);
         count += 1;
       }

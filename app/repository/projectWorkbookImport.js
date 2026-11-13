@@ -7,6 +7,12 @@ function normalizedContent(value) {
   return normalizeKey(value);
 }
 
+function standardContentForComparison(item) {
+  return item.explanation_snapshot
+    ? `${item.explanation_snapshot}\n${item.content_snapshot}`
+    : item.content_snapshot;
+}
+
 function parseCheckedAt(value) {
   const match = String(value || '').match(/\b(20\d{2})\s*[./年-]\s*(\d{1,2})\s*[./月-]\s*(\d{1,2})/);
   if (!match) return null;
@@ -86,7 +92,7 @@ class ProjectWorkbookImportRepository {
   async listProjectStandardItems(projectId) {
     const result = await this.pool.query(`
       SELECT psi.standard_item_id, psi.item_code_snapshot, psi.standard_number_snapshot,
-             psi.content_snapshot
+             psi.explanation_snapshot, psi.content_snapshot
       FROM project_standard_items psi
       WHERE psi.project_id = $1`, [ projectId ]);
     return result.rows;
@@ -120,8 +126,8 @@ class ProjectWorkbookImportRepository {
       }
       const match = { ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot };
       matches.push(match);
-      if (normalizedContent(row.content) !== normalizedContent(unique[0].content_snapshot)) {
-        contentDifferences.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, snapshotContent: unique[0].content_snapshot, importedContent: row.content });
+      if (normalizedContent(row.content) !== normalizedContent(standardContentForComparison(unique[0]))) {
+        contentDifferences.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, snapshotContent: standardContentForComparison(unique[0]), importedContent: row.content });
       }
     }
     const rowCount = (job.payload.rows || []).length;
@@ -171,7 +177,8 @@ class ProjectWorkbookImportRepository {
         JOIN cloud_centers cc ON cc.id = pcc.cloud_center_id
         WHERE pcc.project_id = $1 ORDER BY cc.name, cc.code`, [ projectId ]);
       const itemResult = await client.query(`
-        SELECT psi.standard_item_id, psi.item_code_snapshot, psi.standard_number_snapshot, psi.content_snapshot
+        SELECT psi.standard_item_id, psi.item_code_snapshot, psi.standard_number_snapshot,
+               psi.explanation_snapshot, psi.content_snapshot
         FROM project_standard_items psi WHERE psi.project_id = $1`, [ projectId ]);
       const centersById = new Map(projectCentersResult.rows.map(center => [ center.id, center ]));
       const chosenCenters = cloudCenterIds.map(id => id || null);
@@ -205,7 +212,7 @@ class ProjectWorkbookImportRepository {
           continue;
         }
         matches.push({ ...row, standardItemId: candidates[0].standard_item_id });
-        if (normalizedContent(row.content) !== normalizedContent(candidates[0].content_snapshot)) contentDifferences.push(row);
+        if (normalizedContent(row.content) !== normalizedContent(standardContentForComparison(candidates[0]))) contentDifferences.push(row);
       }
       if (unmatched.length && !acknowledgeUnmatched) {
         const error = new Error(`有${unmatched.length}條未匹配條款；请确认后勾选“仅导入已匹配条款”`);

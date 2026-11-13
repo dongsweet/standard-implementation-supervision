@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseProjectRows, parseStatus, splitEvidence } = require('../app/lib/projectWorkbookImport');
+const { ProjectWorkbookImportRepository } = require('../app/repository/projectWorkbookImport');
 
 test('parses the wide project workbook shape into answers, cloud groups and supervision data', () => {
   const result = parseProjectRows([ {
@@ -28,4 +29,25 @@ test('normalizes simple status and skips default empty evidence', () => {
   assert.equal(parseStatus('不适用').applicability, 'not_applicable');
   assert.deepEqual(splitEvidence('默认：无'), []);
   assert.deepEqual(splitEvidence('证据1\n无\n证据2'), [ '证据1', '证据2' ]);
+});
+
+test('compares imported source text against the reconstructed parent explanation and clause body', async () => {
+  const repository = new ProjectWorkbookImportRepository({
+    async query(sql) {
+      if (sql.includes('FROM project_cloud_centers')) return { rows: [] };
+      if (sql.includes('FROM project_standard_items')) return { rows: [ {
+        standard_item_id: 'item-1', item_code_snapshot: '6.1.1 a)', standard_number_snapshot: '31168-2023-06001',
+        explanation_snapshot: '云服务商应：', content_snapshot: '对资源进行分析并确保可用性；',
+      } ] };
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  });
+  repository.getJob = async () => ({ payload: { rows: [ {
+    sourceSheet: '章节6', sourceRow: 3, clauseNumber: '6.1.1 a)',
+    content: '云服务商应：\n对资源进行分析并确保可用性；', supervision: [],
+  } ] } });
+
+  const review = await repository.getReview('project-1', 'job-1');
+  assert.equal(review.summary.matchedCount, 1);
+  assert.equal(review.summary.contentDifferenceCount, 0);
 });

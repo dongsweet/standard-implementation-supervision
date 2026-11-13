@@ -79,9 +79,9 @@ class ProjectRepository {
       WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
       INSERT INTO project_standard_items (project_id, standard_item_id, standard_number_snapshot,
-        item_code_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
+        item_code_snapshot, explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
       SELECT $2, standard_item_id, standard_number_snapshot, item_code_snapshot,
-        content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at
+        explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at
       FROM project_standard_items WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
       INSERT INTO project_cloud_centers (project_id, cloud_center_id, owner_user_id)
@@ -156,7 +156,10 @@ class ProjectRepository {
       ORDER BY s.code, sv.version`, [ projectId ]);
     const items = await this.pool.query(`
       SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
-             psi.content_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
+             CASE WHEN NULLIF(btrim(psi.explanation_snapshot), '') IS NULL THEN psi.content_snapshot
+               ELSE '条款说明：' || psi.explanation_snapshot || '；标准内容：' || psi.content_snapshot
+             END AS content_snapshot,
+             psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
              si.title,
              COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
@@ -275,8 +278,8 @@ class ProjectRepository {
       await client.query(`
         INSERT INTO project_standard_items
           (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
-           content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-        SELECT $1, si.id, si.standard_number, si.item_code, si.content, sc.code, si.heading_path, now()
+           explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
+        SELECT $1, si.id, si.standard_number, si.item_code, si.explanation, si.content, sc.code, si.heading_path, now()
         FROM standard_items si
         JOIN standard_chapters sc ON sc.id = si.chapter_id
         WHERE si.standard_version_id = $2

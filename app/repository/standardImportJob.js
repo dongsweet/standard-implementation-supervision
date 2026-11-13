@@ -244,25 +244,26 @@ class StandardImportJobRepository {
         const ownContent = item.kind === 'heading'
           ? [ item.content, this.descendantContent(item.id, children, selection) ].filter(Boolean).join('\n')
           : item.content;
-        const content = [ prelude, ownContent ].filter(Boolean).join('\n');
+        const explanation = prelude || null;
+        const content = ownContent;
         const title = item.kind === 'heading' ? null : item.title || null;
         const importOrder = (chapterOrders.get(chapterCode) || 0) + 1;
         chapterOrders.set(chapterCode, importOrder);
         await client.query(`
           INSERT INTO standard_items
-            (standard_version_id, chapter_id, item_code, title, content,
+            (standard_version_id, chapter_id, item_code, title, explanation, content,
             source_page_from, source_page_to, source_excerpt, import_job_id,
              heading_path, import_order, standard_number)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
-            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, explanation = EXCLUDED.explanation, content = EXCLUDED.content,
             source_page_from = EXCLUDED.source_page_from, source_page_to = EXCLUDED.source_page_to,
             source_excerpt = EXCLUDED.source_excerpt, import_job_id = EXCLUDED.import_job_id,
             heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
-        [ versionId, chapterIds.get(chapterCode), item.originalNumber, title, content,
+        [ versionId, chapterIds.get(chapterCode), item.originalNumber, title, explanation, content,
           item.pageFrom || null, item.pageTo || item.pageFrom || null,
-          content.slice(0, 1000), jobId, JSON.stringify(headingPath), importOrder,
+          [ explanation, content ].filter(Boolean).join('\n').slice(0, 1000), jobId, JSON.stringify(headingPath), importOrder,
           [ 'TEMP', versionId, item.originalNumber ].join('-') ]);
       }
       await recalculateStandardNumbers(client, versionId);

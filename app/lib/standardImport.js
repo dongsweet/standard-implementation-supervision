@@ -14,6 +14,7 @@ const FIELD_ALIASES = {
   headingPath: [ '标题路径', '标准项标题路径', '层级标题' ],
   itemCode: [ '标准项编号', '标准编号', '对应标准号' ],
   itemTitle: [ '标准项标题' ],
+  explanation: [ '条款说明', '标题解释', '父条款说明' ],
   content: [ '标准内容', '标准项内容', '标准要求' ],
 };
 const SECOND_HEADER_MARKERS = new Set([
@@ -143,6 +144,7 @@ function parseStandardRows(sheets, options = {}) {
       const row = rows[rowIndex] || [];
       const value = field => header.map[field] >= 0 ? cellText(row[header.map[field]]) : '';
       const itemCode = value('itemCode');
+      const explanation = value('explanation');
       const content = value('content');
       if (!itemCode && !content) continue;
       const sourceRow = rowIndex + 1;
@@ -157,6 +159,7 @@ function parseStandardRows(sheets, options = {}) {
       itemCodes.add(normalizedItemCode);
       if (itemCode.length > 100) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项编号不能超过100个字符');
       if (value('itemTitle').length > 500) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的标准项标题不能超过500个字符');
+      if (explanation.length > 2000) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行的条款说明不能超过2000个字符');
       itemCount += 1;
       if (itemCount > MAX_ITEMS) throw importError('一次最多导入' + MAX_ITEMS + '个标准项');
 
@@ -189,6 +192,7 @@ function parseStandardRows(sheets, options = {}) {
       chapter.items.push({
         itemCode,
         title: value('itemTitle') || null,
+        ...(explanation ? { explanation } : {}),
         content,
         ...(headingPath.length ? { headingPath } : {}),
       });

@@ -89,6 +89,19 @@ test('imports a variable-depth heading path without changing the standard item n
   ]);
 });
 
+test('stores pre-list provider requirement as a parent clause explanation', () => {
+  const result = parseStandardRows([ { name: '带父条款说明', rows: [
+    [ '章节编号', '章节名称', '标题路径', '标准项编号', '标准项标题', '条款说明', '标准内容' ],
+    [ '6', '系统开发与供应链', '6.1 资源分配 > 6.1.1 一般要求', '6.1.1 a)', '一般要求', '云服务商应：', '对保护信息系统和服务所需的资源进行分析；' ],
+    [ '6', '系统开发与供应链', '6.1 资源分配 > 6.1.1 一般要求', '6.1.1 b)', '一般要求', '', '在预算管理过程中考虑网络安全资源需求。' ],
+    [ '6', '系统开发与供应链', '6.1 资源分配 > 6.1.1 一般要求', '6.1.1 c)', '一般要求', '', '云服务商应对资源可用性进行复核。' ],
+  ] } ]);
+  assert.equal(result.chapters[0].items[0].explanation, '云服务商应：');
+  assert.equal(result.chapters[0].items[0].content, '对保护信息系统和服务所需的资源进行分析；');
+  assert.equal(result.chapters[0].items[1].explanation, undefined);
+  assert.equal(result.chapters[0].items[2].content, '云服务商应对资源可用性进行复核。');
+});
+
 test('continues heading depth after a subsection used as the imported chapter', () => {
   const result = parseStandardRows([ { name: '多级标题', rows: [
     [ '章节编号', '章节名称', '标准项编号', '标题路径', '标准内容' ],
@@ -193,13 +206,13 @@ test('the downloadable Excel template exposes and imports arbitrary-depth headin
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(templatePath);
   const worksheet = workbook.getWorksheet('标准原文');
-  assert.deepEqual(worksheet.getRow(1).values.slice(1), [ '章节编号', '章节名称', '标题路径', '标准项编号', '标准项标题', '标准内容' ]);
+  assert.deepEqual(worksheet.getRow(1).values.slice(1), [ '章节编号', '章节名称', '标题路径', '标准项编号', '标准项标题', '条款说明', '标准内容' ]);
   assert.match(workbook.getWorksheet('填写说明').getCell('B9').value, /6\.1\.1\.1 账号策略/);
 
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-template-heading-path-'));
   const filePath = path.join(directory, 'template-sample.xlsx');
   try {
-    worksheet.addRow([ '6', '系统开发与供应链安全', '6.1 资源分配 > 6.1.1 一般要求 > 6.1.1.1 账号策略', '6.1.1 a)', '账号管理', '应保护账号。' ]);
+    worksheet.addRow([ '6', '系统开发与供应链安全', '6.1 资源分配 > 6.1.1 一般要求 > 6.1.1.1 账号策略', '6.1.1 a)', '账号管理', '云服务商应：', '应保护账号。' ]);
     await workbook.xlsx.writeFile(filePath);
     const result = await parseStandardImportFile(filePath, 'template-sample.xlsx');
     assert.deepEqual(result.chapters[0].items[0].headingPath, [
@@ -232,13 +245,14 @@ test('writes mapped standard fields inside one database transaction', async () =
     code: 'STD-1', name: '测试规范', standardType: 'national', version: '2026',
     chapters: [ { code: '8.1', name: '用户标识与鉴别', sortOrder: 0, items: [ {
       itemCode: '8.1.1', content: '账号管理要求', title: '账号管理',
+      explanation: '云服务商应：',
       headingPath: [ { level: 3, number: '8.1.1', title: '一般要求' } ],
     } ] } ],
   });
   assert.equal(result.itemCount, 1);
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
-  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"},{"level":3,"number":"8.1.1","title":"一般要求"}]', 1, '1-2026-08001' ]);
+  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '云服务商应：', '账号管理要求', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"},{"level":3,"number":"8.1.1","title":"一般要求"}]', 1, '1-2026-08001' ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
 });
@@ -319,8 +333,8 @@ test('merges uploaded content into an existing version atomically', async () => 
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
   assert.ok(itemInsert.statement.includes('ON CONFLICT (standard_version_id, item_code) DO UPDATE'));
   assert.deepEqual(itemInsert.values, [
-    'version-1', 'chapter-existing', '8.1.1', '账号管理', '更新后的内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 1, 'TEMP-version-1-8.1.1',
-    'version-1', 'chapter-existing', '8.1.2', null, '新增内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 2, 'TEMP-version-1-8.1.2',
+    'version-1', 'chapter-existing', '8.1.1', '账号管理', null, '更新后的内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 1, 'TEMP-version-1-8.1.1',
+    'version-1', 'chapter-existing', '8.1.2', null, null, '新增内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 2, 'TEMP-version-1-8.1.2',
   ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
