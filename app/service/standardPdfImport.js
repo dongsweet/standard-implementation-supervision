@@ -102,6 +102,28 @@ class StandardPdfImportService extends Service {
     return job;
   }
 
+  async remove(versionId, jobId, actorId) {
+    let result;
+    try {
+      result = await this.repository.remove(jobId, versionId, actorId);
+    } catch (error) {
+      if (error.code === 'IMPORT_JOB_NOT_FOUND') this.ctx.throw(404, error.message);
+      if (error.code === 'IMPORT_JOB_BUSY') this.ctx.throw(409, error.message);
+      throw error;
+    }
+    const keys = [ result.storageKey, result.comparisonStorageKey ].filter(Boolean);
+    const cleanupFailures = [];
+    for (const key of keys) {
+      try {
+        await this.storage.remove(key);
+      } catch (error) {
+        this.ctx.logger.warn('PDF standard import temporary file cleanup failed', { key, error: error.message });
+        cleanupFailures.push(key);
+      }
+    }
+    return { ...result, cleanupFailures };
+  }
+
   async smartReview(versionId, jobId, payload = {}) {
     const job = await this.find(versionId, jobId);
     if (job.status !== 'ready') this.ctx.throw(409, '只有待确认的PDF导入任务可以进行智能复核');

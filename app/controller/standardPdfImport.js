@@ -119,6 +119,30 @@ class StandardPdfImportController extends Controller {
       `PDF导入完成：${result.chapterCount}个章节，${result.itemCount}个标准项`
     ));
   }
+
+  async remove() {
+    const versionId = this.ctx.params.versionId;
+    try {
+      requireGlobalWrite(this.ctx);
+      const result = await this.ctx.service.standardPdfImport.remove(
+        versionId,
+        this.ctx.params.jobId,
+        this.ctx.session.userId
+      );
+      const suffix = result.cleanupFailures.length
+        ? '任务记录已清理，但部分临时文件删除失败，请联系管理员查看日志'
+        : result.status === 'completed'
+          ? '任务及临时文件已清理，已写入规范库的内容已保留'
+          : '任务及临时文件已清理';
+      this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent(suffix));
+    } catch (error) {
+      if ([ 404, 409 ].includes(error.status)) {
+        this.ctx.redirect(`/standards/versions/${versionId}?notice=` + encodeURIComponent('清理失败：' + error.message));
+        return;
+      }
+      throw error;
+    }
+  }
 }
 
 module.exports = StandardPdfImportController;

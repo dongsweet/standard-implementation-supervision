@@ -42,6 +42,50 @@ class StandardImportJobRepository {
     return result.rows;
   }
 
+  async remove(jobId, versionId, actorId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const current = await client.query(`
+        SELECT id, status, storage_key, comparison_storage_key
+        FROM standard_import_jobs
+        WHERE id = $1 AND standard_version_id = $2
+        FOR UPDATE`, [ jobId, versionId ]);
+      if (!current.rowCount) {
+        const error = new Error('PDF导入任务不存在');
+        error.code = 'IMPORT_JOB_NOT_FOUND';
+        throw error;
+      }
+      const job = current.rows[0];
+      if ([ 'queued', 'processing', 'applying' ].includes(job.status)) {
+        const error = new Error('任务正在处理中，暂不能清理');
+        error.code = 'IMPORT_JOB_BUSY';
+        throw error;
+      }
+      await client.query(`
+        DELETE FROM standard_import_jobs
+        WHERE id = $1 AND standard_version_id = $2`, [ jobId, versionId ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'delete_standard_pdf_import_job', 'standard_import_job', $2, $3)`, [
+        actorId || null,
+        jobId,
+        JSON.stringify({ versionId, status: job.status, storageKey: job.storage_key, comparisonStorageKey: job.comparison_storage_key }),
+      ]);
+      await client.query('COMMIT');
+      return {
+        status: job.status,
+        storageKey: job.storage_key,
+        comparisonStorageKey: job.comparison_storage_key,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async markProcessing(jobId) {
     await this.pool.query(`
       UPDATE standard_import_jobs

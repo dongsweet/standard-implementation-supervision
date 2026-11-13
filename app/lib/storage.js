@@ -18,6 +18,10 @@ class LocalStorageProvider {
   async get(key) {
     return fs.readFile(path.join(this.root, key));
   }
+
+  async remove(key) {
+    await fs.rm(path.join(this.root, key), { force: true });
+  }
 }
 
 function createStorageProvider(config) {
