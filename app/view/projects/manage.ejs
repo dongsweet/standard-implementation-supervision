@@ -1,7 +1,9 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div class="text-secondary">项目：<strong><%= project.name %></strong><% if (project.source_project_name) { %>　基于：<strong><%= project.source_project_name %></strong><% } %></div>
-  <a class="btn btn-sm btn-outline-primary ms-auto" href="/project-overview">打开项目总览</a>
+  <div class="ms-auto d-flex gap-2"><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#projectWorkbookImportModal">导入项目整理工作簿</button><a class="btn btn-sm btn-outline-primary" href="/project-overview">打开项目总览</a></div>
 </div>
+
+<div class="modal fade" id="projectWorkbookImportModal" tabindex="-1" aria-labelledby="projectWorkbookImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" action="/projects/<%= project.id %>/data-imports" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="projectWorkbookImportModalLabel">导入项目整理工作簿</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><p class="small text-secondary">支持参考“曙光云多云同构项目表-全部整理版.xlsx”的多工作表宽表。上传后先进行条款匹配和正文差异预览，再确认写入。</p><input class="form-control" type="file" name="file" accept=".xlsx" required><div class="form-text mt-2">系统按条款号匹配当前项目标准项；建议先导入到测试项目核对。</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">上传并预览</button></div></form></div></div></div>
 
 <div class="row g-3 mb-3">
   <div class="col-12 col-xl-5"><div class="card h-100">

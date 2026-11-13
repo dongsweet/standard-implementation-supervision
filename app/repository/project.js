@@ -163,6 +163,8 @@ class ProjectRepository {
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
              COALESCE(psa.unified_requirement, '') AS unified_requirement,
              COALESCE(psa.expected_evidence, '') AS expected_evidence,
+             COALESCE(psa.pending_evidence, '') AS pending_evidence,
+             COALESCE(psa.responsible_text, '') AS responsible_text,
              COALESCE(psa.applicability, 'unspecified') AS applicability,
              COALESCE(psa.applicability_scope, '') AS applicability_scope,
              COALESCE(psa.status, 'unassessed') AS answer_status,
