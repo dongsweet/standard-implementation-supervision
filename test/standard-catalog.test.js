@@ -26,6 +26,12 @@ function createRepository({ versionRow = { id: 'version-1', standard_id: 'standa
         }
         return { rowCount: versionRow ? 1 : 0, rows: versionRow ? [ versionRow ] : [] };
       }
+      if (statement.startsWith('SELECT sv.version, s.code AS standard_code')) {
+        return { rowCount: 1, rows: [ { version: '2026', standard_code: 'GB/T 31168' } ] };
+      }
+      if (statement.startsWith('SELECT id, code, sort_order FROM standard_chapters')) return { rowCount: 0, rows: [] };
+      if (statement.startsWith('SELECT si.id, si.chapter_id, si.item_code')) return { rowCount: 0, rows: [] };
+      if (statement.startsWith('UPDATE standard_items')) return { rowCount: 0, rows: [] };
       throw new Error('Unexpected query: ' + statement);
     },
     release() {

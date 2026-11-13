@@ -24,7 +24,7 @@
     </div>
     <div class="table-responsive"><table class="table table-sm table-striped align-middle mb-0">
       <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>标准内容</th><th>来源页</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { %><tr><td><span class="font-monospace"><%= item.standardNumber %></span></td><td><strong><%= item.itemCode %></strong></td><td><%= item.title || '-' %></td><td><%= item.content %></td><td><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
+        <% (chapter.items || []).forEach(item => { %><tr><td><span class="font-monospace"><%= item.standardNumber %></span></td><td><strong><%= item.itemCode %></strong></td><td><% if (Array.isArray(item.headingPath) && item.headingPath.length) { %><div class="small text-secondary mb-1"><% item.headingPath.forEach(heading => { %><div style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><%= item.title || '-' %></td><td><%= item.content %></td><td><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
         <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>

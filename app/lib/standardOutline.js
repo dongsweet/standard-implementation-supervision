@@ -6,7 +6,7 @@ function normalizeNumber(value) {
 
 function inferLevel(originalNumber, kind = 'heading') {
   const value = normalizeNumber(originalNumber);
-  const numbered = value.match(/^(\d{1,3}(?:\.\d{1,3}){0,3})(?:\s*(?:\(\d{1,3}\)|[A-Za-z][_)）]))?/);
+  const numbered = value.match(/^(\d{1,3}(?:\.\d{1,3})*)(?:\s*(?:\(\d{1,3}\)|[A-Za-z][_)）]))?/);
   if (numbered) {
     const headingLevel = numbered[1].split('.').length;
     const hasListItem = numbered[0].length > numbered[1].length;

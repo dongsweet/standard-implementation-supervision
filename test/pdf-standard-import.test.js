@@ -144,7 +144,7 @@ test('uses section 6.1 as chapter and aggregates skipped child content for a lev
   ];
   const byId = new Map(nodes.map(node => [ node.id, node ]));
   const ancestors = repository.ancestors(nodes[2], byId);
-  assert.equal(repository.chapterNode(ancestors, nodes[2]).originalNumber, '6.1');
+  assert.equal(repository.chapterNode(ancestors, nodes[2]).originalNumber, '6');
 
   const children = new Map([ [ 'n3', [ nodes[3], nodes[4] ] ] ]);
   const selection = new Map([ [ 'n3', 'item' ], [ 'n4', 'skip' ], [ 'n5', 'skip' ] ]);

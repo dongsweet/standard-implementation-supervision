@@ -178,7 +178,7 @@ test('writes mapped standard fields inside one database transaction', async () =
   assert.equal(result.itemCount, 1);
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
-  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', 1, '1-8.1-0001' ]);
+  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 1, '1-2026-08001' ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
 });
@@ -217,14 +217,14 @@ test('merges uploaded content into an existing version atomically', async () => 
       if (statement === 'SELECT id FROM standard_versions WHERE id = $1 FOR UPDATE') {
         return { rows: [ { id: 'version-1' } ], rowCount: 1 };
       }
-      if (statement === 'SELECT s.code FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id WHERE sv.id = $1') {
-        return { rows: [ { code: 'GB/T 31168' } ], rowCount: 1 };
+      if (statement === 'SELECT s.code, sv.version FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id WHERE sv.id = $1') {
+        return { rows: [ { code: 'GB/T 31168', version: '2023' } ], rowCount: 1 };
       }
       if (statement === 'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1') {
         return { rows: [ { id: 'chapter-existing', code: '8.1' } ], rowCount: 1 };
       }
       if (statement.startsWith('INSERT INTO standard_chapters ')) {
-        return { rows: [ { id: 'chapter-existing', code: '8.1' } ], rowCount: 1 };
+        return { rows: [ { id: 'chapter-existing', code: '8' } ], rowCount: 1 };
       }
       if (statement === 'SELECT id, item_code FROM standard_items WHERE standard_version_id = $1') {
         return { rows: [ { id: 'item-existing', item_code: '8.1.1' } ], rowCount: 1 };
@@ -235,6 +235,11 @@ test('merges uploaded content into an existing version atomically', async () => 
           { id: 'item-new', item_code: '8.1.2' },
         ], rowCount: 2 };
       }
+      if (statement.startsWith('SELECT sv.version, s.code AS standard_code')) return { rows: [ { version: '2023', standard_code: 'GB/T 31168' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT id, code, sort_order FROM standard_chapters')) return { rows: [ { id: 'chapter-existing', code: '8', sort_order: 0 } ], rowCount: 1 };
+      if (statement.startsWith('SELECT si.id, si.chapter_id, si.item_code')) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('UPDATE standard_chapters SET standard_number')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('UPDATE standard_items SET standard_number')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('DELETE FROM standard_item_requirements ')) return { rows: [], rowCount: 2 };
       return { rows: [], rowCount: 0 };
     },
@@ -254,8 +259,8 @@ test('merges uploaded content into an existing version atomically', async () => 
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
   assert.ok(itemInsert.statement.includes('ON CONFLICT (standard_version_id, item_code) DO UPDATE'));
   assert.deepEqual(itemInsert.values, [
-    'version-1', 'chapter-existing', '8.1.1', '账号管理', '更新后的内容', 1, '31168-8.1-0001',
-    'version-1', 'chapter-existing', '8.1.2', null, '新增内容', 2, '31168-8.1-0002',
+    'version-1', 'chapter-existing', '8.1.1', '账号管理', '更新后的内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 1, 'TEMP-version-1-8.1.1',
+    'version-1', 'chapter-existing', '8.1.2', null, '新增内容', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 2, 'TEMP-version-1-8.1.2',
   ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);

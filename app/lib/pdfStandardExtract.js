@@ -105,12 +105,12 @@ function isHeaderOrFooter(line) {
 }
 
 function heading(text) {
-  const match = cleanLine(text).match(/^(\d{1,3}(?:\.\d{1,3}){0,3})\s*["'*“”]?\s*(\p{L}.*)$/u);
+  const match = cleanLine(text).match(/^(\d{1,3}(?:\.\d{1,3})*)\s*["'*“”]?\s*(\p{L}.*)$/u);
   if (!match) return null;
   const number = match[1];
   const title = match[2].trim();
   const level = number.split('.').length;
-  if (level > 3 || title.length < 2) return null;
+  if (title.length < 2) return null;
   if (/^[a-z][）)]/i.test(title)) return null;
   if (/^(?:天|年|个月|月|日|小时|分钟|秒|次|项|个|台|人)$/.test(title)) return null;
   return { kind: 'heading', number, title, level };

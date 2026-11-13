@@ -1,9 +1,40 @@
 'use strict';
 
-const { chapterStandardNumber, itemStandardNumber } = require('../lib/standardNumber');
+const { chapterStandardNumber, itemStandardNumber, recalculateStandardNumbers, topLevelChapterCode } = require('../lib/standardNumber');
 
 function normalizeCode(value) {
   return String(value || '').normalize('NFKC').toUpperCase();
+}
+
+function normalizeChapters(chapters) {
+  const grouped = new Map();
+  for (const chapter of chapters || []) {
+    const rootCode = topLevelChapterCode(chapter.code);
+    let target = grouped.get(normalizeCode(rootCode));
+    if (!target) {
+      target = {
+        code: rootCode,
+        name: String(chapter.code) === String(rootCode) ? chapter.name : `第${rootCode}章`,
+        sortOrder: chapter.sortOrder || 0,
+        items: [],
+      };
+      grouped.set(normalizeCode(rootCode), target);
+    }
+    target.sortOrder = Math.min(target.sortOrder, chapter.sortOrder || 0);
+    if (String(chapter.code) === String(rootCode)) target.name = chapter.name;
+    for (const item of chapter.items || []) {
+      const headingPath = [ ...(item.headingPath || []) ];
+      if (String(chapter.code || '') !== String(rootCode)) {
+        headingPath.unshift({
+          level: String(chapter.code).split('.').length,
+          number: chapter.code,
+          title: chapter.name,
+        });
+      }
+      target.items.push({ ...item, headingPath });
+    }
+  }
+  return Array.from(grouped.values()).sort((left, right) => left.sortOrder - right.sortOrder || left.code.localeCompare(right.code));
 }
 
 async function insertMany(client, table, columns, rows, options = {}) {
@@ -100,6 +131,7 @@ class StandardCatalogRepository {
   }
 
   async importStandard({ code, name, description, standardType, issuingOrganization, version, chapters }) {
+    chapters = normalizeChapters(chapters);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -117,7 +149,7 @@ class StandardCatalogRepository {
       for (const chapter of chapters) {
         const result = await client.query(
           'INSERT INTO standard_chapters (standard_version_id, code, name, sort_order, standard_number) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-          [ standardVersion.id, chapter.code, chapter.name, chapter.sortOrder, chapterStandardNumber(standard.code, chapter.code) ]
+          [ standardVersion.id, chapter.code, chapter.name, chapter.sortOrder, chapterStandardNumber(standard.code, version, chapter.code) ]
         );
         chapterIds.set(chapter.code, result.rows[0].id);
       }
@@ -125,15 +157,16 @@ class StandardCatalogRepository {
       const items = chapters.flatMap(chapter => chapter.items.map((item, index) => ({
         ...item, chapterId: chapterIds.get(chapter.code),
         importOrder: index + 1,
-        standardNumber: itemStandardNumber(standard.code, chapter.code, index + 1),
+        standardNumber: itemStandardNumber(standard.code, version, chapter.code, index + 1),
       })));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'import_order', 'standard_number' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'heading_path', 'import_order', 'standard_number' ],
         items.map(item => [
           standardVersion.id, item.chapterId, item.itemCode, item.title || null, item.content,
-          item.importOrder, item.standardNumber,
+          JSON.stringify(item.headingPath || []), item.importOrder, item.standardNumber,
         ]),
         { returning: 'id, item_code' });
+      await recalculateStandardNumbers(client, standardVersion.id);
       await client.query('COMMIT');
       return {
         standardId: standard.id,
@@ -153,6 +186,7 @@ class StandardCatalogRepository {
   }
 
   async importVersionContent({ versionId, chapters }) {
+    chapters = normalizeChapters(chapters);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -162,10 +196,11 @@ class StandardCatalogRepository {
         return null;
       }
       const standard = await client.query(`
-        SELECT s.code
+        SELECT s.code, sv.version
         FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
         WHERE sv.id = $1`, [ versionId ]);
       const standardCode = standard.rows[0].code;
+      const versionLabel = standard.rows[0].version;
 
       const existingChapters = await client.query(
         'SELECT id, code FROM standard_chapters WHERE standard_version_id = $1',
@@ -176,7 +211,7 @@ class StandardCatalogRepository {
       const chapterRows = chapters.map(chapter => {
         const existing = chapterByExactCode.get(chapter.code) || chapterByNormalizedCode.get(normalizeCode(chapter.code));
         const code = existing ? existing.code : chapter.code;
-        return [ versionId, code, chapter.name, chapter.sortOrder, chapterStandardNumber(standardCode, code) ];
+        return [ versionId, code, chapter.name, chapter.sortOrder, chapterStandardNumber(standardCode, versionLabel, code) ];
       });
       const savedChapters = await insertMany(client, 'standard_chapters',
         [ 'standard_version_id', 'code', 'name', 'sort_order', 'standard_number' ], chapterRows, {
@@ -200,21 +235,23 @@ class StandardCatalogRepository {
           chapterId: chapterIds.get(normalizeCode(chapter.code)),
           databaseItemCode: code,
           importOrder,
-          standardNumber: itemStandardNumber(standardCode, chapter.code, importOrder),
+          standardNumber: `TEMP-${versionId}-${code}`,
         };
       }));
       await insertMany(client, 'standard_items',
-        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'import_order', 'standard_number' ],
+        [ 'standard_version_id', 'chapter_id', 'item_code', 'title', 'content', 'heading_path', 'import_order', 'standard_number' ],
         items.map(item => [
           versionId, item.chapterId, item.databaseItemCode, item.title || null, item.content,
-          item.importOrder, item.standardNumber,
+          JSON.stringify(item.headingPath || []), item.importOrder, item.standardNumber,
         ]),
         {
           onConflict: `ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
             chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
           returning: 'id, item_code',
         });
+      await recalculateStandardNumbers(client, versionId);
       await client.query('COMMIT');
       return { chapterCount: chapters.length, itemCount: items.length };
     } catch (error) {
@@ -252,6 +289,7 @@ class StandardCatalogRepository {
         await client.query('ROLLBACK');
         return null;
       }
+      await recalculateStandardNumbers(client, versionId);
       await client.query('COMMIT');
       return { ...standard.rows[0], version: standardVersion.rows[0] };
     } catch (error) {
@@ -274,7 +312,7 @@ class StandardCatalogRepository {
              count(si.id)::integer AS item_count,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'standardNumber', si.standard_number,
-               'itemCode', si.item_code, 'title', si.title, 'content', si.content,
+             'itemCode', si.item_code, 'title', si.title, 'content', si.content, 'headingPath', si.heading_path,
                'sourcePageFrom', si.source_page_from, 'sourcePageTo', si.source_page_to
              ) ORDER BY si.import_order, si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS items
       FROM standard_chapters sc
@@ -335,17 +373,32 @@ class StandardCatalogRepository {
   }
 
   async createChapter({ versionId, code, name, sortOrder }) {
-    const standard = await this.pool.query(`
-      SELECT s.code
-      FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
-      WHERE sv.id = $1`, [ versionId ]);
-    if (!standard.rowCount) return null;
-    const result = await this.pool.query(`
-      INSERT INTO standard_chapters (standard_version_id, code, name, sort_order, standard_number)
-      VALUES ($1, $2, $3, $4, $5) RETURNING *`, [
-      versionId, code, name, sortOrder || 0, chapterStandardNumber(standard.rows[0].code, code),
-    ]);
-    return result.rows[0];
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const standard = await client.query(`
+        SELECT s.code, sv.version
+        FROM standard_versions sv JOIN standards s ON s.id = sv.standard_id
+        WHERE sv.id = $1 FOR UPDATE`, [ versionId ]);
+      if (!standard.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const result = await client.query(`
+        INSERT INTO standard_chapters (standard_version_id, code, name, sort_order, standard_number)
+        VALUES ($1, $2, $3, $4, $5) RETURNING *`, [
+        versionId, code, name, sortOrder || 0,
+        chapterStandardNumber(standard.rows[0].code, standard.rows[0].version, code),
+      ]);
+      await recalculateStandardNumbers(client, versionId);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async findChapter(chapterId) {
@@ -363,14 +416,14 @@ class StandardCatalogRepository {
     try {
       await client.query('BEGIN');
       const chapter = await client.query(`
-        SELECT sc.code, s.code AS standard_code,
+        SELECT sc.code, s.code AS standard_code, sv.version,
                COALESCE(MAX(si.import_order), 0)::integer + 1 AS import_order
         FROM standard_chapters sc
         JOIN standard_versions sv ON sv.id = sc.standard_version_id
         JOIN standards s ON s.id = sv.standard_id
         LEFT JOIN standard_items si ON si.chapter_id = sc.id
         WHERE sc.id = $1 AND sc.standard_version_id = $2
-        GROUP BY sc.id, sc.code, s.code`, [ chapterId, versionId ]);
+        GROUP BY sc.id, sc.code, s.code, sv.version`, [ chapterId, versionId ]);
       if (!chapter.rowCount) {
         const error = new Error('章节不存在');
         error.code = 'MISSING_CHAPTER';
@@ -378,13 +431,14 @@ class StandardCatalogRepository {
       }
       const result = await client.query(`
       INSERT INTO standard_items
-        (standard_version_id, chapter_id, item_code, title, content, import_order, standard_number)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (standard_version_id, chapter_id, item_code, title, content, heading_path, import_order, standard_number)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`, [
-        versionId, chapterId, itemCode, title || null, content,
+        versionId, chapterId, itemCode, title || null, content, '[]',
         chapter.rows[0].import_order,
-        itemStandardNumber(chapter.rows[0].standard_code, chapter.rows[0].code, chapter.rows[0].import_order),
+        `TEMP-${versionId}-${itemCode}`,
       ]);
+      await recalculateStandardNumbers(client, versionId);
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {
@@ -401,7 +455,7 @@ class StandardCatalogRepository {
     try {
       await client.query('BEGIN');
       const chapter = await client.query(`
-        SELECT sc.code, s.code AS standard_code
+        SELECT sc.code, s.code AS standard_code, sv.version
         FROM standard_chapters sc
         JOIN standard_versions sv ON sv.id = sc.standard_version_id
         JOIN standards s ON s.id = sv.standard_id
@@ -414,15 +468,17 @@ class StandardCatalogRepository {
       for (const [ index, row ] of rows.entries()) {
         await client.query(`
           INSERT INTO standard_items
-            (standard_version_id, chapter_id, item_code, title, content, import_order, standard_number)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (standard_version_id, chapter_id, item_code, title, content, heading_path, import_order, standard_number)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
             chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
+            heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
-        [ versionId, chapterId, row.itemCode, row.title || null, row.content, index + 1,
-          itemStandardNumber(chapter.rows[0].standard_code, chapter.rows[0].code, index + 1) ]);
+        [ versionId, chapterId, row.itemCode, row.title || null, row.content,
+          JSON.stringify(row.headingPath || []), index + 1, `TEMP-${versionId}-${row.itemCode}` ]);
         count += 1;
       }
+      await recalculateStandardNumbers(client, versionId);
       await client.query('COMMIT');
       return count;
     } catch (error) {

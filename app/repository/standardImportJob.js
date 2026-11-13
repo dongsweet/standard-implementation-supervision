@@ -1,7 +1,7 @@
 'use strict';
 
 const { recalculateHierarchy } = require('../lib/standardOutline');
-const { chapterStandardNumber, itemStandardNumber } = require('../lib/standardNumber');
+const { chapterStandardNumber, recalculateStandardNumbers } = require('../lib/standardNumber');
 
 class StandardImportJobRepository {
   constructor(pool) {
@@ -109,7 +109,7 @@ class StandardImportJobRepository {
     try {
       await client.query('BEGIN');
       const jobResult = await client.query(`
-        SELECT j.id, j.result, s.code AS standard_code
+        SELECT j.id, j.result, s.code AS standard_code, sv.version
         FROM standard_import_jobs j
         JOIN standard_versions sv ON sv.id = j.standard_version_id
         JOIN standards s ON s.id = sv.standard_id
@@ -175,7 +175,7 @@ class StandardImportJobRepository {
           ON CONFLICT (standard_version_id, code) DO UPDATE SET name = EXCLUDED.name, standard_number = EXCLUDED.standard_number
           RETURNING id, standard_number`, [
           versionId, code, name, chapterIds.size * 10,
-          chapterStandardNumber(jobResult.rows[0].standard_code, code),
+          chapterStandardNumber(jobResult.rows[0].standard_code, jobResult.rows[0].version, code),
         ]);
         chapterIds.set(code, inserted.rows[0].id);
       }
@@ -185,6 +185,14 @@ class StandardImportJobRepository {
         const ancestors = this.ancestors(item, byId);
         const chapterNode = this.chapterNode(ancestors, item);
         const chapterCode = chapterNode.originalNumber || chapterNode.headingNumber;
+        const headings = [ ...ancestors ].reverse().filter(node => node.kind === 'heading');
+        const chapterHeading = headings.find(node => node.level === 1) || headings[0] || chapterNode;
+        const headingPath = headings
+          .filter(node => node !== chapterHeading)
+          .map(node => ({ level: node.level, number: node.originalNumber || node.headingNumber || '', title: node.title || '' }));
+        if (item.kind === 'heading' && item !== chapterHeading) {
+          headingPath.push({ level: item.level, number: item.originalNumber || item.headingNumber || '', title: item.title || '' });
+        }
         const prelude = ancestors
           .filter(node => node.kind === 'heading' && node.content)
           .map(node => node.content)
@@ -193,25 +201,27 @@ class StandardImportJobRepository {
           ? [ item.content, this.descendantContent(item.id, children, selection) ].filter(Boolean).join('\n')
           : item.content;
         const content = [ prelude, ownContent ].filter(Boolean).join('\n');
-        const title = item.title || chapterNode.title || null;
+        const title = item.kind === 'heading' ? null : item.title || null;
         const importOrder = (chapterOrders.get(chapterCode) || 0) + 1;
         chapterOrders.set(chapterCode, importOrder);
         await client.query(`
           INSERT INTO standard_items
             (standard_version_id, chapter_id, item_code, title, content,
-             source_page_from, source_page_to, source_excerpt, import_job_id,
-             import_order, standard_number)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            source_page_from, source_page_to, source_excerpt, import_job_id,
+             heading_path, import_order, standard_number)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           ON CONFLICT (standard_version_id, item_code) DO UPDATE SET
             chapter_id = EXCLUDED.chapter_id, title = EXCLUDED.title, content = EXCLUDED.content,
             source_page_from = EXCLUDED.source_page_from, source_page_to = EXCLUDED.source_page_to,
             source_excerpt = EXCLUDED.source_excerpt, import_job_id = EXCLUDED.import_job_id,
+            heading_path = EXCLUDED.heading_path,
             import_order = EXCLUDED.import_order, standard_number = EXCLUDED.standard_number`,
         [ versionId, chapterIds.get(chapterCode), item.originalNumber, title, content,
           item.pageFrom || null, item.pageTo || item.pageFrom || null,
-          content.slice(0, 1000), jobId, importOrder,
-          itemStandardNumber(jobResult.rows[0].standard_code, chapterCode, importOrder) ]);
+          content.slice(0, 1000), jobId, JSON.stringify(headingPath), importOrder,
+          [ 'TEMP', versionId, item.originalNumber ].join('-') ]);
       }
+      await recalculateStandardNumbers(client, versionId);
 
       await client.query(`
         UPDATE standard_import_jobs
@@ -246,8 +256,7 @@ class StandardImportJobRepository {
 
   chapterNode(ancestors, item) {
     const headings = [ item, ...ancestors ].filter(node => node.kind === 'heading');
-    return headings.find(node => node.level === 2)
-      || headings.find(node => node.level === 1)
+    return headings.find(node => node.level === 1)
       || headings[0]
       || item;
   }
