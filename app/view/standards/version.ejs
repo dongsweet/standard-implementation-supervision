@@ -5,7 +5,7 @@
 <div class="alert alert-info py-2"><strong>维护说明：</strong>推荐直接上传规范PDF。系统会 OCR 识别章节和条款，经人工选择粒度、跳过章节后写入；Excel/TSV 仍可用于结构化补录。标准化编号按“规范号-章节号-导入顺序号”生成，原文编号原样保留。</div>
 
 <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
-  <a class="btn btn-outline-secondary" href="/public/standard-import-template.xlsx?v=3" download>下载标准原文模板</a>
+  <a class="btn btn-outline-secondary" href="/public/standard-import-template.xlsx?v=4" download>下载标准原文模板</a>
   <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#importVersionContentModal">导入Excel/TSV</button>
   <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#pdfImportModal">导入PDF并预览</button>
   <button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#newChapterModal">新增章节</button>
@@ -78,7 +78,7 @@
     <div class="modal-header"><h2 class="modal-title fs-5" id="importVersionContentModalLabel">仅导入规范内容</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-12"><div class="alert alert-info py-2 mb-0">当前规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>，版本：<strong><%= version.version %></strong>。此操作只导入章节和标准项，不修改规范编号、名称、类型、组织或版本标识。</div></div>
-      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=3" download>Excel模板</a>；也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=3" download>TSV格式</a>。应用口径和项目证据在项目页填写。</div></div>
+      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=4" download>Excel模板</a>；“标题路径”列支持任意层级，用“ &gt; ”分隔，例如：6.1 资源分配 &gt; 6.1.1 一般要求。也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=4" download>TSV格式</a>。应用口径和项目证据在项目页填写。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入内容</button></div>
   </form>

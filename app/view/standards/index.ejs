@@ -82,7 +82,7 @@
       <div class="col-md-8"><label class="form-label" for="importStandardName">规范名称</label><input class="form-control" id="importStandardName" name="name" maxlength="300" required></div>
       <div class="col-md-4"><label class="form-label" for="importStandardOrganization">发布/制定组织</label><input class="form-control" id="importStandardOrganization" name="issuingOrganization" maxlength="300"></div>
       <div class="col-12"><label class="form-label" for="importStandardDescription">规范说明</label><textarea class="form-control" id="importStandardDescription" name="description" rows="2"></textarea></div>
-      <div class="col-12"><label class="form-label" for="standardImportFile">规范内容文件</label><input class="form-control" id="standardImportFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=3" download>标准原文Excel模板</a>；也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=3" download>TSV格式</a>。</div></div>
+      <div class="col-12"><label class="form-label" for="standardImportFile">规范内容文件</label><input class="form-control" id="standardImportFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=4" download>标准原文Excel模板</a>；“标题路径”列支持任意层级，用“ &gt; ”分隔，例如：6.1 资源分配 &gt; 6.1.1 一般要求。也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=4" download>TSV格式</a>。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入并创建规范</button></div>
   </form>

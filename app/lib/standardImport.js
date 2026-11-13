@@ -11,6 +11,7 @@ const FIELD_ALIASES = {
   chapterCode: [ '章节编号' ],
   chapterName: [ '章节名称' ],
   sectionName: [ '标准名称', '标准子类' ],
+  headingPath: [ '标题路径', '标准项标题路径', '层级标题' ],
   itemCode: [ '标准项编号', '标准编号', '对应标准号' ],
   itemTitle: [ '标准项标题' ],
   content: [ '标准内容', '标准项内容', '标准要求' ],
@@ -100,6 +101,24 @@ function splitChapter(value) {
   return { code: text, name: text };
 }
 
+function parseHeadingPath(value, chapterCode) {
+  const text = cellText(value);
+  if (!text) return [];
+  const firstLevel = cellText(chapterCode).split('.').length + 1;
+  return text.split(/\s*(?:>|＞)\s*/)
+    .map((part, index) => {
+      const segment = part.trim();
+      if (!segment) return null;
+      const match = segment.match(/^((?:\d+\.)*\d+)(?:\s*[、.)）]?\s*)(.*)$/);
+      return {
+        level: firstLevel + index,
+        number: match ? match[1] : '',
+        title: match ? match[2].trim() : segment,
+      };
+    })
+    .filter(Boolean);
+}
+
 function parseStandardRows(sheets, options = {}) {
   const { allowDuplicateItemCodes = false } = options;
   const chapters = [];
@@ -166,10 +185,12 @@ function parseStandardRows(sheets, options = {}) {
         throw importError('章节编号“' + chapterCode + '”对应了多个不同章节名称');
       }
 
+      const headingPath = parseHeadingPath(value('headingPath'), chapterCode);
       chapter.items.push({
         itemCode,
         title: value('itemTitle') || null,
         content,
+        ...(headingPath.length ? { headingPath } : {}),
       });
     }
   }

@@ -74,6 +74,32 @@ test('recognizes supervision workbook standard aliases', () => {
   assert.equal(result.chapters[0].items[0].itemCode, '6001');
 });
 
+test('imports a variable-depth heading path without changing the standard item number', () => {
+  const result = parseStandardRows([ { name: '多级标题', rows: [
+    [ '章节编号', '章节名称', '标准项编号', '标准项标题', '标题路径', '标准内容' ],
+    [ '6', '系统开发与供应链安全', '6.1.1 a)', '资源保护', '6.1 资源分配 > 6.1.1 一般要求 > 6.1.1.1 账号策略', '应保护资源。' ],
+  ] } ]);
+  const item = result.chapters[0].items[0];
+  assert.equal(item.itemCode, '6.1.1 a)');
+  assert.equal(item.title, '资源保护');
+  assert.deepEqual(item.headingPath, [
+    { level: 2, number: '6.1', title: '资源分配' },
+    { level: 3, number: '6.1.1', title: '一般要求' },
+    { level: 4, number: '6.1.1.1', title: '账号策略' },
+  ]);
+});
+
+test('continues heading depth after a subsection used as the imported chapter', () => {
+  const result = parseStandardRows([ { name: '多级标题', rows: [
+    [ '章节编号', '章节名称', '标准项编号', '标题路径', '标准内容' ],
+    [ '8.1', '用户标识与鉴别', '8.1.1', '8.1.1 一般要求 > 8.1.1.1 账号策略', '应保护账号。' ],
+  ] } ]);
+  assert.deepEqual(result.chapters[0].items[0].headingPath, [
+    { level: 3, number: '8.1.1', title: '一般要求' },
+    { level: 4, number: '8.1.1.1', title: '账号策略' },
+  ]);
+});
+
 test('rejects duplicate item codes across sheets after Unicode normalization', () => {
   const header = [ '章节编号', '章节名称', '标准项编号', '标准内容' ];
   const sheets = [
@@ -102,13 +128,22 @@ test('parses a TSV upload with quoted fields', async () => {
   const filePath = path.join(directory, 'source.tsv');
   try {
     const rows = [
-      [ '章节编号', '章节名称', '标准项编号', '标准项标题', '标准内容', '是否为重点项', '多云统管体系具体要求' ],
-      [ '8.1', '用户标识与鉴别', '8.1.1', '账号管理', '账号管理要求', '是', '统一策略' ],
+      [ '章节编号', '章节名称', '标题路径', '标准项编号', '标准项标题', '标准内容' ],
+      [ '8', '用户标识与鉴别', '8.1 账号管理 > 8.1.1 身份认证 > 8.1.1.1 口令', '8.1.1', '账号管理', '账号管理要求' ],
     ];
     await fs.writeFile(filePath, rows.map(row => row.join(tab)).join(newline), 'utf8');
     const result = await parseStandardImportFile(filePath, 'source.tsv');
     assert.equal(result.itemCount, 1);
-    assert.deepEqual(result.chapters[0].items[0], { itemCode: '8.1.1', title: '账号管理', content: '账号管理要求' });
+    assert.deepEqual(result.chapters[0].items[0], {
+      itemCode: '8.1.1',
+      title: '账号管理',
+      content: '账号管理要求',
+      headingPath: [
+        { level: 2, number: '8.1', title: '账号管理' },
+        { level: 3, number: '8.1.1', title: '身份认证' },
+        { level: 4, number: '8.1.1.1', title: '口令' },
+      ],
+    });
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -153,6 +188,30 @@ test('parses xlsx workbooks with full-column data validations', { skip: !ExcelJS
   }
 });
 
+test('the downloadable Excel template exposes and imports arbitrary-depth heading paths', { skip: !ExcelJS }, async () => {
+  const templatePath = path.join(__dirname, '../app/public/standard-import-template.xlsx');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(templatePath);
+  const worksheet = workbook.getWorksheet('标准原文');
+  assert.deepEqual(worksheet.getRow(1).values.slice(1), [ '章节编号', '章节名称', '标题路径', '标准项编号', '标准项标题', '标准内容' ]);
+  assert.match(workbook.getWorksheet('填写说明').getCell('B9').value, /6\.1\.1\.1 账号策略/);
+
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-template-heading-path-'));
+  const filePath = path.join(directory, 'template-sample.xlsx');
+  try {
+    worksheet.addRow([ '6', '系统开发与供应链安全', '6.1 资源分配 > 6.1.1 一般要求 > 6.1.1.1 账号策略', '6.1.1 a)', '账号管理', '应保护账号。' ]);
+    await workbook.xlsx.writeFile(filePath);
+    const result = await parseStandardImportFile(filePath, 'template-sample.xlsx');
+    assert.deepEqual(result.chapters[0].items[0].headingPath, [
+      { level: 2, number: '6.1', title: '资源分配' },
+      { level: 3, number: '6.1.1', title: '一般要求' },
+      { level: 4, number: '6.1.1.1', title: '账号策略' },
+    ]);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('writes mapped standard fields inside one database transaction', async () => {
   const queries = [];
   const client = {
@@ -173,12 +232,13 @@ test('writes mapped standard fields inside one database transaction', async () =
     code: 'STD-1', name: '测试规范', standardType: 'national', version: '2026',
     chapters: [ { code: '8.1', name: '用户标识与鉴别', sortOrder: 0, items: [ {
       itemCode: '8.1.1', content: '账号管理要求', title: '账号管理',
+      headingPath: [ { level: 3, number: '8.1.1', title: '一般要求' } ],
     } ] } ],
   });
   assert.equal(result.itemCount, 1);
   assert.ok(queries.some(query => query.statement === 'COMMIT'));
   const itemInsert = queries.find(query => query.statement.startsWith('INSERT INTO standard_items '));
-  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"}]', 1, '1-2026-08001' ]);
+  assert.deepEqual(itemInsert.values, [ 'version-1', 'chapter-1', '8.1.1', '账号管理', '账号管理要求', '[{"level":2,"number":"8.1","title":"用户标识与鉴别"},{"level":3,"number":"8.1.1","title":"一般要求"}]', 1, '1-2026-08001' ]);
   assert.equal(queries.some(query => query.statement.includes('standard_item_requirements')), false);
   assert.equal(queries.some(query => query.statement.includes('standard_provider_assignments')), false);
 });
