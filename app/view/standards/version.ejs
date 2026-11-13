@@ -78,7 +78,7 @@
     <div class="modal-header"><h2 class="modal-title fs-5" id="importVersionContentModalLabel">仅导入规范内容</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-12"><div class="alert alert-info py-2 mb-0">当前规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>，版本：<strong><%= version.version %></strong>。此操作只导入章节和标准项，不修改规范编号、名称、类型、组织或版本标识。</div></div>
-      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=4" download>Excel模板</a>；“标题路径”列支持任意层级，用“ &gt; ”分隔，例如：6.1 资源分配 &gt; 6.1.1 一般要求。也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=4" download>TSV格式</a>。应用口径和项目证据在项目页填写。</div></div>
+      <div class="col-12"><label class="form-label" for="versionContentFile">规范内容文件</label><input class="form-control" id="versionContentFile" name="file" type="file" accept=".xlsx,.tsv" required><div class="form-text">文件最大15MB。建议使用<a href="/public/standard-import-template.xlsx?v=4" download>Excel模板</a>；“标题路径”列支持任意层级，用“ &gt; ”分隔，例如：6.1 资源分配 &gt; 6.1.1 一般要求 &gt; 6.1.1.1 账号策略。也支持原始多工作表Excel和<a href="/public/standard-import-template.tsv?v=4" download>TSV格式</a>。应用口径和项目证据在项目页填写。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">导入内容</button></div>
   </form>
