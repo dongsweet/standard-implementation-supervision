@@ -99,6 +99,12 @@ exports.up = pgm => {
     JOIN widths USING (standard_version_id, root_code)
     WHERE grouped.id = si.id
   `);
+  pgm.sql(`
+    UPDATE project_standard_items psi
+    SET standard_number_snapshot = si.standard_number
+    FROM standard_items si
+    WHERE si.id = psi.standard_item_id
+  `);
   pgm.createIndex('standard_chapters', [ 'standard_version_id', 'standard_number' ], {
     name: 'standard_chapters_version_standard_number_idx',
   });
