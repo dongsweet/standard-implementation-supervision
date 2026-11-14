@@ -109,10 +109,28 @@ class StandardCatalogService extends Service {
     }
   }
 
-  async getVersionDetail(versionId) {
+  async getVersionDetail(versionId, query = {}) {
     const result = await this.repository.getVersionDetail(versionId);
     if (!result) this.ctx.throw(404, '规范版本不存在');
     result.importJobs = await new StandardImportJobRepository(this.ctx.app.db).listByVersion(versionId);
+    const allChapters = result.chapters;
+    const totalChapterCount = allChapters.length;
+    const requestedSize = String(query.chapterPageSize || '1');
+    const allowedSizes = new Set([ '1', '2', '5', '10', '20', 'all' ]);
+    const chapterPageSize = allowedSizes.has(requestedSize) ? requestedSize : '1';
+    const numericPageSize = chapterPageSize === 'all' ? Math.max(1, totalChapterCount) : Number(chapterPageSize);
+    const chapterPageCount = Math.max(1, Math.ceil(totalChapterCount / numericPageSize));
+    const chapterPage = Math.min(chapterPageCount, Math.max(1, Number.parseInt(query.chapterPage, 10) || 1));
+    const start = (chapterPage - 1) * numericPageSize;
+    result.chapters = allChapters.slice(start, start + numericPageSize);
+    result.chapterPagination = {
+      page: chapterPage,
+      pageCount: chapterPageCount,
+      pageSize: chapterPageSize,
+      firstChapter: totalChapterCount ? start + 1 : 0,
+      lastChapter: Math.min(start + numericPageSize, totalChapterCount),
+      total: totalChapterCount,
+    };
     return result;
   }
 

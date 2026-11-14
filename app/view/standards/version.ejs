@@ -2,6 +2,8 @@
   <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong><span class="badge text-bg-light ms-2"><%= ({ national: '国家标准', industry: '行业标准', local: '地方标准', group: '团体标准', enterprise: '企业标准', internal: '企业内部制度/规范', regulatory: '监管要求', other: '其他' })[version.standard_type] || version.standard_type %></span></div>
 </div>
 
+<% const chapterPageUrl = page => '?chapterPage=' + page + '&chapterPageSize=' + encodeURIComponent(chapterPagination.pageSize); %>
+
 <style>
   .standard-items-table-wrap { overflow-x:auto; }
   .standard-items-table { min-width:72rem; table-layout:fixed; }
@@ -22,6 +24,12 @@
   .standard-item-copy { line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
   .standard-item-explanation { margin-bottom:.45rem; padding:.35rem .6rem; border-left:3px solid var(--bs-info); background:var(--bs-tertiary-bg); line-height:1.55; }
   .standard-item-explanation-label { margin-right:.35rem; color:var(--bs-secondary-color); font-weight:600; }
+  .standard-heading-group-row td { padding:.35rem .75rem; background:var(--bs-tertiary-bg); }
+  .standard-heading-toggle { display:flex; align-items:center; gap:.5rem; width:100%; border:0; padding:.2rem 0; color:var(--bs-body-color); background:transparent; text-align:left; }
+  .standard-heading-toggle:hover { color:var(--bs-primary); }
+  .standard-heading-toggle-icon { display:inline-grid; place-items:center; width:1.25rem; height:1.25rem; border:1px solid var(--bs-border-color); border-radius:.25rem; font-weight:700; }
+  .standard-heading-group-count { margin-left:auto; color:var(--bs-secondary-color); font-size:.82rem; }
+  .standard-chapter-pagination .pagination { margin-bottom:0; }
   @media (max-width:767.98px) {
     .standard-items-table { min-width:62rem; }
     .standard-items-table .standard-col-title { width:18rem; }
@@ -40,6 +48,19 @@
 
 <% if (importJobs && importJobs.length) { %><div class="card mb-3"><div class="card-header d-flex align-items-center"><h2 class="card-title h6 mb-0">PDF导入复核任务</h2><span class="small text-secondary ms-2">可继续打开未完成的复核草稿</span></div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>PDF文件</th><th>对照文件</th><th>状态</th><th>更新时间</th><th style="width:13rem"></th></tr></thead><tbody><% importJobs.forEach(job => { const statusLabel = ({ queued: '排队中', processing: '解析中', ready: '待复核/草稿', failed: '解析失败', applying: '写入中', completed: '已写入' })[job.status] || job.status; const statusClass = job.status === 'ready' ? 'text-bg-warning' : job.status === 'failed' ? 'text-bg-danger' : job.status === 'completed' ? 'text-bg-success' : 'text-bg-secondary'; %><tr><td><span class="text-break"><%= job.original_filename %></span></td><td><span class="text-break"><%= job.comparison_filename || '-' %></span></td><td><span class="badge <%= statusClass %>"><%= statusLabel %></span><% if (job.status === 'processing' || job.status === 'queued') { %><span class="small text-secondary ms-1"><%= job.progress || 0 %>%</span><% } %></td><td><%= job.updated_at ? new Date(job.updated_at).toLocaleString('zh-CN') : '-' %></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/standards/versions/<%= version.id %>/pdf-imports/<%= job.id %>"><%= job.status === 'ready' ? '继续复核' : job.status === 'completed' ? '查看结果' : '查看任务' %></a><% if ([ 'queued', 'processing', 'applying' ].includes(job.status)) { %><button class='btn btn-sm btn-outline-secondary ms-1' type='button' disabled title='任务处理中，暂不能清理'>处理中</button><% } else { %><form method="post" action="/standards/versions/<%= version.id %>/pdf-imports/<%= job.id %>/delete" data-confirm="确认清理这个PDF导入任务及其临时文件吗？已写入规范库的标准项不会被删除。" data-confirm-title="清理PDF导入任务" class="d-inline ms-1"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm btn-outline-danger" type="submit">清理</button></form><% } %></td></tr><% }) %></tbody></table></div></div><% } %>
 
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap align-items-end gap-3">
+    <div class="me-auto"><div class="fw-semibold">章节浏览</div><div class="small text-secondary">当前显示第 <%= chapterPagination.firstChapter %>–<%= chapterPagination.lastChapter %> 章，共 <%= chapterPagination.total %> 章</div></div>
+    <form method="get" action="/standards/versions/<%= version.id %>" class="d-flex align-items-end gap-2">
+      <div><label class="form-label small mb-1" for="chapterPageSize">每页章节</label><select class="form-select form-select-sm" id="chapterPageSize" name="chapterPageSize" onchange="this.form.submit()"><% [ ['1','1章'], ['2','2章'], ['5','5章'], ['10','10章'], ['20','20章'], ['all','全部'] ].forEach(option => { %><option value="<%= option[0] %>" <%= chapterPagination.pageSize === option[0] ? 'selected' : '' %>><%= option[1] %></option><% }) %></select></div>
+      <input type="hidden" name="chapterPage" value="1">
+    </form>
+    <div><label class="form-label small mb-1" for="standardHeadingDepth">标题分组</label><select class="form-select form-select-sm" id="standardHeadingDepth"><option value="0">不分组</option><option value="3">到第2级标题</option><option value="4" selected>到第3级标题</option><option value="5">到第4级标题</option><option value="6">到第5级标题</option></select></div>
+    <div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary" id="collapseStandardGroups" type="button">全部收起</button><button class="btn btn-sm btn-outline-secondary" id="expandStandardGroups" type="button">全部展开</button></div>
+  </div>
+  <% if (chapterPagination.pageCount > 1 && chapterPagination.pageSize !== 'all') { %><div class="card-footer d-flex flex-wrap align-items-center gap-2 standard-chapter-pagination"><span class="small text-secondary">第 <%= chapterPagination.page %> / <%= chapterPagination.pageCount %> 页</span><nav class="ms-auto" aria-label="章节分页"><ul class="pagination pagination-sm"><li class="page-item <%= chapterPagination.page <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= chapterPagination.page <= 1 ? '#' : chapterPageUrl(chapterPagination.page - 1) %>">上一页</a></li><% for (let page = 1; page <= chapterPagination.pageCount; page += 1) { %><li class="page-item <%= page === chapterPagination.page ? 'active' : '' %>"><a class="page-link" href="<%= chapterPageUrl(page) %>"><%= page %></a></li><% } %><li class="page-item <%= chapterPagination.page >= chapterPagination.pageCount ? 'disabled' : '' %>"><a class="page-link" href="<%= chapterPagination.page >= chapterPagination.pageCount ? '#' : chapterPageUrl(chapterPagination.page + 1) %>">下一页</a></li></ul></nav></div><% } %>
+</div>
+
 <% if (!chapters.length) { %><div class="card"><div class="card-body text-center text-secondary py-5">暂无章节，请先添加章节。</div></div><% } %>
 <% chapters.forEach(chapter => { %>
   <div class="card mb-3">
@@ -51,7 +72,7 @@
     <div class="table-responsive standard-items-table-wrap"><table class="table table-sm table-striped align-middle mb-0 standard-items-table">
       <colgroup><col class="standard-col-number"><col class="standard-col-original"><col class="standard-col-title"><col><col class="standard-col-source"></colgroup>
       <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>条款说明与标准内容</th><th>来源页</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { const headingPath = Array.isArray(item.headingPath) ? item.headingPath : []; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); const explanationText = String(item.explanation || '').trim(); const contentText = String(item.content || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; %><tr><td class="standard-item-number"><span class="font-monospace"><%= item.standardNumber %></span></td><td class="standard-item-code"><strong><%= item.itemCode %></strong></td><td><% if (headingPath.length) { %><div class="standard-item-heading-path"><% headingPath.forEach(heading => { %><div class="standard-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (showTitle) { %><div class="standard-item-title"><%= item.title %></div><% } %><% if (!headingPath.length && !item.title) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-copy"><% if (explanationText) { %><div class="standard-item-explanation"><span class="standard-item-explanation-label">说明：</span><span><%= explanationText %></span></div><% } %><% if (contentText && !contentRepeatsExplanation) { %><div><%= contentText %></div><% } %><% if (!explanationText && !contentText) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-source"><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
+        <% (chapter.items || []).forEach(item => { const headingPath = Array.isArray(item.headingPath) ? item.headingPath : []; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); const explanationText = String(item.explanation || '').trim(); const contentText = String(item.content || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; %><tr class="standard-item-row" data-heading-path="<%= JSON.stringify(headingPath) %>"><td class="standard-item-number"><span class="font-monospace"><%= item.standardNumber %></span></td><td class="standard-item-code"><strong><%= item.itemCode %></strong></td><td><% if (headingPath.length) { %><div class="standard-item-heading-path"><% headingPath.forEach(heading => { %><div class="standard-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (showTitle) { %><div class="standard-item-title"><%= item.title %></div><% } %><% if (!headingPath.length && !item.title) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-copy"><% if (explanationText) { %><div class="standard-item-explanation"><span class="standard-item-explanation-label">说明：</span><span><%= explanationText %></span></div><% } %><% if (contentText && !contentRepeatsExplanation) { %><div><%= contentText %></div><% } %><% if (!explanationText && !contentText) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-source"><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
         <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>
@@ -76,6 +97,104 @@
     </form>
   </div></div></div>
 <% }) %>
+
+<script>
+  (() => {
+    const depthSelect = document.getElementById('standardHeadingDepth');
+    const groupTables = Array.from(document.querySelectorAll('.standard-items-table'));
+    if (!depthSelect || !groupTables.length) return;
+    const collapsed = new Set();
+    const headingKey = heading => [heading.number || '', heading.title || ''].join(' ').trim();
+    const makeGroupId = headings => headings.map(headingKey).join(' / ');
+
+    const renderGroups = () => {
+      const maxLevel = Number(depthSelect.value || 0);
+      collapsed.clear();
+      for (const table of groupTables) {
+        table.querySelectorAll('.standard-heading-group-row').forEach(row => row.remove());
+        const itemRows = Array.from(table.querySelectorAll('.standard-item-row'));
+        let previousIds = [];
+        for (const itemRow of itemRows) {
+          let headings = [];
+          try { headings = JSON.parse(itemRow.dataset.headingPath || '[]'); } catch {}
+          const grouped = headings.filter(heading => Number(heading.level || 0) > 2 && Number(heading.level || 0) <= maxLevel);
+          const ids = [];
+          for (let index = 0; index < grouped.length; index += 1) {
+            ids.push(makeGroupId(grouped.slice(0, index + 1)));
+          }
+          let shared = 0;
+          while (shared < previousIds.length && shared < ids.length && previousIds[shared] === ids[shared]) shared += 1;
+          for (let index = shared; index < grouped.length; index += 1) {
+            const row = document.createElement('tr');
+            row.className = 'standard-heading-group-row';
+            row.dataset.groupId = ids[index];
+            row.dataset.parentGroupIds = ids.slice(0, index).join('|');
+            const cell = document.createElement('td');
+            cell.colSpan = 5;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'standard-heading-toggle';
+            button.innerHTML = '<span class="standard-heading-toggle-icon">−</span>';
+            const label = document.createElement('strong');
+            label.textContent = [grouped[index].number, grouped[index].title].filter(Boolean).join(' ');
+            const count = document.createElement('span');
+            count.className = 'standard-heading-group-count';
+            const prefix = ids[index];
+            count.textContent = itemRows.filter(candidate => {
+              try {
+                const path = JSON.parse(candidate.dataset.headingPath || '[]').filter(heading => Number(heading.level || 0) > 2 && Number(heading.level || 0) <= maxLevel);
+                return makeGroupId(path.slice(0, index + 1)) === prefix;
+              } catch { return false; }
+            }).length + ' 项';
+            button.append(label, count);
+            button.addEventListener('click', () => {
+              if (collapsed.has(prefix)) collapsed.delete(prefix);
+              else collapsed.add(prefix);
+              applyCollapsedState(table);
+            });
+            cell.append(button);
+            row.append(cell);
+            itemRow.before(row);
+          }
+          itemRow.dataset.groupIds = ids.join('|');
+          previousIds = ids;
+        }
+        applyCollapsedState(table);
+      }
+    };
+
+    const applyCollapsedState = table => {
+      for (const row of table.querySelectorAll('.standard-heading-group-row')) {
+        const parents = (row.dataset.parentGroupIds || '').split('|').filter(Boolean);
+        const hiddenByParent = parents.some(id => collapsed.has(id));
+        row.hidden = hiddenByParent;
+        const isCollapsed = collapsed.has(row.dataset.groupId);
+        const icon = row.querySelector('.standard-heading-toggle-icon');
+        if (icon) icon.textContent = isCollapsed ? '+' : '−';
+      }
+      for (const row of table.querySelectorAll('.standard-item-row')) {
+        const groups = (row.dataset.groupIds || '').split('|').filter(Boolean);
+        row.hidden = groups.some(id => collapsed.has(id));
+      }
+    };
+
+    const setAll = shouldCollapse => {
+      collapsed.clear();
+      if (shouldCollapse) document.querySelectorAll('.standard-heading-group-row').forEach(row => collapsed.add(row.dataset.groupId));
+      groupTables.forEach(applyCollapsedState);
+    };
+
+    const savedDepth = localStorage.getItem('standardCatalogHeadingDepth');
+    if (savedDepth && Array.from(depthSelect.options).some(option => option.value === savedDepth)) depthSelect.value = savedDepth;
+    depthSelect.addEventListener('change', () => {
+      localStorage.setItem('standardCatalogHeadingDepth', depthSelect.value);
+      renderGroups();
+    });
+    document.getElementById('collapseStandardGroups')?.addEventListener('click', () => setAll(true));
+    document.getElementById('expandStandardGroups')?.addEventListener('click', () => setAll(false));
+    renderGroups();
+  })();
+</script>
 
 <div class="modal fade" id="pdfImportModal" tabindex="-1" aria-labelledby="pdfImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/standards/versions/<%= version.id %>/pdf-imports" enctype="multipart/form-data" data-confirm="将上传PDF并在后台执行OCR，完成后先进入预览，不会自动写入。确认继续？" data-confirm-title="导入规范PDF"><input type="hidden" name="_csrf" value="<%= csrf %>">

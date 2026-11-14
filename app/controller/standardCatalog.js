@@ -60,7 +60,7 @@ class StandardCatalogController extends Controller {
 
   async version() {
     requireGlobalRead(this.ctx);
-    const detail = await this.ctx.service.standardCatalog.getVersionDetail(this.ctx.params.versionId);
+    const detail = await this.ctx.service.standardCatalog.getVersionDetail(this.ctx.params.versionId, this.ctx.query);
     await this.ctx.render('standards/version', { title: `${detail.version.standard_code} · ${detail.version.version}`, ...detail, csrf: this.ctx.csrf });
   }
 
