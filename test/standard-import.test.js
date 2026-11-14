@@ -113,6 +113,19 @@ test('accepts a heading explanation row without a separate standard content cell
   assert.equal(result.chapters[0].items[0].content, '云服务商应：');
 });
 
+test('infers a missing parent explanation from a prefixed first child clause', () => {
+  const result = parseStandardRows([ { name: '正文带前置说明', rows: [
+    [ '章节编号', '章节名称', '标准项编号', '标准项标题', '标准内容' ],
+    [ '7', '系统与通信保护', '7.1.1 a)', '一般要求', '云服务商应：\na）在边界上对通信进行监控；' ],
+    [ '7', '系统与通信保护', '7.1.1 b)', '一般要求', '将允许外部公开直接访问的组件隔离。' ],
+  ] } ]);
+  assert.equal(result.itemCount, 3);
+  assert.equal(result.chapters[0].items[0].itemCode, '7.1.1');
+  assert.equal(result.chapters[0].items[0].explanation, '云服务商应：');
+  assert.equal(result.chapters[0].items[1].itemCode, '7.1.1 a)');
+  assert.equal(result.chapters[0].items[1].content, '在边界上对通信进行监控；');
+});
+
 test('continues heading depth after a subsection used as the imported chapter', () => {
   const result = parseStandardRows([ { name: '多级标题', rows: [
     [ '章节编号', '章节名称', '标准项编号', '标题路径', '标准内容' ],

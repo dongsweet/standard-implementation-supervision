@@ -39,9 +39,9 @@ test('adds a standard version and snapshots all of its items in one transaction'
   const versionInsert = queries.find(query => query.statement.startsWith('INSERT INTO project_standard_versions '));
   assert.deepEqual(versionInsert.values, [ 'project-1', 'version-1' ]);
   const snapshotInsert = queries.find(query => query.statement.startsWith('INSERT INTO project_standard_items '));
-  assert.match(snapshotInsert.statement, /SELECT \$1, si\.id, si\.standard_number, si\.item_code, si\.explanation, si\.content, sc\.code, si\.heading_path, now\(\)/);
+  assert.match(snapshotInsert.statement, /SELECT \$1, si\.id, si\.standard_number, si\.item_code, COALESCE\(si\.explanation, parent\.explanation\), si\.content, sc\.code, si\.heading_path, now\(\)/);
   assert.match(snapshotInsert.statement, /WHERE si\.standard_version_id = \$2/);
-  assert.deepEqual(snapshotInsert.values, [ 'project-1', 'version-1' ]);
+  assert.deepEqual(snapshotInsert.values, [ 'project-1', 'version-1', '\\s+[a-z]\\s*[)）)_]\\s*$', '' ]);
   assert.equal(isReleased(), true);
 });
 

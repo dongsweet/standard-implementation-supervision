@@ -121,6 +121,65 @@ function parseHeadingPath(value, chapterCode) {
     .filter(Boolean);
 }
 
+function splitLeadingExplanation(value) {
+  const raw = cellText(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (!raw) return { explanation: '', content: '' };
+  const marker = raw.match(/(^|\n|[:：])\s*([a-z]\s*[)）)_])\s*/i);
+  const markerStart = marker ? marker.index + marker[1].length : -1;
+  if (!marker || markerStart <= 0 || !raw.slice(0, markerStart).trim()) return { explanation: '', content: raw };
+  return {
+    explanation: raw.slice(0, markerStart).trim(),
+    content: raw.slice(marker.index + marker[0].length).trim(),
+  };
+}
+
+function parentItemCode(itemCode) {
+  const match = String(itemCode || '').normalize('NFKC').trim().match(/^(.+?)\s+[a-z]\s*[)）)_]\s*$/i);
+  return match ? match[1].trim() : '';
+}
+
+function completeParentExplanations(chapters) {
+  for (const chapter of chapters) {
+    const items = chapter.items || [];
+    const byCode = new Map(items.map(item => [ normalizeHeader(item.itemCode), item ]));
+    const additions = [];
+    for (const item of items) {
+      const parentCode = parentItemCode(item.itemCode);
+      if (!parentCode) continue;
+      const split = splitLeadingExplanation(item.content);
+      if (!split.explanation) continue;
+      const explanation = split.explanation;
+      if (split.content) item.content = split.content;
+      item.explanation = null;
+      const parentKey = normalizeHeader(parentCode);
+      const existingParent = byCode.get(parentKey);
+      if (existingParent) {
+        if (!existingParent.explanation) existingParent.explanation = explanation;
+        if (!existingParent.content) existingParent.content = explanation;
+        continue;
+      }
+      const parent = {
+        itemCode: parentCode,
+        title: item.title || null,
+        explanation,
+        content: explanation,
+        ...(item.headingPath?.length ? { headingPath: item.headingPath } : {}),
+      };
+      additions.push({ item, parent });
+      byCode.set(parentKey, parent);
+    }
+    if (!additions.length) continue;
+    const output = [];
+    for (const item of items) {
+      const addition = additions.find(entry => entry.item === item);
+      if (addition) output.push(addition.parent);
+      output.push(item);
+    }
+    chapter.items = output;
+  }
+  return chapters;
+}
+
 function parseStandardRows(sheets, options = {}) {
   const { allowDuplicateItemCodes = false } = options;
   const chapters = [];
@@ -203,7 +262,9 @@ function parseStandardRows(sheets, options = {}) {
     }
   }
   if (!itemCount) throw importError('未找到可导入的标准项；请确认文件包含“标准项编号”和“标准内容”列');
-  return { chapters, itemCount, importedSheetCount, skippedSheetCount, duplicateItemCount };
+  completeParentExplanations(chapters);
+  const completedItemCount = chapters.reduce((count, chapter) => count + chapter.items.length, 0);
+  return { chapters, itemCount: completedItemCount, importedSheetCount, skippedSheetCount, duplicateItemCount };
 }
 
 function parseDelimitedRows(text, delimiter) {
@@ -311,4 +372,4 @@ async function parseStandardImportFile(filePath, fileName, options = {}) {
   return parseStandardRows(sheets, options);
 }
 
-module.exports = { parseDelimitedRows, parseStandardImportFile, parseStandardRows };
+module.exports = { completeParentExplanations, parseDelimitedRows, parseStandardImportFile, parseStandardRows, splitLeadingExplanation };

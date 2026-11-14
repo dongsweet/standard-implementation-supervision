@@ -279,11 +279,14 @@ class ProjectRepository {
         INSERT INTO project_standard_items
           (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
            explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-        SELECT $1, si.id, si.standard_number, si.item_code, si.explanation, si.content, sc.code, si.heading_path, now()
+        SELECT $1, si.id, si.standard_number, si.item_code,
+               COALESCE(si.explanation, parent.explanation), si.content, sc.code, si.heading_path, now()
         FROM standard_items si
         JOIN standard_chapters sc ON sc.id = si.chapter_id
+        LEFT JOIN standard_items parent ON parent.standard_version_id = si.standard_version_id
+          AND parent.item_code = regexp_replace(si.item_code, $3, $4)
         WHERE si.standard_version_id = $2
-        ON CONFLICT DO NOTHING`, [ projectId, standardVersionId ]);
+        ON CONFLICT DO NOTHING`, [ projectId, standardVersionId, '\\s+[a-z]\\s*[)）)_]\\s*$', '' ]);
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
