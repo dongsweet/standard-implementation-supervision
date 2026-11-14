@@ -2,6 +2,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const JSZip = require('jszip');
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_SHEETS = 100;
@@ -145,7 +146,10 @@ function parseStandardRows(sheets, options = {}) {
       const value = field => header.map[field] >= 0 ? cellText(row[header.map[field]]) : '';
       const itemCode = value('itemCode');
       const explanation = value('explanation');
-      const content = value('content');
+      // A heading-level explanation can be supplied as its own row. Keep the
+      // explanation field and use it as the required searchable content so
+      // the row remains importable without pretending it is an a)/b) clause.
+      const content = value('content') || explanation;
       if (!itemCode && !content) continue;
       const sourceRow = rowIndex + 1;
       if (!itemCode) throw importError('工作表“' + sheet.name + '”第' + sourceRow + '行缺少标准项编号');
@@ -250,7 +254,7 @@ async function parseStandardImportFile(filePath, fileName, options = {}) {
   }
 
   const ExcelJS = require('exceljs');
-  const workbook = new ExcelJS.Workbook();
+  let workbook = new ExcelJS.Workbook();
   try {
     // Data validation rules are workbook UI metadata. Some operational
     // workbooks apply them to entire Excel columns (up to row 1,048,576),
@@ -258,9 +262,40 @@ async function parseStandardImportFile(filePath, fileName, options = {}) {
     // The importer only needs cell values, so skip that metadata node.
     await workbook.xlsx.readFile(filePath, { ignoreNodes: [ 'dataValidations' ] });
   } catch (error) {
-    const wrapped = importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
-    wrapped.cause = error;
-    throw wrapped;
+    // Some Excel-compatible exporters prefix every main OOXML element with
+    // `x:` (and put the namespace declaration on the root element). ExcelJS
+    // expects the same XML namespace without that prefix and throws before it
+    // creates a workbook model. Retry against an in-memory normalized package
+    // so the upload remains read-only and the user's source file is untouched.
+    try {
+      const bytes = await fs.readFile(filePath);
+      const archive = await JSZip.loadAsync(bytes);
+      let normalized = false;
+      for (const name of Object.keys(archive.files).filter(item => item.endsWith('.xml'))) {
+        const entry = archive.file(name);
+        if (!entry) continue;
+        const xml = await entry.async('string');
+        if (!/<\/?x:[A-Za-z_]/.test(xml)) continue;
+        const hasDefaultNamespace = /\sxmlns\s*=/.test(xml);
+        let updated = xml.replace(/(<\/?)(x:)/g, '$1');
+        updated = hasDefaultNamespace
+          ? updated.replace(/\sxmlns:x=(['"][^'"]+['"])/g, '')
+          : updated.replace(/xmlns:x=/g, 'xmlns=');
+        archive.file(name, updated);
+        normalized = true;
+      }
+      if (!normalized) throw error;
+      workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        await archive.generateAsync({ type: 'nodebuffer' }),
+        { ignoreNodes: [ 'dataValidations' ] }
+      );
+    } catch (fallbackError) {
+      const wrapped = importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
+      wrapped.cause = error;
+      wrapped.fallbackCause = fallbackError;
+      throw wrapped;
+    }
   }
   if (workbook.worksheets.length > MAX_SHEETS) throw importError('工作簿最多支持' + MAX_SHEETS + '个工作表');
   const sheets = workbook.worksheets.map(worksheet => {

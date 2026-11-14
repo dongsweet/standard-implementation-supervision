@@ -102,6 +102,17 @@ test('stores pre-list provider requirement as a parent clause explanation', () =
   assert.equal(result.chapters[0].items[2].content, '云服务商应对资源可用性进行复核。');
 });
 
+test('accepts a heading explanation row without a separate standard content cell', () => {
+  const result = parseStandardRows([ { name: '标题解释', rows: [
+    [ '章节编号', '章节名称', '标准项编号', '标准项标题', '条款说明', '标准内容' ],
+    [ '6', '系统开发与供应链', '6.1.1', '一般要求', '云服务商应：', '' ],
+  ] } ]);
+  assert.equal(result.itemCount, 1);
+  assert.equal(result.chapters[0].items[0].itemCode, '6.1.1');
+  assert.equal(result.chapters[0].items[0].explanation, '云服务商应：');
+  assert.equal(result.chapters[0].items[0].content, '云服务商应：');
+});
+
 test('continues heading depth after a subsection used as the imported chapter', () => {
   const result = parseStandardRows([ { name: '多级标题', rows: [
     [ '章节编号', '章节名称', '标准项编号', '标题路径', '标准内容' ],
@@ -172,10 +183,13 @@ test('ignores invalid date values in unused workbook cells', () => {
 });
 
 let ExcelJS;
+let JSZip;
 try {
   ExcelJS = require('exceljs');
+  JSZip = require('jszip');
 } catch {
   ExcelJS = null;
+  JSZip = null;
 }
 
 test('parses xlsx workbooks with full-column data validations', { skip: !ExcelJS }, async () => {
@@ -196,6 +210,35 @@ test('parses xlsx workbooks with full-column data validations', { skip: !ExcelJS
     const result = await parseStandardImportFile(filePath, 'source.xlsx');
     assert.equal(result.itemCount, 1);
     assert.equal(result.chapters[0].items[0].itemCode, '8.1.1');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('parses xlsx files whose OOXML main parts use an x namespace prefix', { skip: !ExcelJS || !JSZip }, async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'standard-import-prefixed-xlsx-'));
+  const filePath = path.join(directory, 'source.xlsx');
+  try {
+    const sourceWorkbook = new ExcelJS.Workbook();
+    const worksheet = sourceWorkbook.addWorksheet('标准原文');
+    worksheet.addRow([ '章节编号', '章节名称', '标准项编号', '标准内容' ]);
+    worksheet.addRow([ '6', '系统开发与供应链安全', '6.1.1 a)', '云服务商应保护资源。' ]);
+    const sourceBuffer = await sourceWorkbook.xlsx.writeBuffer();
+    const archive = await JSZip.loadAsync(sourceBuffer);
+    for (const name of Object.keys(archive.files).filter(item =>
+      item === 'xl/workbook.xml' || item === 'xl/sharedStrings.xml' || item.startsWith('xl/worksheets/'))
+    ) {
+      const entry = archive.file(name);
+      if (!entry) continue;
+      const xml = await entry.async('string');
+      const prefixed = xml.replace(/(<\/?)([A-Za-z_][A-Za-z0-9_.-]*)(?=[\s/>])/g, '$1x:$2')
+        .replace(/xmlns="([^"]+)"/, 'xmlns:x="$1"');
+      archive.file(name, prefixed);
+    }
+    await fs.writeFile(filePath, await archive.generateAsync({ type: 'nodebuffer' }));
+    const result = await parseStandardImportFile(filePath, 'source.xlsx');
+    assert.equal(result.itemCount, 1);
+    assert.equal(result.chapters[0].items[0].itemCode, '6.1.1 a)');
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
