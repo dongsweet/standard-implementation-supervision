@@ -2,6 +2,32 @@
   <div class="text-secondary">规范：<strong><%= version.standard_code %> · <%= version.standard_name %></strong>　版本：<strong><%= version.version %></strong><span class="badge text-bg-light ms-2"><%= ({ national: '国家标准', industry: '行业标准', local: '地方标准', group: '团体标准', enterprise: '企业标准', internal: '企业内部制度/规范', regulatory: '监管要求', other: '其他' })[version.standard_type] || version.standard_type %></span></div>
 </div>
 
+<style>
+  .standard-items-table-wrap { overflow-x:auto; }
+  .standard-items-table { min-width:72rem; table-layout:fixed; }
+  .standard-items-table th,
+  .standard-items-table td { padding:.75rem .85rem; vertical-align:top; }
+  .standard-items-table .standard-col-number { width:10.5rem; }
+  .standard-items-table .standard-col-original { width:8.5rem; }
+  .standard-items-table .standard-col-title { width:21rem; }
+  .standard-items-table .standard-col-source { width:5rem; }
+  .standard-items-table thead th { white-space:nowrap; font-size:.9rem; }
+  .standard-item-number,
+  .standard-item-code,
+  .standard-item-source { white-space:nowrap; word-break:normal; overflow-wrap:normal; }
+  .standard-item-number { font-size:.86rem; }
+  .standard-item-heading-path { display:flex; flex-direction:column; gap:.15rem; color:var(--bs-secondary-color); font-size:.82rem; line-height:1.4; }
+  .standard-item-heading { overflow-wrap:anywhere; }
+  .standard-item-title { margin-top:.4rem; font-weight:600; line-height:1.45; }
+  .standard-item-copy { line-height:1.65; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }
+  .standard-item-explanation { margin-bottom:.45rem; padding:.35rem .6rem; border-left:3px solid var(--bs-info); background:var(--bs-tertiary-bg); line-height:1.55; }
+  .standard-item-explanation-label { margin-right:.35rem; color:var(--bs-secondary-color); font-weight:600; }
+  @media (max-width:767.98px) {
+    .standard-items-table { min-width:62rem; }
+    .standard-items-table .standard-col-title { width:18rem; }
+  }
+</style>
+
 <div class="alert alert-info py-2"><strong>维护说明：</strong>推荐直接上传规范PDF。系统会 OCR 识别章节和条款，经人工选择粒度、跳过章节后写入；Excel/TSV 仍可用于结构化补录。标题下、a)/b) 子条款之前的引导语单独保存为条款说明。标准化编号按“规范号-章节号-导入顺序号”生成，原文编号原样保留。</div>
 
 <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
@@ -22,9 +48,10 @@
       <button class="btn btn-sm btn-outline-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#itemModal-<%= chapter.id %>">新增标准项</button>
       <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#importModal-<%= chapter.id %>">批量导入</button>
     </div>
-    <div class="table-responsive"><table class="table table-sm table-striped align-middle mb-0">
+    <div class="table-responsive standard-items-table-wrap"><table class="table table-sm table-striped align-middle mb-0 standard-items-table">
+      <colgroup><col class="standard-col-number"><col class="standard-col-original"><col class="standard-col-title"><col><col class="standard-col-source"></colgroup>
       <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>条款说明与标准内容</th><th>来源页</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { %><tr><td><span class="font-monospace"><%= item.standardNumber %></span></td><td><strong><%= item.itemCode %></strong></td><td><% if (Array.isArray(item.headingPath) && item.headingPath.length) { %><div class="small text-secondary mb-1"><% item.headingPath.forEach(heading => { %><div style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><%= item.title || '-' %></td><td><% if (item.explanation) { %><div class="small text-secondary mb-1"><strong>条款说明：</strong><%= item.explanation %></div><% } %><%= item.content %></td><td><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
+        <% (chapter.items || []).forEach(item => { const headingPath = Array.isArray(item.headingPath) ? item.headingPath : []; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); const explanationText = String(item.explanation || '').trim(); const contentText = String(item.content || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; %><tr><td class="standard-item-number"><span class="font-monospace"><%= item.standardNumber %></span></td><td class="standard-item-code"><strong><%= item.itemCode %></strong></td><td><% if (headingPath.length) { %><div class="standard-item-heading-path"><% headingPath.forEach(heading => { %><div class="standard-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (showTitle) { %><div class="standard-item-title"><%= item.title %></div><% } %><% if (!headingPath.length && !item.title) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-copy"><% if (explanationText) { %><div class="standard-item-explanation"><span class="standard-item-explanation-label">说明：</span><span><%= explanationText %></span></div><% } %><% if (contentText && !contentRepeatsExplanation) { %><div><%= contentText %></div><% } %><% if (!explanationText && !contentText) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-source"><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
         <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>
