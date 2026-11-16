@@ -24,6 +24,7 @@
   .standard-items-table .standard-col-original { width:8.5rem; }
   .standard-items-table .standard-col-title { width:21rem; }
   .standard-items-table .standard-col-source { width:5rem; }
+  .standard-items-table .standard-col-actions { width:6rem; }
   .standard-items-table thead th { white-space:nowrap; font-size:.9rem; }
   .standard-item-number,
   .standard-item-code,
@@ -89,10 +90,10 @@
       <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="modal" data-bs-target="#importModal-<%= chapter.id %>">批量导入</button>
     </div>
     <div class="table-responsive standard-items-table-wrap"><table class="table table-sm table-striped align-middle mb-0 standard-items-table">
-      <colgroup><col class="standard-col-number"><col class="standard-col-original"><col class="standard-col-title"><col><col class="standard-col-source"></colgroup>
-      <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>条款说明与标准内容</th><th>来源页</th></tr></thead><tbody>
-        <% (chapter.items || []).forEach(item => { const headingPath = Array.isArray(item.headingPath) ? item.headingPath : []; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); const explanationText = String(item.explanation || '').trim(); const contentText = String(item.content || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; %><tr class="standard-item-row" data-heading-path="<%= JSON.stringify(headingPath) %>"><td class="standard-item-number"><span class="font-monospace"><%= item.standardNumber %></span><% if (item.requiresAssignment) { %><span class="badge text-bg-warning ms-1">需赋值</span><% } %></td><td class="standard-item-code"><strong><%= item.itemCode %></strong></td><td><% if (headingPath.length) { %><div class="standard-item-heading-path"><% headingPath.forEach(heading => { %><div class="standard-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (showTitle) { %><div class="standard-item-title"><%= item.title %></div><% } %><% if (!headingPath.length && !item.title) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-copy"><% if (explanationText) { %><div class="standard-item-explanation"><span class="standard-item-explanation-label">说明：</span><span><%= explanationText %></span></div><% } %><% if (contentText && !contentRepeatsExplanation) { %><div><%= contentText %></div><% } %><% if (!explanationText && !contentText) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-source"><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td></tr><% }) %>
-        <% if (!chapter.items.length) { %><tr><td colspan="5" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
+      <colgroup><col class="standard-col-number"><col class="standard-col-original"><col class="standard-col-title"><col><col class="standard-col-source"><col class="standard-col-actions"></colgroup>
+      <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>条款说明与标准内容</th><th>来源页</th><th>操作</th></tr></thead><tbody>
+        <% (chapter.items || []).forEach(item => { const headingPath = Array.isArray(item.headingPath) ? item.headingPath : []; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); const explanationText = String(item.explanation || '').trim(); const contentText = String(item.content || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; const editPayload = JSON.stringify({ id: item.id, standardNumber: item.standardNumber, itemCode: item.itemCode, title: item.title || '', explanation: item.explanation || '', content: item.content || '' }).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); %><tr class="standard-item-row" data-heading-path="<%= JSON.stringify(headingPath) %>"><td class="standard-item-number"><span class="font-monospace"><%= item.standardNumber %></span><% if (item.requiresAssignment) { %><span class="badge text-bg-warning ms-1">需赋值</span><% } %></td><td class="standard-item-code"><strong><%= item.itemCode %></strong></td><td><% if (headingPath.length) { %><div class="standard-item-heading-path"><% headingPath.forEach(heading => { %><div class="standard-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (showTitle) { %><div class="standard-item-title"><%= item.title %></div><% } %><% if (!headingPath.length && !item.title) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-copy"><% if (explanationText) { %><div class="standard-item-explanation"><span class="standard-item-explanation-label">说明：</span><span><%= explanationText %></span></div><% } %><% if (contentText && !contentRepeatsExplanation) { %><div><%= contentText %></div><% } %><% if (!explanationText && !contentText) { %><span class="text-secondary">-</span><% } %></td><td class="standard-item-source"><%= item.sourcePageFrom ? (item.sourcePageFrom === item.sourcePageTo ? item.sourcePageFrom : item.sourcePageFrom + '-' + item.sourcePageTo) : '-' %></td><td class="standard-item-actions"><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editStandardItemModal" data-standard-item="<%- editPayload %>">编辑</button></td></tr><% }) %>
+        <% if (!chapter.items.length) { %><tr><td colspan="6" class="text-center text-secondary py-3">本章节暂无标准项</td></tr><% } %>
       </tbody></table></div>
   </div>
 
@@ -115,10 +116,42 @@
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-outline-primary" type="submit">导入并更新</button></div>
     </form>
   </div></div></div>
+
 <% }) %><% } %>
+
+<div class="modal fade" id="editStandardItemModal" tabindex="-1" aria-labelledby="editStandardItemModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form id="editStandardItemForm" method="post" action="/standards/items/">
+    <input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="<%= buildVersionUrl({}) %>">
+    <div class="modal-header"><h2 class="modal-title fs-5" id="editStandardItemModalLabel">编辑标准项</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body row g-3">
+      <div class="col-12"><div class="alert alert-warning py-2 mb-0">此处修改只更新规范库当前版本，不会覆盖已建立项目固定基线中的标准项快照。</div></div>
+      <div class="col-md-4"><label class="form-label" for="editStandardItemCode">原文编号</label><input class="form-control" id="editStandardItemCode" name="itemCode" required><div class="form-text">系统标准化编号保持不变。</div></div>
+      <div class="col-md-8"><label class="form-label" for="editStandardItemTitle">标准项标题</label><input class="form-control" id="editStandardItemTitle" name="title"></div>
+      <div class="col-12"><label class="form-label" for="editStandardItemExplanation">条款说明</label><textarea class="form-control" id="editStandardItemExplanation" name="explanation" rows="3"></textarea><div class="form-text">用于保存标题下、子条款之前的“云服务商应……”等说明。</div></div>
+      <div class="col-12"><label class="form-label" for="editStandardItemContent">标准内容</label><textarea class="form-control" id="editStandardItemContent" name="content" rows="8" required></textarea></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
+  </form>
+</div></div></div>
 
 <script>
   (() => {
+    const editModal = document.getElementById('editStandardItemModal');
+    if (editModal) {
+      editModal.addEventListener('show.bs.modal', event => {
+        const trigger = event.relatedTarget;
+        if (!trigger) return;
+        let item;
+        try { item = JSON.parse(trigger.dataset.standardItem || '{}'); } catch { return; }
+        document.getElementById('editStandardItemModalLabel').textContent = '编辑标准项 · ' + (item.standardNumber || '');
+        document.getElementById('editStandardItemForm').action = '/standards/items/' + encodeURIComponent(item.id || '');
+        document.getElementById('editStandardItemCode').value = item.itemCode || '';
+        document.getElementById('editStandardItemTitle').value = item.title || '';
+        document.getElementById('editStandardItemExplanation').value = item.explanation || '';
+        document.getElementById('editStandardItemContent').value = item.content || '';
+      });
+    }
+
     const depthSelect = document.getElementById('standardHeadingDepth');
     const groupTables = Array.from(document.querySelectorAll('.standard-items-table'));
     if (!depthSelect || !groupTables.length) return;
@@ -149,7 +182,7 @@
             row.dataset.groupId = ids[index];
             row.dataset.parentGroupIds = ids.slice(0, index).join('|');
             const cell = document.createElement('td');
-            cell.colSpan = 5;
+            cell.colSpan = 6;
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'standard-heading-toggle';

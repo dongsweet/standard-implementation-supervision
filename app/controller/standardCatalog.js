@@ -113,6 +113,26 @@ class StandardCatalogController extends Controller {
     this.ctx.redirect(returnTo + (returnTo.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('标准项已创建'));
   }
 
+  async updateItem() {
+    const requestedReturnTo = String((this.ctx.request.body || {}).returnTo || '');
+    const returnTo = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '/standards';
+    try {
+      requireGlobalWrite(this.ctx);
+      await this.ctx.service.standardCatalog.updateItem(
+        this.ctx.params.itemId,
+        this.ctx.request.body || {},
+        this.ctx.session.userId
+      );
+      this.ctx.redirect(returnTo + (returnTo.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('标准项已更新'));
+    } catch (error) {
+      if ([ 400, 404, 409 ].includes(error.status)) {
+        this.ctx.redirect(returnTo + (returnTo.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('标准项更新失败：' + error.message));
+        return;
+      }
+      throw error;
+    }
+  }
+
   async importItems() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.standardCatalog.importItems(this.ctx.params.chapterId, this.ctx.request.body.text);

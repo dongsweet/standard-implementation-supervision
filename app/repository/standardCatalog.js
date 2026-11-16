@@ -449,6 +449,50 @@ class StandardCatalogRepository {
     }
   }
 
+  async updateItem({ itemId, itemCode, title, explanation, content, actorId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const current = await client.query(`
+        SELECT si.id, si.standard_version_id, si.item_code, si.title, si.explanation, si.content,
+               sv.version, s.code AS standard_code
+        FROM standard_items si
+        JOIN standard_versions sv ON sv.id = si.standard_version_id
+        JOIN standards s ON s.id = sv.standard_id
+        WHERE si.id = $1
+        FOR UPDATE`, [ itemId ]);
+      if (!current.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const before = current.rows[0];
+      const result = await client.query(`
+        UPDATE standard_items
+        SET item_code = $2, title = $3, explanation = $4, content = $5
+        WHERE id = $1
+        RETURNING *`, [ itemId, itemCode, title, explanation, content ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'update_standard_item', 'standard_item', $2, $3)`, [
+        actorId || null,
+        itemId,
+        JSON.stringify({
+          standardCode: before.standard_code,
+          version: before.version,
+          before: { itemCode: before.item_code, title: before.title, explanation: before.explanation, content: before.content },
+          after: { itemCode, title, explanation, content },
+        }),
+      ]);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async upsertItems({ versionId, chapterId, rows }) {
     const client = await this.pool.connect();
     let count = 0;

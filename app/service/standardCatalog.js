@@ -180,6 +180,30 @@ class StandardCatalogService extends Service {
     }
   }
 
+  async updateItem(itemId, payload, actorId) {
+    const itemCode = String(payload.itemCode || '').trim();
+    const content = String(payload.content || '').trim();
+    if (!itemCode) this.ctx.throw(400, '标准项编号不能为空');
+    if (!content) this.ctx.throw(400, '标准内容不能为空');
+    if (itemCode.length > 100) this.ctx.throw(400, '标准项编号不能超过100个字符');
+    if (String(payload.title || '').trim().length > 500) this.ctx.throw(400, '标准项标题不能超过500个字符');
+    try {
+      const result = await this.repository.updateItem({
+        itemId,
+        itemCode,
+        title: String(payload.title || '').trim() || null,
+        explanation: String(payload.explanation || '').trim() || null,
+        content,
+        actorId,
+      });
+      if (!result) this.ctx.throw(404, '标准项不存在');
+      return result;
+    } catch (error) {
+      if (error.code === '23505') this.ctx.throw(409, '该版本下标准项编号已存在');
+      throw error;
+    }
+  }
+
   parseImport(text) {
     const lines = String(text || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     if (!lines.length) this.ctx.throw(400, '请填写待导入内容');

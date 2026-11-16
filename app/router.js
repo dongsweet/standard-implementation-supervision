@@ -35,6 +35,7 @@ module.exports = app => {
   router.post('/standards/versions/:versionId/import', controller.standardCatalog.importVersionContent);
   router.post('/standards/versions/:versionId/chapters', controller.standardCatalog.createChapter);
   router.post('/standards/chapters/:chapterId/items', controller.standardCatalog.createItem);
+  router.post('/standards/items/:itemId', controller.standardCatalog.updateItem);
   router.post('/standards/chapters/:chapterId/import', controller.standardCatalog.importItems);
   router.get('/projects', controller.project.index);
   router.post('/projects', controller.project.create);
