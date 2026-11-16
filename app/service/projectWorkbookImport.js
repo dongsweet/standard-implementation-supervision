@@ -35,10 +35,11 @@ class ProjectWorkbookImportService extends Service {
         cloudCenterIds: cloudCenterIds.map(item => String(item || '').trim() || null),
         acknowledgeUnmatched: payload.acknowledgeUnmatched === 'true' || payload.acknowledgeUnmatched === 'on',
         acknowledgeContentDifferences: payload.acknowledgeContentDifferences === 'true' || payload.acknowledgeContentDifferences === 'on',
+        acknowledgeAssignmentReview: payload.acknowledgeAssignmentReview === 'true' || payload.acknowledgeAssignmentReview === 'on',
         actorId,
       });
     } catch (error) {
-      if ([ 'PROJECT_IMPORT_NOT_FOUND', 'PROJECT_IMPORT_NOT_READY', 'PROJECT_IMPORT_INVALID_CENTER_MAPPING', 'PROJECT_IMPORT_UNMATCHED', 'PROJECT_IMPORT_CONTENT_DIFFERENCE', 'PROJECT_IMPORT_NO_MATCH' ].includes(error.code)) {
+      if ([ 'PROJECT_IMPORT_NOT_FOUND', 'PROJECT_IMPORT_NOT_READY', 'PROJECT_IMPORT_INVALID_CENTER_MAPPING', 'PROJECT_IMPORT_UNMATCHED', 'PROJECT_IMPORT_CONTENT_DIFFERENCE', 'PROJECT_IMPORT_ASSIGNMENT_REVIEW', 'PROJECT_IMPORT_NO_MATCH' ].includes(error.code)) {
         this.ctx.throw(409, error.message);
       }
       throw error;

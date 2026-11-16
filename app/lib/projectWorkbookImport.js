@@ -105,6 +105,298 @@ function extractLine(text, labels) {
   return '';
 }
 
+function findHeaderRow(rows, requiredAliases = []) {
+  const wanted = requiredAliases.map(normalizeHeader);
+  const limit = Math.min(rows.length, 12);
+  for (let rowIndex = 0; rowIndex < limit; rowIndex += 1) {
+    const row = rows[rowIndex] || [];
+    const headers = row.map(normalizeHeader);
+    if (wanted.every(alias => headers.some(header => header === alias || header.includes(alias)))) {
+      return { rowIndex, headers };
+    }
+  }
+  return null;
+}
+
+function findAnswerColumn(headers, aliases) {
+  const wanted = aliases.map(normalizeHeader);
+  return headers.findIndex(header => wanted.some(alias => header === alias || header.includes(alias)));
+}
+
+function answerField(value, { hasProjectSequence = false } = {}) {
+  const text = cellText(value).trim();
+  if (!text) return '';
+  // 规范满足情况.xlsx 中的父级说明行使用 658 作为空值占位，不应写入项目应答。
+  if (!hasProjectSequence && text === '658') return '';
+  return text;
+}
+
+function answerPlaceholderLabel(value) {
+  const text = cellText(value).trim();
+  if (!text) return '';
+  return text
+    .replace(/^\s*[\[［【]?\s*(?:赋值|选择)\s*[:：;；]?\s*/i, '')
+    .replace(/[\]］】]\s*$/, '')
+    .trim();
+}
+
+function stripAssignmentPrefix(value, expectedLabel = '') {
+  let text = cellText(value).trim().replace(/^\s*(?:赋值|选择)\s*\d*\s*[:：]\s*/i, '').trim();
+  const lead = text.match(/^([^：:\n]{1,100})\s*[：:]\s*/);
+  if (lead && expectedLabel && normalizeAssignmentLabel(lead[1]) === normalizeAssignmentLabel(expectedLabel)) {
+    text = text.slice(lead[0].length).trim();
+  }
+  return text;
+}
+
+function numberedAssignmentSegments(value) {
+  const source = cellText(value);
+  const result = [];
+  const pattern = /(?:^|[\r\n])\s*(?:(?:赋值|选择)\s*)?(?:[:：]\s*)?(\d+)\s*[：:、.]\s*([\s\S]*?)(?=(?:[\r\n])\s*(?:(?:赋值|选择)\s*)?(?:[:：]\s*)?\d+\s*[：:、.]|$)/g;
+  let match;
+  while ((match = pattern.exec(source))) {
+    const text = match[2].trim();
+    if (text) result.push({ number: Number(match[1]), value: text });
+  }
+  return result;
+}
+
+function labeledAssignmentSegments(value) {
+  const result = [];
+  let current = null;
+  for (const line of cellText(value).split(/\r?\n/)) {
+    const match = line.match(/^\s*([^：:\n]{1,80})\s*[：:]\s*(.*)$/);
+    if (match) {
+      current = { label: match[1].trim(), value: match[2].trim() };
+      result.push(current);
+    } else if (current && line.trim()) {
+      current.value = [ current.value, line.trim() ].filter(Boolean).join('\n');
+    }
+  }
+  return result;
+}
+
+function normalizeAssignmentLabel(value) {
+  return normalizeKey(value)
+    .replace(/云服务商定义的|云服务商规定的|定义的/g, '')
+    .replace(/频率|时间段|项目审查里程碑/g, '时间');
+}
+
+function labelValueForDetail(detail, labeled) {
+  const target = normalizeAssignmentLabel(detail.label);
+  const direct = labeled.find(item => {
+    const candidate = normalizeAssignmentLabel(item.label);
+    return candidate && (candidate === target || candidate.includes(target));
+  });
+  if (direct) return direct.value;
+  if (/深度|广度|覆盖面/.test(detail.label)) {
+    const scope = labeled.filter(item => /深度|广度|覆盖面/.test(item.label));
+    if (scope.length) return scope.map(item => `${item.label}：${item.value}`).join('\n');
+  }
+  if (detail.type === '选择') {
+    const selection = labeled.find(item => /选择/.test(item.label));
+    if (selection) return selection.value;
+  }
+  return '';
+}
+
+function buildAnswerAssignmentDetails(detailRows, fallbackText) {
+  const details = detailRows.filter(row => row.type === '赋值' || row.type === '选择');
+  if (!details.length) return [];
+  const sourceText = details.map(row => row.currentAssignment).find(Boolean) || fallbackText || '';
+  const numbered = numberedAssignmentSegments(sourceText);
+  const labeled = labeledAssignmentSegments(sourceText);
+  return details.map((row, index) => {
+    let value = row.currentAssignment || sourceText;
+    const genericReviewReason = /当前赋值可能对应一个或多个占位符/.test(row.reviewReason || '');
+    let reviewRequired = row.needsReview === true && !genericReviewReason;
+    let reviewReason = genericReviewReason ? '' : row.reviewReason || '';
+    if (details.length === 1) {
+      const listValues = cellText(value).split(/\r?\n/)
+        .map(line => line.match(/^\s*\d+\s*[、.)]\s*(.+)$/)?.[1]?.trim())
+        .filter(Boolean);
+      value = listValues.length > 1 ? listValues.join('\n') : stripAssignmentPrefix(value, row.label);
+    } else if (numbered.length >= details.length && numbered[index]) {
+      value = numbered[index].value.replace(/^\s*\d+\s*[、.]\s*/, '').trim();
+    } else if (labeled.length) {
+      const matchedValue = labelValueForDetail(row, labeled);
+      if (matchedValue) value = matchedValue;
+      else {
+        reviewRequired = true;
+        reviewReason = reviewReason || '存在多个赋值/选择项，未能按提示名称从赋值内容中唯一定位。';
+      }
+    } else if (numbered.length === 0) {
+      reviewRequired = true;
+      reviewReason = reviewReason || '同一标准项存在多个赋值/选择项，工作簿未提供可确定的一一对应序号。';
+    }
+    if (details.length > 1 && /选择/.test(sourceText) && numbered.length === 0) {
+      reviewRequired = true;
+      reviewReason = reviewReason || '赋值内容同时包含选择项和多个描述维度，需要人工确认各项对应关系。';
+    }
+    return {
+      type: row.type === '选择' ? 'selection' : 'assignment',
+      label: answerPlaceholderLabel(row.placeholder),
+      placeholder: row.placeholder || null,
+      value: value || null,
+      sourceRow: row.sourceRow,
+      reviewRequired,
+      reviewReason: reviewReason || null,
+    };
+  });
+}
+
+function formatAnswerAssignments(details, fallbackText = '') {
+  if (!details.length) return fallbackText || '';
+  return details.map(detail => {
+    const label = detail.label || (detail.type === 'selection' ? '选择项' : '需赋值项');
+    return `${label}：${detail.value || '待确认'}`;
+  }).join('\n');
+}
+
+function parseAnswerWorkbookRows(sheets) {
+  const detailSheet = sheets.find(sheet => findHeaderRow(sheet.rows || [], [ '标准化编号', '原文占位符' ]));
+  const summarySheet = sheets.find(sheet => sheet !== detailSheet && findHeaderRow(sheet.rows || [], [ '标准化编号' ])
+    && (findHeaderRow(sheet.rows || [], [ '标准化编号', '规范体系具体要求' ])
+      || findHeaderRow(sheet.rows || [], [ '标准化编号', '证据列表' ])));
+  const onlyDetailSheet = !summarySheet && detailSheet ? detailSheet : null;
+  if (!summarySheet && !detailSheet) return null;
+
+  const byNumber = new Map();
+  const getRow = (standardNumber, sourceSheet, sourceRow) => {
+    const key = normalizeKey(standardNumber);
+    if (!key) return null;
+    if (!byNumber.has(key)) {
+      byNumber.set(key, {
+        sourceSheet,
+        sourceRow,
+        sourceKind: 'answer',
+        standardNumber: cellText(standardNumber).trim(),
+        projectSequence: '',
+        clauseNumber: '',
+        chapterCode: '',
+        chapterName: '',
+        headingPath: '',
+        title: '',
+        explanation: '',
+        content: '',
+        assignmentText: '',
+        assignmentDetails: [],
+        unifiedRequirement: '',
+        expectedEvidence: '',
+        actualEvidence: '',
+        pendingEvidence: '',
+        problem: '',
+        responsible: '',
+        cloudCenters: {},
+        supervision: [],
+      });
+    }
+    return byNumber.get(key);
+  };
+
+  if (summarySheet) {
+    const found = findHeaderRow(summarySheet.rows || [], [ '标准化编号' ]);
+    const headers = found.headers;
+    const map = {
+      standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
+      projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
+      assignment: findAnswerColumn(headers, [ '赋值', '云服务商赋值', '当前赋值' ]),
+      unifiedRequirement: findAnswerColumn(headers, [ '规范体系具体要求', '多云统管制度规范体系具体要求' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '统一规范实施证据列表', '应提供证据' ]),
+      actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
+    };
+    for (let rowIndex = found.rowIndex + 1; rowIndex < summarySheet.rows.length; rowIndex += 1) {
+      const source = summarySheet.rows[rowIndex] || [];
+      const rawNumber = cellText(source[map.standardNumber]).trim();
+      if (!rawNumber) continue;
+      const projectSequence = answerField(source[map.projectSequence], { hasProjectSequence: Boolean(cellText(source[map.projectSequence]).trim()) });
+      const row = getRow(rawNumber, summarySheet.name, rowIndex + 1);
+      row.projectSequence = row.projectSequence || projectSequence;
+      row.assignmentText = row.assignmentText || answerField(source[map.assignment], { hasProjectSequence: Boolean(projectSequence) });
+      row.unifiedRequirement = row.unifiedRequirement || answerField(source[map.unifiedRequirement], { hasProjectSequence: Boolean(projectSequence) });
+      row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence: Boolean(projectSequence) });
+      row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence: Boolean(projectSequence) });
+    }
+  }
+
+  if (detailSheet) {
+    const found = findHeaderRow(detailSheet.rows || [], [ '标准化编号', '原文占位符' ]);
+    const headers = found.headers;
+    const map = {
+      standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
+      projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
+      clauseNumber: findAnswerColumn(headers, [ '原标准项编号', '条款号', '标准项编号' ]),
+      chapterCode: findAnswerColumn(headers, [ '章节编号', '章节号' ]),
+      chapterName: findAnswerColumn(headers, [ '章节名称' ]),
+      headingPath: findAnswerColumn(headers, [ '标题路径' ]),
+      title: findAnswerColumn(headers, [ '标题', '标准项标题' ]),
+      explanation: findAnswerColumn(headers, [ '条款说明' ]),
+      content: findAnswerColumn(headers, [ '标准内容', '标准项内容' ]),
+      extractionType: findAnswerColumn(headers, [ '提取类型' ]),
+      placeholder: findAnswerColumn(headers, [ '原文占位符' ]),
+      currentAssignment: findAnswerColumn(headers, [ '当前赋值' ]),
+      unifiedRequirement: findAnswerColumn(headers, [ '规范体系具体要求' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '统一规范实施证据列表', '应提供证据' ]),
+      actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
+      review: findAnswerColumn(headers, [ '需要复核' ]),
+      reviewReason: findAnswerColumn(headers, [ '复核原因' ]),
+    };
+    const detailByNumber = new Map();
+    for (let rowIndex = found.rowIndex + 1; rowIndex < detailSheet.rows.length; rowIndex += 1) {
+      const source = detailSheet.rows[rowIndex] || [];
+      const rawNumber = cellText(source[map.standardNumber]).trim();
+      if (!rawNumber) continue;
+      const hasProjectSequence = Boolean(cellText(source[map.projectSequence]).trim());
+      const row = getRow(rawNumber, detailSheet.name, rowIndex + 1);
+      row.projectSequence = row.projectSequence || answerField(source[map.projectSequence], { hasProjectSequence });
+      row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence });
+      row.chapterCode = row.chapterCode || answerField(source[map.chapterCode], { hasProjectSequence });
+      row.chapterName = row.chapterName || answerField(source[map.chapterName], { hasProjectSequence });
+      row.headingPath = row.headingPath || answerField(source[map.headingPath], { hasProjectSequence });
+      row.title = row.title || answerField(source[map.title], { hasProjectSequence });
+      row.explanation = row.explanation || answerField(source[map.explanation], { hasProjectSequence });
+      row.content = row.content || answerField(source[map.content], { hasProjectSequence });
+      row.unifiedRequirement = row.unifiedRequirement || answerField(source[map.unifiedRequirement], { hasProjectSequence });
+      row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence });
+      row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence });
+      const detail = {
+        type: answerField(source[map.extractionType], { hasProjectSequence }),
+        placeholder: answerField(source[map.placeholder], { hasProjectSequence }),
+        currentAssignment: answerField(source[map.currentAssignment], { hasProjectSequence }),
+        sourceRow: rowIndex + 1,
+        needsReview: /是|待核对|复核/.test(cellText(source[map.review])),
+        reviewReason: answerField(source[map.reviewReason], { hasProjectSequence }),
+      };
+      if (detail.type === '赋值' || detail.type === '选择') {
+        if (!detailByNumber.has(normalizeKey(rawNumber))) detailByNumber.set(normalizeKey(rawNumber), []);
+        detailByNumber.get(normalizeKey(rawNumber)).push(detail);
+      }
+    }
+    for (const [key, row] of byNumber) {
+      const details = buildAnswerAssignmentDetails(detailByNumber.get(key) || [], row.assignmentText);
+      if (details.length) {
+        row.assignmentDetails = details;
+        row.assignmentText = formatAnswerAssignments(details, row.assignmentText);
+      }
+    }
+  }
+
+  const rows = [ ...byNumber.values() ].filter(row => row.assignmentText || row.unifiedRequirement || row.expectedEvidence
+    || row.actualEvidence || row.assignmentDetails.length || row.projectSequence || row.content || row.explanation);
+  if (!rows.length) throw importError('未找到可导入的规范满足数据；请确认文件包含“标准化编号”列');
+  const assignmentDetailCount = rows.reduce((sum, row) => sum + row.assignmentDetails.length, 0);
+  const assignmentReviewCount = rows.reduce((sum, row) => sum + row.assignmentDetails.filter(item => item.reviewRequired).length, 0);
+  return {
+    rows,
+    importedSheetCount: [ summarySheet, onlyDetailSheet || (detailSheet && summarySheet !== detailSheet ? detailSheet : null) ].filter(Boolean).length,
+    skippedSheetCount: sheets.length - [ summarySheet, onlyDetailSheet || (detailSheet && summarySheet !== detailSheet ? detailSheet : null) ].filter(Boolean).length,
+    cloudCenterNames: [],
+    importMode: 'answer',
+    assignmentDetailCount,
+    assignmentReviewCount,
+  };
+}
+
 function detectCloudGroups(rows, map) {
   const second = rows[1] || [];
   const starts = [];
@@ -254,12 +546,15 @@ async function parseProjectWorkbookFile(filePath, fileName) {
     worksheet.eachRow({ includeEmpty: true }, row => { rows[row.number - 1] = (row.values || []).slice(1).map(cellText); });
     return { name: worksheet.name, rows };
   });
+  const answerPayload = parseAnswerWorkbookRows(sheets);
+  if (answerPayload) return answerPayload;
   return parseProjectRows(sheets);
 }
 
 module.exports = {
   DEFAULT_CLOUD_CENTERS,
   parseProjectRows,
+  parseAnswerWorkbookRows,
   parseProjectWorkbookFile,
   parseStatus,
   normalizeKey,

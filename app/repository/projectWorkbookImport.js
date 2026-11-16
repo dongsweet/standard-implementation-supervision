@@ -13,6 +13,21 @@ function standardContentForComparison(item) {
     : item.content_snapshot;
 }
 
+function hasAssignmentPlaceholder(item) {
+  const text = standardContentForComparison(item);
+  return /[\[［【]\s*[赋賦]值/u.test(String(text || ''));
+}
+
+function normalizeAnswerRow(row, item) {
+  if (row.sourceKind !== 'answer' || hasAssignmentPlaceholder(item)) return row;
+  return {
+    ...row,
+    assignmentText: '',
+    assignmentDetails: [],
+    assignmentIgnoredReason: '标准项正文和条款说明未发现赋值占位符，工作簿中的赋值内容未写入。',
+  };
+}
+
 function parseCheckedAt(value) {
   const match = String(value || '').match(/\b(20\d{2})\s*[./年-]\s*(\d{1,2})\s*[./月-]\s*(\d{1,2})/);
   if (!match) return null;
@@ -118,15 +133,16 @@ class ProjectWorkbookImportRepository {
     const unmatched = [];
     const contentDifferences = [];
     for (const row of job.payload.rows || []) {
-      const candidates = byCode.get(normalizeKey(row.clauseNumber)) || [];
+      const lookupValue = row.sourceKind === 'answer' ? row.standardNumber : row.clauseNumber;
+      const candidates = byCode.get(normalizeKey(lookupValue)) || [];
       const unique = [ ...new Map(candidates.map(item => [ item.standard_item_id, item ])).values() ];
       if (unique.length !== 1) {
-        unmatched.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, reason: unique.length ? '项目中存在多个同号标准项' : '项目基线中未找到该条款号' });
+        unmatched.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber || lookupValue, standardNumber: row.standardNumber, reason: unique.length ? '项目中存在多个同号标准项' : '项目基线中未找到该标准化编号' });
         continue;
       }
-      const match = { ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot };
+      const match = normalizeAnswerRow({ ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot }, unique[0]);
       matches.push(match);
-      if (normalizedContent(row.content) !== normalizedContent(standardContentForComparison(unique[0]))) {
+      if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(unique[0]))) {
         contentDifferences.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, snapshotContent: standardContentForComparison(unique[0]), importedContent: row.content });
       }
     }
@@ -149,12 +165,16 @@ class ProjectWorkbookImportRepository {
         skippedSheetCount: job.payload.skippedSheetCount || 0,
         supervisionDefinitionCount,
         supervisionObservationCount,
+        importMode: job.payload.importMode || 'project',
+        assignmentDetailCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).length, 0),
+        assignmentReviewCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).filter(detail => detail.reviewRequired).length, 0),
+        assignmentIgnoredCount: matches.filter(row => row.assignmentIgnoredReason).length,
       },
-      previewRows: matches.slice(0, 8).map(row => ({ clauseNumber: row.clauseNumber, content: row.content, sourceSheet: row.sourceSheet })),
+      previewRows: matches.slice(0, 8).map(row => ({ clauseNumber: row.clauseNumber || row.standardNumber, content: row.content || row.unifiedRequirement, assignmentText: row.assignmentText, assignmentDetails: row.assignmentDetails || [], sourceSheet: row.sourceSheet })),
     };
   }
 
-  async apply({ projectId, jobId, cloudCenterIds, acknowledgeUnmatched, acknowledgeContentDifferences, actorId }) {
+  async apply({ projectId, jobId, cloudCenterIds, acknowledgeUnmatched, acknowledgeContentDifferences, acknowledgeAssignmentReview, actorId }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -206,13 +226,14 @@ class ProjectWorkbookImportRepository {
       const unmatched = [];
       const contentDifferences = [];
       for (const row of job.payload.rows || []) {
-        const candidates = [ ...new Map((byCode.get(normalizeKey(row.clauseNumber)) || []).map(item => [ item.standard_item_id, item ])).values() ];
+        const lookupValue = row.sourceKind === 'answer' ? row.standardNumber : row.clauseNumber;
+        const candidates = [ ...new Map((byCode.get(normalizeKey(lookupValue)) || []).map(item => [ item.standard_item_id, item ])).values() ];
         if (candidates.length !== 1) {
           unmatched.push(row);
           continue;
         }
-        matches.push({ ...row, standardItemId: candidates[0].standard_item_id });
-        if (normalizedContent(row.content) !== normalizedContent(standardContentForComparison(candidates[0]))) contentDifferences.push(row);
+        matches.push(normalizeAnswerRow({ ...row, standardItemId: candidates[0].standard_item_id }, candidates[0]));
+        if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(candidates[0]))) contentDifferences.push(row);
       }
       if (unmatched.length && !acknowledgeUnmatched) {
         const error = new Error(`有${unmatched.length}條未匹配條款；请确认后勾选“仅导入已匹配条款”`);
@@ -222,6 +243,13 @@ class ProjectWorkbookImportRepository {
       if (contentDifferences.length && !acknowledgeContentDifferences) {
         const error = new Error(`有${contentDifferences.length}条标准正文与项目快照不同；请确认后再导入`);
         error.code = 'PROJECT_IMPORT_CONTENT_DIFFERENCE';
+        throw error;
+      }
+      const assignmentReviewRows = matches.filter(row => (row.assignmentDetails || []).some(detail => detail.reviewRequired));
+      if (assignmentReviewRows.length && !acknowledgeAssignmentReview) {
+        const reviewCount = assignmentReviewRows.reduce((sum, row) => sum + row.assignmentDetails.filter(detail => detail.reviewRequired).length, 0);
+        const error = new Error(`有${reviewCount}个赋值/选择项无法从工作簿确定一一对应；请确认后再导入`);
+        error.code = 'PROJECT_IMPORT_ASSIGNMENT_REVIEW';
         throw error;
       }
       if (!matches.length) {
@@ -251,32 +279,40 @@ class ProjectWorkbookImportRepository {
         }
       };
       for (const row of matches) {
-        const hasGlobalData = row.level || row.isKey !== null || row.providerAssignment || row.unifiedRequirement
-          || row.expectedEvidence || row.pendingEvidence || row.problem || row.responsible;
+        const hasGlobalData = row.sourceKind === 'answer'
+          ? Boolean(row.assignmentText || (row.assignmentDetails && row.assignmentDetails.length) || row.unifiedRequirement
+            || row.expectedEvidence || row.actualEvidence || row.pendingEvidence || row.problem || row.responsible)
+          : Boolean(row.level || (row.isKey !== null && row.isKey !== undefined) || row.providerAssignment
+          || row.assignmentText || (row.assignmentDetails && row.assignmentDetails.length) || row.unifiedRequirement
+          || row.expectedEvidence || row.actualEvidence || row.pendingEvidence || row.problem || row.responsible);
         if (hasGlobalData) {
           const globalAnswer = await client.query(`
             INSERT INTO project_standard_answers
               (project_id, standard_item_id, standard_level, is_key, clause_assignment,
-               unified_requirement, expected_evidence, pending_evidence, responsible_text, problem_description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               assignment_details, unified_requirement, expected_evidence, actual_evidence,
+               pending_evidence, responsible_text, problem_description)
+            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)
             ON CONFLICT (project_id, standard_item_id) WHERE cloud_center_id IS NULL
             DO UPDATE SET
               standard_level = COALESCE(EXCLUDED.standard_level, project_standard_answers.standard_level),
-              is_key = EXCLUDED.is_key,
+              is_key = CASE WHEN $13 THEN project_standard_answers.is_key ELSE EXCLUDED.is_key END,
               clause_assignment = COALESCE(EXCLUDED.clause_assignment, project_standard_answers.clause_assignment),
+              assignment_details = CASE WHEN jsonb_array_length(EXCLUDED.assignment_details) > 0 THEN EXCLUDED.assignment_details ELSE project_standard_answers.assignment_details END,
               unified_requirement = COALESCE(EXCLUDED.unified_requirement, project_standard_answers.unified_requirement),
               expected_evidence = COALESCE(EXCLUDED.expected_evidence, project_standard_answers.expected_evidence),
+              actual_evidence = COALESCE(EXCLUDED.actual_evidence, project_standard_answers.actual_evidence),
               pending_evidence = COALESCE(EXCLUDED.pending_evidence, project_standard_answers.pending_evidence),
               responsible_text = COALESCE(EXCLUDED.responsible_text, project_standard_answers.responsible_text),
               problem_description = COALESCE(EXCLUDED.problem_description, project_standard_answers.problem_description),
               updated_at = now()
             RETURNING id`, [
-            projectId, row.standardItemId, row.level || null, Boolean(row.isKey), row.providerAssignment || null,
-            row.unifiedRequirement || null, row.expectedEvidence || null, row.pendingEvidence || null,
-            row.responsible || null, row.problem || null,
+            projectId, row.standardItemId, row.level || null, Boolean(row.isKey), row.providerAssignment || row.assignmentText || null,
+            JSON.stringify(row.assignmentDetails || []), row.unifiedRequirement || null, row.expectedEvidence || null,
+            row.actualEvidence || null, row.pendingEvidence || null, row.responsible || null, row.problem || null,
+            row.sourceKind === 'answer',
           ]);
           answerCount += 1;
-          await addEvidence(globalAnswer.rows[0].id, row.pendingEvidence, { scope: 'pending' });
+          await addEvidence(globalAnswer.rows[0].id, row.actualEvidence || row.pendingEvidence, { scope: row.actualEvidence ? 'actual' : 'pending' });
         }
         for (const [ slot, groupName ] of (job.payload.cloudCenterNames || []).entries()) {
           const answer = row.cloudCenters?.[groupName];
@@ -397,6 +433,8 @@ class ProjectWorkbookImportRepository {
         matchedCount: matches.length,
         unmatchedCount: unmatched.length,
         contentDifferenceCount: contentDifferences.length,
+        assignmentDetailCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).length, 0),
+        assignmentReviewCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).filter(detail => detail.reviewRequired).length, 0),
         answerCount,
         cloudAnswerCount,
         definitionCount: definitionsByHash.size,

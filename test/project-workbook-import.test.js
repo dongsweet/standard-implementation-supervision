@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseProjectRows, parseStatus, splitEvidence } = require('../app/lib/projectWorkbookImport');
+const { parseProjectRows, parseAnswerWorkbookRows, parseStatus, splitEvidence } = require('../app/lib/projectWorkbookImport');
 const { ProjectWorkbookImportRepository } = require('../app/repository/projectWorkbookImport');
 
 test('parses the wide project workbook shape into answers, cloud groups and supervision data', () => {
@@ -31,6 +31,32 @@ test('normalizes simple status and skips default empty evidence', () => {
   assert.deepEqual(splitEvidence('证据1\n无\n证据2'), [ '证据1', '证据2' ]);
 });
 
+test('parses the standard answer workbook and keeps assignment details per placeholder', () => {
+  const result = parseAnswerWorkbookRows([
+    {
+      name: 'Sheet1',
+      rows: [
+        [ '标准化编号', '项目表序号(A列)', '赋值', '规范体系具体要求', '证据列表' ],
+        [ '31168-2023-06033', 6026, '1、采购合同\n2、安全协议', '制度要求', '制度文件A' ],
+        [ '31168-2023-08037', null, '云服务商定义的强制实施的访问控制策略：\n1、租户默认策略', '', '' ],
+      ],
+    },
+    {
+      name: '赋值提取复核',
+      rows: [
+        [ '标准化编号', '项目表序号(A列)', '原文占位符', '提取类型', '当前赋值', '规范体系具体要求', '证据列表', '需要复核', '复核原因' ],
+        [ '31168-2023-06033', 6026, '[赋值：云服务商定义的安全要求]', '赋值', '1、采购合同\n2、安全协议', '制度要求', '制度文件A', '是', '已提取占位符；当前赋值可能对应一个或多个占位符。' ],
+        [ '31168-2023-08037', null, '[赋值：云服务商定义的强制实施的访问控制策略]', '赋值', '云服务商定义的强制实施的访问控制策略：\n1、租户默认策略', '', '', '否', '用户确认：说明项保留赋值。' ],
+      ],
+    },
+  ]);
+  assert.equal(result.importMode, 'answer');
+  assert.equal(result.rows.length, 2);
+  assert.equal(result.assignmentDetailCount, 2);
+  assert.equal(result.rows.find(row => row.standardNumber === '31168-2023-06033').assignmentDetails[0].value, '采购合同\n安全协议');
+  assert.equal(result.rows.find(row => row.standardNumber === '31168-2023-08037').assignmentDetails[0].reviewRequired, false);
+});
+
 test('compares imported source text against the reconstructed parent explanation and clause body', async () => {
   const repository = new ProjectWorkbookImportRepository({
     async query(sql) {
@@ -50,4 +76,95 @@ test('compares imported source text against the reconstructed parent explanation
   const review = await repository.getReview('project-1', 'job-1');
   assert.equal(review.summary.matchedCount, 1);
   assert.equal(review.summary.contentDifferenceCount, 0);
+});
+
+test('does not import an assignment value when the matched standard item has no assignment placeholder', async () => {
+  const repository = new ProjectWorkbookImportRepository({ query: async () => ({ rows: [] }) });
+  repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', sourceSheet: 'Sheet1', sourceRow: 120, standardNumber: '31168-2023-12055',
+    assignmentText: '赋值：每日', assignmentDetails: [], unifiedRequirement: '制度要求', expectedEvidence: '制度文件',
+  } ] } });
+  repository.listProjectCloudCenters = async () => [];
+  repository.listProjectStandardItems = async () => [ {
+    standard_item_id: 'item-12055', item_code_snapshot: '12.5.5', standard_number_snapshot: '31168-2023-12055',
+    explanation_snapshot: null, content_snapshot: '普通条款，不含占位符。',
+  } ];
+  const review = await repository.getReview('project-1', 'job-1');
+  assert.equal(review.summary.matchedCount, 1);
+  assert.equal(review.matches[0].assignmentText, '');
+  assert.equal(review.summary.assignmentIgnoredCount, 1);
+});
+
+test('writes assignment details, implementation requirements, and real evidence in answer-import mode', async () => {
+  const calls = [];
+  const payload = { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', standardNumber: '31168-2023-06033', clauseNumber: '6.3.1 a)',
+    assignmentText: '云服务商定义的安全要求：采购合同',
+    assignmentDetails: [ { type: 'assignment', label: '云服务商定义的安全要求', placeholder: '[赋值：云服务商定义的安全要求]', value: '采购合同', reviewRequired: false } ],
+    unifiedRequirement: '制定统一要求。', expectedEvidence: '', actualEvidence: '《采购管理规范》',
+    cloudCenters: {}, supervision: [],
+  } ] };
+  const client = {
+    async query(sql, values) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push({ statement, values });
+      if (statement === 'BEGIN' || statement === 'COMMIT' || statement === 'ROLLBACK') return { rowCount: 0, rows: [] };
+      if (statement.includes('FROM project_data_import_jobs') && statement.includes('FOR UPDATE')) {
+        return { rowCount: 1, rows: [ { id: 'job-1', status: 'ready', original_filename: 'answers.xlsx', payload, cloud_mapping: {} } ] };
+      }
+      if (statement.includes('FROM project_cloud_centers')) return { rowCount: 0, rows: [] };
+      if (statement.includes('FROM project_standard_items')) return { rowCount: 1, rows: [ {
+        standard_item_id: 'item-1', item_code_snapshot: '6.3.1 a)', standard_number_snapshot: '31168-2023-06033',
+        explanation_snapshot: null, content_snapshot: '采购合同中提出安全要求[赋值：云服务商定义的安全要求]。',
+      } ] };
+      if (statement.startsWith('INSERT INTO project_standard_answers')) return { rowCount: 1, rows: [ { id: 'answer-1' } ] };
+      if (statement.startsWith('INSERT INTO evidence_materials')) return { rowCount: 1, rows: [ { id: 'evidence-1' } ] };
+      if (statement.startsWith('INSERT INTO answer_evidence')) return { rowCount: 1, rows: [] };
+      if (statement.startsWith('UPDATE project_data_import_jobs')) return { rowCount: 1, rows: [] };
+      throw new Error(`Unexpected query: ${statement}`);
+    },
+    release() {},
+  };
+  const repository = new ProjectWorkbookImportRepository({ connect: async () => client });
+  const result = await repository.apply({
+    projectId: 'project-1', jobId: 'job-1', cloudCenterIds: [ null ],
+    acknowledgeUnmatched: false, acknowledgeContentDifferences: false,
+    acknowledgeAssignmentReview: false, actorId: 'user-1',
+  });
+  const answerWrite = calls.find(call => call.statement.startsWith('INSERT INTO project_standard_answers'));
+  assert.ok(answerWrite);
+  assert.equal(JSON.parse(answerWrite.values[5])[0].value, '采购合同');
+  assert.equal(answerWrite.values[6], '制定统一要求。');
+  assert.equal(answerWrite.values[8], '《采购管理规范》');
+  assert.equal(answerWrite.values[12], true);
+  assert.equal(result.matchedCount, 1);
+  assert.equal(result.evidenceCount, 1);
+  assert.equal(result.cloudAnswerCount, 0);
+});
+
+test('blocks unresolved assignment links until the reviewer acknowledges them', async () => {
+  const calls = [];
+  const payload = { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', standardNumber: '31168-2023-06033', clauseNumber: '6.3.1 a)',
+    assignmentText: '赋值', assignmentDetails: [ { reviewRequired: true, value: 'x' } ],
+    cloudCenters: {}, supervision: [],
+  } ] };
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if ([ 'BEGIN', 'ROLLBACK' ].includes(statement)) return { rowCount: 0, rows: [] };
+      if (statement.includes('FROM project_data_import_jobs') && statement.includes('FOR UPDATE')) return { rowCount: 1, rows: [ { status: 'ready', payload } ] };
+      if (statement.includes('FROM project_cloud_centers')) return { rowCount: 0, rows: [] };
+      if (statement.includes('FROM project_standard_items')) return { rowCount: 1, rows: [ { standard_item_id: 'item-1', item_code_snapshot: '6.3.1 a)', standard_number_snapshot: '31168-2023-06033', explanation_snapshot: null, content_snapshot: '条款[赋值：某项]' } ] };
+      throw new Error(`Unexpected query: ${statement}`);
+    },
+    release() {},
+  };
+  const repository = new ProjectWorkbookImportRepository({ connect: async () => client });
+  await assert.rejects(
+    repository.apply({ projectId: 'project-1', jobId: 'job-1', cloudCenterIds: [], acknowledgeUnmatched: false, acknowledgeContentDifferences: false, acknowledgeAssignmentReview: false }),
+    error => error.code === 'PROJECT_IMPORT_ASSIGNMENT_REVIEW',
+  );
+  assert.equal(calls.some(statement => statement.startsWith('INSERT INTO project_standard_answers')), false);
 });

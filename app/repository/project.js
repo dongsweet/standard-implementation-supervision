@@ -98,19 +98,26 @@ class ProjectRepository {
 
     const answers = await client.query(`
       SELECT id, standard_item_id, cloud_center_id, applicability, applicability_scope,
-             status, actual_evidence, measure_description, problem_description, owner_user_id, updated_at
+             status, actual_evidence, measure_description, problem_description, owner_user_id,
+             standard_level, is_key, clause_assignment, assignment_details,
+             unified_requirement, expected_evidence, pending_evidence, responsible_text, updated_at
       FROM project_standard_answers WHERE project_id = $1`, [ sourceProjectId ]);
     const answerMap = new Map();
     for (const answer of answers.rows) {
       const inserted = await client.query(`
         INSERT INTO project_standard_answers
           (project_id, standard_item_id, cloud_center_id, applicability, applicability_scope,
-           status, actual_evidence, measure_description, problem_description, owner_user_id, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           status, actual_evidence, measure_description, problem_description, owner_user_id,
+           standard_level, is_key, clause_assignment, assignment_details,
+           unified_requirement, expected_evidence, pending_evidence, responsible_text, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18, $19)
         ON CONFLICT DO NOTHING RETURNING id`,
       [ targetProjectId, answer.standard_item_id, answer.cloud_center_id, answer.applicability,
         answer.applicability_scope, answer.status, answer.actual_evidence, answer.measure_description,
-        answer.problem_description, answer.owner_user_id, answer.updated_at ]);
+        answer.problem_description, answer.owner_user_id, answer.standard_level,
+        answer.is_key, answer.clause_assignment, JSON.stringify(answer.assignment_details || []),
+        answer.unified_requirement, answer.expected_evidence, answer.pending_evidence, answer.responsible_text,
+        answer.updated_at ]);
       if (inserted.rowCount) answerMap.set(answer.id, inserted.rows[0].id);
     }
 
@@ -164,6 +171,7 @@ class ProjectRepository {
              COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
+             COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
              COALESCE(psa.unified_requirement, '') AS unified_requirement,
              COALESCE(psa.expected_evidence, '') AS expected_evidence,
              COALESCE(psa.pending_evidence, '') AS pending_evidence,
