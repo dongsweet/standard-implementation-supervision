@@ -6,7 +6,6 @@ const {
   filterChapters,
   hasAssignmentPlaceholder,
   paginateChapters,
-  paginateItems,
 } = require('../app/lib/standardCatalogView');
 
 const chapters = [
@@ -42,34 +41,22 @@ test('filters assignable items and text search across clause fields', () => {
   assert.deepEqual(searched[0].items.map(item => item.id), [ 'item-2' ]);
 });
 
+test('filters by chapter and combines chapter, search, and assignment conditions', () => {
+  const selected = filterChapters(chapters, { chapterCode: '6' });
+  assert.deepEqual(selected.map(chapter => chapter.code), [ '6' ]);
+  assert.deepEqual(selected[0].items.map(item => item.id), [ 'item-1', 'item-2', 'item-3' ]);
+
+  const combined = filterChapters(chapters, { chapterCode: '6', search: '检查', needsAssignment: true });
+  assert.deepEqual(combined.map(chapter => chapter.code), [ '6' ]);
+  assert.deepEqual(combined[0].items.map(item => item.id), [ 'item-1' ]);
+
+  assert.deepEqual(filterChapters(chapters, { chapterCode: '8' }), []);
+});
+
 test('paginates matching chapters without losing page counts', () => {
   const filtered = filterChapters(chapters, { needsAssignment: true });
   const firstPage = paginateChapters(filtered, 1, '1');
   assert.deepEqual(firstPage.chapters.map(chapter => chapter.code), [ '6' ]);
   assert.equal(firstPage.pagination.pageCount, 2);
   assert.equal(firstPage.chapters[0].item_count, 1);
-});
-
-test('paginates standard items across chapter boundaries and groups the page by chapter', () => {
-  const firstPage = paginateItems(chapters, 1, '20');
-  assert.equal(firstPage.pagination.total, 4);
-  assert.equal(firstPage.pagination.pageCount, 1);
-  assert.deepEqual(firstPage.chapters.map(chapter => chapter.code), [ '6', '7' ]);
-  assert.deepEqual(firstPage.chapters.flatMap(chapter => chapter.items.map(item => item.id)), [ 'item-1', 'item-2', 'item-3', 'item-4' ]);
-});
-
-test('splits a large standard-item result into stable pages', () => {
-  const manyItems = [
-    { ...chapters[0], items: Array.from({ length: 30 }, (_, index) => ({ id: `a-${index + 1}` })) },
-    { ...chapters[1], items: Array.from({ length: 25 }, (_, index) => ({ id: `b-${index + 1}` })) },
-  ];
-  const firstPage = paginateItems(manyItems, 1, '50');
-  const secondPage = paginateItems(manyItems, 2, '50');
-  assert.equal(firstPage.pagination.total, 55);
-  assert.equal(firstPage.pagination.pageCount, 2);
-  assert.equal(firstPage.pagination.lastItem, 50);
-  assert.equal(secondPage.pagination.firstItem, 51);
-  assert.equal(secondPage.pagination.lastItem, 55);
-  assert.deepEqual(secondPage.chapters.map(chapter => chapter.code), [ '7' ]);
-  assert.equal(secondPage.chapters[0].items.length, 5);
 });

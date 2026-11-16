@@ -5,7 +5,7 @@ const StandardCatalogRepository = require('../repository/standardCatalog');
 const StandardImportJobRepository = require('../repository/standardImportJob');
 const { STANDARD_TYPES, STANDARD_TYPE_LABELS } = require('../lib/standardTypes');
 const { parseStandardImportFile } = require('../lib/standardImport');
-const { filterChapters, paginateChapters, paginateItems } = require('../lib/standardCatalogView');
+const { filterChapters, paginateChapters } = require('../lib/standardCatalogView');
 
 const STANDARD_TYPE_VALUES = new Set(STANDARD_TYPES.map(item => item.value));
 
@@ -114,27 +114,20 @@ class StandardCatalogService extends Service {
     const result = await this.repository.getVersionDetail(versionId);
     if (!result) this.ctx.throw(404, '规范版本不存在');
     result.importJobs = await new StandardImportJobRepository(this.ctx.app.db).listByVersion(versionId);
-    const viewMode = query.view === 'items' ? 'items' : 'chapters';
     const search = String(query.search || '').trim().slice(0, 100);
     const needsAssignment = query.needsAssignment === '1';
-    const filteredChapters = filterChapters(result.chapters, { search, needsAssignment });
+    const chapterCode = String(query.chapterCode || '').trim().slice(0, 100);
+    const chapterOptions = result.chapters.map(chapter => ({ code: chapter.code, name: chapter.name }));
+    const filteredChapters = filterChapters(result.chapters, { search, needsAssignment, chapterCode });
     const filteredItemCount = filteredChapters.reduce((total, chapter) => total + chapter.items.length, 0);
-    result.viewMode = viewMode;
     result.search = search;
     result.needsAssignment = needsAssignment;
+    result.chapterCode = chapterCode;
+    result.chapterOptions = chapterOptions;
     result.filteredItemCount = filteredItemCount;
-
-    if (viewMode === 'items') {
-      const paginated = paginateItems(filteredChapters, query.itemPage, query.itemPageSize);
-      result.chapters = paginated.chapters;
-      result.itemPagination = paginated.pagination;
-      result.chapterPagination = null;
-    } else {
-      const paginated = paginateChapters(filteredChapters, query.chapterPage, query.chapterPageSize || '1');
-      result.chapters = paginated.chapters;
-      result.chapterPagination = paginated.pagination;
-      result.itemPagination = null;
-    }
+    const paginated = paginateChapters(filteredChapters, query.chapterPage, query.chapterPageSize || '1');
+    result.chapters = paginated.chapters;
+    result.chapterPagination = paginated.pagination;
     return result;
   }
 

@@ -1,7 +1,6 @@
 'use strict';
 
 const CHAPTER_PAGE_SIZES = new Set([ '1', '2', '5', '10', '20', 'all' ]);
-const ITEM_PAGE_SIZES = new Set([ '20', '50', '100' ]);
 
 function normalizeSearchText(value) {
   return String(value || '').normalize('NFKC').trim().toLocaleLowerCase();
@@ -31,10 +30,12 @@ function itemMatchesSearch(item, chapter, search) {
   return searchableText.includes(search);
 }
 
-function filterChapters(chapters, { search = '', needsAssignment = false } = {}) {
+function filterChapters(chapters, { search = '', needsAssignment = false, chapterCode = '' } = {}) {
   const normalizedSearch = normalizeSearchText(search);
-  const shouldHideEmpty = Boolean(normalizedSearch || needsAssignment);
+  const normalizedChapterCode = normalizeSearchText(chapterCode);
+  const shouldHideEmpty = Boolean(normalizedSearch || needsAssignment || normalizedChapterCode);
   return chapters.flatMap(chapter => {
+    if (normalizedChapterCode && normalizeSearchText(chapter.code) !== normalizedChapterCode) return [];
     const items = (chapter.items || [])
       .map(item => ({ ...item, requiresAssignment: hasAssignmentPlaceholder(item) }))
       .filter(item =>
@@ -68,44 +69,9 @@ function paginateChapters(chapters, requestedPage, pageSizeValue) {
   };
 }
 
-function paginateItems(chapters, requestedPage, requestedPageSize) {
-  const pageSizeValue = String(requestedPageSize || '50');
-  const pageSize = ITEM_PAGE_SIZES.has(pageSizeValue) ? Number(pageSizeValue) : 50;
-  const flattened = chapters.flatMap(chapter => (chapter.items || []).map(item => ({ chapter, item })));
-  const total = flattened.length;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(pageCount, getPage(requestedPage));
-  const start = (page - 1) * pageSize;
-  const pageRows = flattened.slice(start, start + pageSize);
-  const pageChapters = [];
-  const chaptersById = new Map();
-  for (const { chapter, item } of pageRows) {
-    let target = chaptersById.get(chapter.id);
-    if (!target) {
-      target = { ...chapter, item_count: 0, items: [] };
-      chaptersById.set(chapter.id, target);
-      pageChapters.push(target);
-    }
-    target.items.push(item);
-    target.item_count += 1;
-  }
-  return {
-    chapters: pageChapters,
-    pagination: {
-      page,
-      pageCount,
-      pageSize,
-      firstItem: total ? start + 1 : 0,
-      lastItem: Math.min(start + pageSize, total),
-      total,
-    },
-  };
-}
-
 module.exports = {
   filterChapters,
   hasAssignmentPlaceholder,
   itemMatchesSearch,
   paginateChapters,
-  paginateItems,
 };
