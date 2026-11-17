@@ -217,7 +217,7 @@ class ProjectRepository {
     return { project: projectResult.rows[0], standards: versions.rows };
   }
 
-  async getProjectStandardAnswers({ projectId, standardVersionId, search = '', chapterCode = '', status = '', sortBy = 'standardNumber', sortDirection = 'asc', page = 1, pageSize = 50 }) {
+  async getProjectStandardAnswers({ projectId, standardVersionId, search = '', chapterCode = '', status = '', sortBy = 'standardNumber', sortDirection = 'asc', chapterPage = 1, chapterPageSize = '1' }) {
     const versionResult = await this.pool.query(`
       SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
              s.name AS standard_name, s.standard_type, p.name AS project_name
@@ -227,16 +227,6 @@ class ProjectRepository {
       JOIN projects p ON p.id = psv.project_id
       WHERE psv.project_id = $1 AND psv.standard_version_id = $2`, [ projectId, standardVersionId ]);
     if (!versionResult.rowCount) return null;
-    const chaptersResult = await this.pool.query(`
-      SELECT DISTINCT psi.chapter_code_snapshot AS code,
-             COALESCE(sc.name, psi.chapter_code_snapshot) AS name,
-             COALESCE(sc.sort_order, 0) AS sort_order
-      FROM project_standard_items psi
-      JOIN standard_items si ON si.id = psi.standard_item_id
-      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
-      WHERE psi.project_id = $1 AND si.standard_version_id = $2
-      ORDER BY sort_order, psi.chapter_code_snapshot`, [ projectId, standardVersionId ]);
-
     const validSorts = {
       standardNumber: 'psi.standard_number_snapshot',
       itemCode: 'psi.item_code_snapshot',
@@ -245,6 +235,15 @@ class ProjectRepository {
     };
     const orderBy = validSorts[sortBy] || validSorts.standardNumber;
     const direction = sortDirection === 'desc' ? 'DESC' : 'ASC';
+    const chapterOptionsResult = await this.pool.query(`
+      SELECT DISTINCT psi.chapter_code_snapshot AS code,
+             COALESCE(sc.name, psi.chapter_code_snapshot) AS name,
+             COALESCE(sc.sort_order, 0) AS sort_order
+      FROM project_standard_items psi
+      JOIN standard_items si ON si.id = psi.standard_item_id
+      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
+      WHERE psi.project_id = $1 AND si.standard_version_id = $2
+      ORDER BY sort_order, psi.chapter_code_snapshot`, [ projectId, standardVersionId ]);
     const params = [ projectId, standardVersionId ];
     const predicates = [ 'psi.project_id = $1', 'si.standard_version_id = $2' ];
     if (chapterCode) {
@@ -267,23 +266,44 @@ class ProjectRepository {
       predicates.push(`COALESCE(psa.status, 'unassessed') = $${params.length}`);
     }
     const where = predicates.join(' AND ');
-    const count = await this.pool.query(`
-      SELECT count(*)::integer AS total
+    const chapterResult = await this.pool.query(`
+      SELECT psi.chapter_code_snapshot AS code,
+             COALESCE(sc.name, psi.chapter_code_snapshot) AS name,
+             COALESCE(sc.sort_order, 0) AS sort_order,
+             count(*)::integer AS item_count
       FROM project_standard_items psi
       JOIN standard_items si ON si.id = psi.standard_item_id
+      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
       LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
         AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
-      WHERE ${where}`, params);
-    const total = count.rows[0]?.total || 0;
-    const normalizedPageSize = [ 20, 50, 100 ].includes(Number(pageSize)) ? Number(pageSize) : 50;
-    const pageCount = Math.max(1, Math.ceil(total / normalizedPageSize));
-    const currentPage = Math.min(Math.max(1, Number(page) || 1), pageCount);
-    const offset = (currentPage - 1) * normalizedPageSize;
-    const dataParams = [ ...params, normalizedPageSize, offset ];
-    const items = await this.pool.query(`
+      WHERE ${where}
+      GROUP BY psi.chapter_code_snapshot, sc.name, sc.sort_order
+      ORDER BY COALESCE(sc.sort_order, 0), psi.chapter_code_snapshot`, params);
+    const filteredChapters = chapterResult.rows;
+    const totalItems = filteredChapters.reduce((sum, chapter) => sum + chapter.item_count, 0);
+    const pageSizeValue = [ '1', '2', '5', '10', '20', 'all' ].includes(String(chapterPageSize)) ? String(chapterPageSize) : '1';
+    const normalizedPageSize = pageSizeValue === 'all' ? Math.max(1, filteredChapters.length) : Number(pageSizeValue);
+    const pageCount = Math.max(1, Math.ceil(filteredChapters.length / normalizedPageSize));
+    const currentPage = Math.min(Math.max(1, Number(chapterPage) || 1), pageCount);
+    const chapterOffset = (currentPage - 1) * normalizedPageSize;
+    const chapters = filteredChapters.slice(chapterOffset, chapterOffset + normalizedPageSize);
+    const chapterCodes = chapters.map(chapter => chapter.code);
+    let explanations = [];
+    let items = { rows: [] };
+    if (chapterCodes.length) {
+      const explanationResult = await this.pool.query(`
+        SELECT DISTINCT psi.chapter_code_snapshot AS chapter_code, psi.explanation_snapshot
+        FROM project_standard_items psi
+        JOIN standard_items si ON si.id = psi.standard_item_id
+        WHERE psi.project_id = $1 AND si.standard_version_id = $2
+          AND psi.chapter_code_snapshot = ANY($3::text[])
+          AND NULLIF(btrim(psi.explanation_snapshot), '') IS NOT NULL
+        ORDER BY psi.chapter_code_snapshot, psi.explanation_snapshot`, [ projectId, standardVersionId, chapterCodes ]);
+      explanations = explanationResult.rows;
+      const dataParams = [ ...params, chapterCodes ];
+      items = await this.pool.query(`
       SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
-             CASE WHEN NULLIF(btrim(psi.explanation_snapshot), '') IS NULL THEN psi.content_snapshot
-               ELSE '条款说明：' || psi.explanation_snapshot || '；标准内容：' || psi.content_snapshot END AS content_snapshot,
+             psi.content_snapshot,
              psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
              si.title, COALESCE(sc.name, psi.chapter_code_snapshot) AS chapter_name,
              COALESCE(psa.standard_level, '') AS standard_level,
@@ -305,14 +325,32 @@ class ProjectRepository {
       LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
       LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
         AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
-      WHERE ${where}
-      ORDER BY ${orderBy} ${direction}, psi.standard_number_snapshot ASC
-      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`, dataParams);
+      WHERE ${where} AND psi.chapter_code_snapshot = ANY($${dataParams.length}::text[])
+      ORDER BY COALESCE(sc.sort_order, 0), psi.chapter_code_snapshot, ${orderBy} ${direction}, psi.standard_number_snapshot ASC`, dataParams);
+    }
+    const explanationsByChapter = new Map();
+    for (const explanation of explanations) {
+      if (!explanationsByChapter.has(explanation.chapter_code)) explanationsByChapter.set(explanation.chapter_code, []);
+      explanationsByChapter.get(explanation.chapter_code).push(explanation.explanation_snapshot);
+    }
+    const chaptersWithExplanations = chapters.map(chapter => ({
+      ...chapter,
+      explanations: explanationsByChapter.get(chapter.code) || [],
+    }));
     return {
       project: versionResult.rows[0],
-      chapters: chaptersResult.rows,
+      chapters: chaptersWithExplanations,
+      chapterOptions: chapterOptionsResult.rows,
       items: items.rows,
-      pagination: { page: currentPage, pageSize: normalizedPageSize, pageCount, total },
+      pagination: {
+        page: currentPage,
+        pageSize: pageSizeValue,
+        pageCount,
+        firstChapter: filteredChapters.length ? chapterOffset + 1 : 0,
+        lastChapter: Math.min(chapterOffset + normalizedPageSize, filteredChapters.length),
+        totalChapters: filteredChapters.length,
+        totalItems,
+      },
       filters: { search, chapterCode, status, sortBy: validSorts[sortBy] ? sortBy : 'standardNumber', sortDirection: direction.toLowerCase() },
     };
   }

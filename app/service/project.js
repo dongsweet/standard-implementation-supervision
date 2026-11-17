@@ -56,8 +56,8 @@ class ProjectService extends Service {
       status: String(query.status || '').trim(),
       sortBy: String(query.sortBy || 'standardNumber').trim(),
       sortDirection: String(query.sortDirection || 'asc').trim(),
-      page: Number.parseInt(query.page, 10) || 1,
-      pageSize: Number.parseInt(query.pageSize, 10) || 50,
+      chapterPage: Number.parseInt(query.chapterPage, 10) || 1,
+      chapterPageSize: String(query.chapterPageSize || '1'),
     });
     if (!result) this.ctx.throw(404, '项目规范不存在');
     return result;

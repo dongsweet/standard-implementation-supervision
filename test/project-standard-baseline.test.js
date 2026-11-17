@@ -80,20 +80,25 @@ test('filters, sorts, and paginates project standard answers', async () => {
       queries.push({ statement, values });
       if (statement.includes('FROM project_standard_versions psv')) return { rowCount: 1, rows: [ { standard_version_id: 'version-1', project_name: '多云统管' } ] };
       if (statement.startsWith('SELECT DISTINCT psi.chapter_code_snapshot')) return { rowCount: 1, rows: [ { code: '6', name: '系统开发与供应链' } ] };
-      if (statement.startsWith('SELECT count(*)::integer AS total')) return { rowCount: 1, rows: [ { total: 121 } ] };
+      if (statement.startsWith('SELECT psi.chapter_code_snapshot AS code')) return { rowCount: 3, rows: [
+        { code: '6', name: '系统开发与供应链', item_count: 40 },
+        { code: '7', name: '访问控制', item_count: 40 },
+        { code: '8', name: '鉴别', item_count: 41 },
+      ] };
+      if (statement.startsWith('SELECT DISTINCT psi.chapter_code_snapshot AS chapter_code')) return { rowCount: 1, rows: [] };
       return { rowCount: 1, rows: [ { standard_item_id: 'item-1' } ] };
     },
   });
   const result = await repository.getProjectStandardAnswers({
-    projectId: 'project-1', standardVersionId: 'version-1', search: '账号', chapterCode: '6',
-    status: 'not_satisfied', sortBy: 'status', sortDirection: 'desc', page: 2, pageSize: 50,
+    projectId: 'project-1', standardVersionId: 'version-1', search: '账号', chapterCode: '',
+    status: 'not_satisfied', sortBy: 'status', sortDirection: 'desc', chapterPage: 2, chapterPageSize: '1',
   });
-  assert.equal(result.pagination.total, 121);
+  assert.equal(result.pagination.totalChapters, 3);
   assert.equal(result.pagination.page, 2);
   assert.equal(result.pagination.pageCount, 3);
   assert.equal(result.items.length, 1);
-  const dataQuery = queries[3];
-  assert.match(dataQuery.statement, /ORDER BY COALESCE\(psa\.status, 'unassessed'\) DESC/);
-  assert.match(dataQuery.statement, /LIMIT \$6 OFFSET \$7/);
-  assert.deepEqual(dataQuery.values, [ 'project-1', 'version-1', '6', '%账号%', 'not_satisfied', 50, 50 ]);
+  assert.equal(result.chapters[0].code, '7');
+  const dataQuery = queries[4];
+  assert.match(dataQuery.statement, /ORDER BY COALESCE\(sc\.sort_order, 0\)/);
+  assert.match(dataQuery.statement, /ANY\(\$5::text\[\]\)/);
 });
