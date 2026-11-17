@@ -95,6 +95,28 @@ test('does not import an assignment value when the matched standard item has no 
   assert.equal(review.summary.assignmentIgnoredCount, 1);
 });
 
+test('matches an answer on a missing parent explanation item by its own standard number', async () => {
+  const repository = new ProjectWorkbookImportRepository({ query: async () => ({ rows: [] }) });
+  repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', sourceSheet: 'Sheet1', sourceRow: 12, standardNumber: '31168-2023-08037',
+    assignmentText: '云服务商定义的强制实施的访问控制策略：租户默认策略', assignmentDetails: [],
+  } ] } });
+  repository.listProjectCloudCenters = async () => [];
+  repository.listProjectStandardItems = async () => [ {
+    standard_item_id: 'item-08038', item_code_snapshot: '8.1.1 a)', standard_number_snapshot: '31168-2023-08038',
+    explanation_snapshot: '云服务商应：', content_snapshot: '执行访问控制。',
+  } ];
+  repository.listProjectSourceItems = async () => [
+    { id: 'item-08037', item_code: '8.1.1', standard_number: '31168-2023-08037', explanation: '[赋值：云服务商定义的强制实施的访问控制策略]', content: '[赋值：云服务商定义的强制实施的访问控制策略]', chapter_code: '8' },
+    { id: 'item-08038', item_code: '8.1.1 a)', standard_number: '31168-2023-08038', explanation: '云服务商应：', content: '执行访问控制。', chapter_code: '8' },
+  ];
+  const review = await repository.getReview('project-1', 'job-1');
+  assert.equal(review.summary.matchedCount, 1);
+  assert.equal(review.summary.pendingSnapshotCount, 1);
+  assert.equal(review.matches[0].standardItemId, 'item-08037');
+  assert.equal(review.matches[0].snapshotMissing, true);
+});
+
 test('writes assignment details, implementation requirements, and real evidence in answer-import mode', async () => {
   const calls = [];
   const payload = { importMode: 'answer', rows: [ {
@@ -140,6 +162,45 @@ test('writes assignment details, implementation requirements, and real evidence 
   assert.equal(result.matchedCount, 1);
   assert.equal(result.evidenceCount, 1);
   assert.equal(result.cloudAnswerCount, 0);
+});
+
+test('adds a missing parent explanation to the project snapshot before saving its assignment', async () => {
+  const calls = [];
+  const payload = { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', standardNumber: '31168-2023-08037',
+    assignmentText: '强制实施的访问控制策略：租户默认策略',
+    assignmentDetails: [ { type: 'assignment', label: '云服务商定义的强制实施的访问控制策略', placeholder: '[赋值：云服务商定义的强制实施的访问控制策略]', value: '租户默认策略', reviewRequired: false } ],
+    cloudCenters: {}, supervision: [],
+  } ] };
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rowCount: 0, rows: [] };
+      if (statement.includes('FROM project_data_import_jobs') && statement.includes('FOR UPDATE')) return { rowCount: 1, rows: [ { status: 'ready', payload, original_filename: 'answers.xlsx' } ] };
+      if (statement.includes('FROM project_cloud_centers')) return { rowCount: 0, rows: [] };
+      if (statement.startsWith('WITH project_items AS')) return { rowCount: 2, rows: [
+        { standard_item_id: 'parent-08037', source_item_id: 'parent-08037', item_code_snapshot: '8.1.1', standard_number_snapshot: '31168-2023-08037', explanation_snapshot: '[赋值：云服务商定义的强制实施的访问控制策略]', content_snapshot: '[赋值：云服务商定义的强制实施的访问控制策略]', item_code: '8.1.1', standard_number: '31168-2023-08037', snapshot_missing: true, chapter_code: '8' },
+        { standard_item_id: 'clause-08038', source_item_id: 'clause-08038', item_code_snapshot: '8.1.1 a)', standard_number_snapshot: '31168-2023-08038', explanation_snapshot: '云服务商应：', content_snapshot: '执行访问控制。', item_code: '8.1.1 a)', standard_number: '31168-2023-08038', snapshot_missing: false, chapter_code: '8' },
+      ] };
+      if (statement.startsWith('INSERT INTO project_standard_items')) return { rowCount: 1, rows: [ { standard_item_id: 'parent-08037' } ] };
+      if (statement.startsWith('INSERT INTO project_standard_answers')) return { rowCount: 1, rows: [ { id: 'answer-08037' } ] };
+      if (statement.startsWith('UPDATE project_data_import_jobs')) return { rowCount: 1, rows: [] };
+      throw new Error(`Unexpected query: ${statement}`);
+    },
+    release() {},
+  };
+  const repository = new ProjectWorkbookImportRepository({ connect: async () => client });
+  const result = await repository.apply({
+    projectId: 'project-1', jobId: 'job-1', cloudCenterIds: [],
+    acknowledgeUnmatched: false, acknowledgeContentDifferences: false,
+    acknowledgeAssignmentReview: false, actorId: 'user-1',
+  });
+  const snapshotWrite = calls.findIndex(statement => statement.startsWith('INSERT INTO project_standard_items'));
+  const answerWrite = calls.findIndex(statement => statement.startsWith('INSERT INTO project_standard_answers'));
+  assert.ok(snapshotWrite >= 0 && snapshotWrite < answerWrite);
+  assert.equal(result.snapshotAddedCount, 1);
+  assert.equal(result.matchedCount, 1);
 });
 
 test('blocks unresolved assignment links until the reviewer acknowledges them', async () => {

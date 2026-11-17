@@ -14,7 +14,7 @@ class ProjectWorkbookImportController extends Controller {
       this.ctx.redirect(`/projects/${projectId}/data-imports/${job.id}`);
     } catch (error) {
       if ([ 400, 409 ].includes(error.status)) {
-        this.ctx.redirect(`/projects/${projectId}/manage?notice=${encodeURIComponent('项目数据导入失败：' + error.message)}`);
+        this.ctx.redirect(`/chapter-answers?notice=${encodeURIComponent('项目数据导入失败：' + error.message)}`);
         return;
       }
       throw error;
@@ -41,8 +41,9 @@ class ProjectWorkbookImportController extends Controller {
     try {
       const result = await this.ctx.service.projectWorkbookImport.apply(projectId, this.ctx.params.jobId, this.ctx.request.body || {}, this.ctx.session.userId);
       const notice = `项目数据已导入：匹配${result.matchedCount}条，应答${result.answerCount}条，赋值明细${result.assignmentDetailCount || 0}条，云中心应答${result.cloudAnswerCount}条，监督定义${result.definitionCount}条，检查记录${result.executionCount}条`
+        + (result.snapshotAddedCount ? `，补入说明项${result.snapshotAddedCount}条` : '')
         + (result.unmatchedCount ? `，未匹配${result.unmatchedCount}条` : '');
-      this.ctx.redirect(`/projects/${projectId}/manage?notice=${encodeURIComponent(notice)}`);
+      this.ctx.redirect(`/chapter-answers?notice=${encodeURIComponent(notice)}`);
     } catch (error) {
       if ([ 400, 409 ].includes(error.status)) {
         this.ctx.redirect(`/projects/${projectId}/data-imports/${this.ctx.params.jobId}?notice=${encodeURIComponent('暂不能导入：' + error.message)}`);

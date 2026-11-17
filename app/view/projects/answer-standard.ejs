@@ -52,8 +52,10 @@ const chapterPageUrl = page => buildUrl({ chapterPage: page });
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <span class="text-secondary">当前项目：<strong><%= project.project_name %></strong>　规范：<strong><%= project.standard_code %> · <%= project.standard_name %></strong>　版本：<strong><%= project.version %></strong></span>
-  <a class="btn btn-sm btn-outline-secondary ms-auto" href="/chapter-answers">返回规范总览</a>
+  <div class="ms-auto d-flex gap-2"><% if (canImport) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#answerImportModal">导入规范满足情况</button><% } %><a class="btn btn-sm btn-outline-secondary" href="/chapter-answers">返回规范总览</a></div>
 </div>
+
+<% if (canImport) { %><div class="modal fade" id="answerImportModal" tabindex="-1" aria-labelledby="answerImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" action="/projects/<%= currentProject.id %>/data-imports" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="answerImportModalLabel">导入规范满足情况</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><p class="small text-secondary">上传按标准化编号整理的规范满足工作簿，系统会先匹配、预览赋值和证据，再确认写入当前项目。</p><input class="form-control" type="file" name="file" accept=".xlsx" required><div class="form-text mt-2">说明项中的赋值也会按说明项自己的标准化编号导入。</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">上传并预览</button></div></form></div></div></div><% } %>
 
 <div class="card mb-3">
   <div class="card-body">
@@ -81,14 +83,13 @@ const chapterPageUrl = page => buildUrl({ chapterPage: page });
 <% chapters.forEach(chapter => { %>
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center"><h3 class="card-title"><%= chapter.code %> · <%= chapter.name %> <span class="badge text-bg-light ms-2"><%= chapter.item_count %> 项</span></h3></div>
-    <% if (chapter.explanations.length) { %><div class="card-body pb-2"><% chapter.explanations.forEach(explanation => { %><div class="alert alert-info py-2 mb-2"><strong>说明：</strong><%= explanation %></div><% }) %></div><% } %>
     <div class="table-responsive answer-items-table-wrap"><table class="table table-sm table-striped align-middle mb-0 answer-items-table">
       <colgroup><col class="answer-col-number"><col class="answer-col-code"><col class="answer-col-title"><col><col><col class="answer-col-status"><col class="answer-col-status"><col><col><col class="answer-col-action"></colgroup>
       <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>标准内容</th><th>云服务商赋值</th><th>适用性</th><th>符合性</th><th>制度文件/证据</th><th>制度符合性描述</th><th>操作</th></tr></thead>
-      <tbody><% items.filter(item => item.chapter_code_snapshot === chapter.code).forEach(item => { const headingPath = Array.isArray(item.heading_path_snapshot) ? item.heading_path_snapshot : []; %>
+      <tbody><% const chapterItems = items.filter(item => item.chapter_code_snapshot === chapter.code); let lastClauseBase = ''; chapterItems.forEach(item => { const headingPath = Array.isArray(item.heading_path_snapshot) ? item.heading_path_snapshot : []; const itemCode = String(item.item_code_snapshot || ''); const clauseBase = itemCode.replace(/\s+[a-z]\s*[)）]$/i, ''); const isSubclause = clauseBase !== itemCode; const hasChildClauses = !isSubclause && chapterItems.some(candidate => String(candidate.item_code_snapshot || '').startsWith(`${itemCode} `) && /\s+[a-z]\s*[)）]$/i.test(String(candidate.item_code_snapshot || ''))); const isExplanationItem = Boolean(hasChildClauses && (item.explanation_snapshot || /[\[［【]\s*(?:赋值|选择)/u.test(item.content_snapshot || ''))); const showExplanation = Boolean(item.explanation_snapshot && !isExplanationItem && clauseBase !== lastClauseBase); lastClauseBase = clauseBase; if (showExplanation) { %><tr class="answer-explanation-row"><td colspan="10"><div class="alert alert-info py-2 mb-0"><strong>说明：</strong><%= item.explanation_snapshot %></div></td></tr><% } %>
         <tr class="answer-item-row" data-heading-path="<%= JSON.stringify(headingPath) %>">
           <td class="answer-item-number font-monospace"><%= item.standard_number_snapshot %></td>
-          <td class="answer-item-code"><strong><%= item.item_code_snapshot %></strong></td>
+          <td class="answer-item-code"><strong><%= item.item_code_snapshot %></strong><% if (isExplanationItem) { %><div><span class="badge text-bg-info mt-1">说明项</span></div><% } %></td>
           <td><% if (headingPath.length) { %><div class="answer-item-heading-path"><% headingPath.forEach(heading => { %><div class="answer-item-heading" style="padding-left:<%= Math.max(0, Number(heading.level || 2) - 2) %>rem"><%= [heading.number, heading.title].filter(Boolean).join(' ') %></div><% }) %></div><% } %><% if (item.title) { %><div class="answer-item-title"><%= item.title %></div><% } %></td>
           <td class="answer-item-copy"><%= item.content_snapshot %></td>
           <td class="answer-item-copy"><% if (Array.isArray(item.assignment_details) && item.assignment_details.length) { %><% item.assignment_details.forEach(detail => { %><div><span class="text-secondary"><%= detail.label || (detail.type === 'selection' ? '选择项' : '需赋值项') %>：</span><%= detail.value || '待确认' %><% if (detail.reviewRequired) { %><span class="badge text-bg-warning ms-1">待复核</span><% } %></div><% }) %><% } else { %><%= item.clause_assignment || '-' %><% } %></td>
@@ -98,7 +99,7 @@ const chapterPageUrl = page => buildUrl({ chapterPage: page });
           <td class="answer-item-copy"><%= item.measure_description || '-' %><% if (item.problem_description) { %><div class="small text-danger mt-1">问题：<%= item.problem_description %></div><% } %></td>
           <td><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#answerModal-<%= item.standard_item_id %>">编辑</button></td>
         </tr>
-      <% }) %><% if (!items.some(item => item.chapter_code_snapshot === chapter.code)) { %><tr><td colspan="10" class="text-center text-secondary py-3">本章节暂无符合筛选的标准项。</td></tr><% } %></tbody>
+      <% }) %><% if (!chapterItems.length) { %><tr><td colspan="10" class="text-center text-secondary py-3">本章节暂无符合筛选的标准项。</td></tr><% } %></tbody>
     </table></div>
   </div>
 <% }) %>

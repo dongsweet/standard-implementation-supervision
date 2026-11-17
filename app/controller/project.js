@@ -1,7 +1,7 @@
 'use strict';
 
 const Controller = require('egg').Controller;
-const { requireGlobalWrite, requireProject, requireProjectAdmin } = require('../lib/authorization');
+const { canWriteProject, requireGlobalWrite, requireProject, requireProjectAdmin } = require('../lib/authorization');
 
 class ProjectController extends Controller {
   async index() {
@@ -43,6 +43,7 @@ class ProjectController extends Controller {
       title: '章节应答',
       ...overview,
       csrf: this.ctx.csrf,
+      canImport: canWriteProject(this.ctx.state.roles || [], currentProject.id),
     });
   }
 
@@ -58,6 +59,7 @@ class ProjectController extends Controller {
       title: `章节应答 · ${detail.project.standard_code} · ${detail.project.version}`,
       ...detail,
       csrf: this.ctx.csrf,
+      canImport: canWriteProject(this.ctx.state.roles || [], currentProject.id),
     });
   }
 
