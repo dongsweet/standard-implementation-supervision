@@ -57,6 +57,49 @@ test('parses the standard answer workbook and keeps assignment details per place
   assert.equal(result.rows.find(row => row.standardNumber === '31168-2023-08037').assignmentDetails[0].reviewRequired, false);
 });
 
+test('maps labeled depth, coverage, and choice values to their own placeholders', () => {
+  const result = parseAnswerWorkbookRows([
+    { name: '汇总', rows: [
+      [ '标准化编号', '规范体系具体要求', '证据列表' ],
+      [ '31168-2023-06062', '落实系统测试。', '测试报告' ],
+    ] },
+    { name: '赋值提取复核', rows: [
+      [ '标准化编号', '提取类型', '需赋值项或选择项', '原文占位符', '当前赋值', '需要复核', '复核原因' ],
+      [ '31168-2023-06062', '赋值', '云服务商定义的深度和覆盖面', '[赋值：云服务商定义的深度和覆盖面]', '深度：漏洞扫描、渗透测试、关键代码审计\n广度：云平台所有关键组件\n选择：系统', '是', '已提取占位符；当前赋值可能对应一个或多个占位符，需逐项核对并拆分保存。' ],
+      [ '31168-2023-06062', '选择', '单元；集成；系统；回归', '[选择：单元；集成；系统；回归]', '深度：漏洞扫描、渗透测试、关键代码审计\n广度：云平台所有关键组件\n选择：系统', '是', '已提取占位符；当前赋值可能对应一个或多个占位符，需逐项核对并拆分保存。' ],
+    ] },
+  ]);
+  const row = result.rows[0];
+  assert.equal(row.assignmentDetails[0].value, '深度：漏洞扫描、渗透测试、关键代码审计\n广度：云平台所有关键组件');
+  assert.equal(row.assignmentDetails[1].value, '系统');
+  assert.equal(row.assignmentDetails[0].reviewRequired, false);
+  assert.equal(row.assignmentDetails[1].reviewRequired, false);
+});
+
+test('imports explicit nested choice mapping and preserves inactive assignments as unselected', () => {
+  const result = parseAnswerWorkbookRows([
+    { name: '汇总', rows: [
+      [ '标准化编号', '规范体系具体要求', '证据列表' ],
+      [ '31168-2023-06042', '依据每年一次检查质量度量标准。', '检查记录' ],
+    ] },
+    { name: '赋值提取复核', rows: [
+      [ '标准化编号', '占位符ID', '提取类型', '需赋值项或选择项', '原文占位符', '当前赋值', '所属选择项ID', '是否选中/生效', '对应占位符的当前值', '需要复核', '复核原因' ],
+      [ '31168-2023-06042', '31168-2023-06042#1', '选择', '[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时', '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]', '每年一次', '', '是', '[赋值：云服务商定义的频率]', '否', '' ],
+      [ '31168-2023-06042', '31168-2023-06042#2', '赋值', '云服务商定义的频率', '[赋值：云服务商定义的频率]', '每年一次', '31168-2023-06042#1', '是', '每年一次', '否', '' ],
+      [ '31168-2023-06042', '31168-2023-06042#3', '赋值', '云服务商定义的项目审查里程碑', '[赋值：云服务商定义的项目审查里程碑]', '每年一次', '31168-2023-06042#1', '否', '', '否', '' ],
+    ] },
+  ]);
+  const row = result.rows[0];
+  assert.equal(row.assignmentDetails[0].value, '[赋值：云服务商定义的频率]');
+  assert.equal(row.assignmentDetails[1].value, '每年一次');
+  assert.equal(row.assignmentDetails[1].parentSelectionId, '31168-2023-06042#1');
+  assert.equal(row.assignmentDetails[2].value, null);
+  assert.equal(row.assignmentDetails[2].selected, false);
+  assert.equal(row.assignmentDetails[2].reviewRequired, false);
+  assert.match(row.assignmentText, /未选中/);
+  assert.doesNotMatch(row.assignmentText, /待确认/);
+});
+
 test('compares imported source text against the reconstructed parent explanation and clause body', async () => {
   const repository = new ProjectWorkbookImportRepository({
     async query(sql) {
@@ -122,7 +165,7 @@ test('writes assignment details, implementation requirements, and real evidence 
   const payload = { importMode: 'answer', rows: [ {
     sourceKind: 'answer', standardNumber: '31168-2023-06033', clauseNumber: '6.3.1 a)',
     assignmentText: '云服务商定义的安全要求：采购合同',
-    assignmentDetails: [ { type: 'assignment', label: '云服务商定义的安全要求', placeholder: '[赋值：云服务商定义的安全要求]', value: '采购合同', reviewRequired: false } ],
+    assignmentDetails: [ { type: 'assignment', label: '云服务商定义的安全要求', placeholder: '[赋值：云服务商定义的安全要求]', placeholderId: '31168-2023-06033#1', parentSelectionId: null, selected: true, value: '采购合同', reviewRequired: false } ],
     unifiedRequirement: '制定统一要求。', expectedEvidence: '', actualEvidence: '《采购管理规范》',
     cloudCenters: {}, supervision: [],
   } ] };
@@ -156,6 +199,8 @@ test('writes assignment details, implementation requirements, and real evidence 
   const answerWrite = calls.find(call => call.statement.startsWith('INSERT INTO project_standard_answers'));
   assert.ok(answerWrite);
   assert.equal(JSON.parse(answerWrite.values[5])[0].value, '采购合同');
+  assert.equal(JSON.parse(answerWrite.values[5])[0].placeholderId, '31168-2023-06033#1');
+  assert.equal(JSON.parse(answerWrite.values[5])[0].selected, true);
   assert.equal(answerWrite.values[6], '制定统一要求。');
   assert.equal(answerWrite.values[8], '《采购管理规范》');
   assert.equal(answerWrite.values[12], true);
