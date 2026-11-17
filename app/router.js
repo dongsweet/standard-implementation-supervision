@@ -18,6 +18,8 @@ module.exports = app => {
   router.get('/supervision-executions', controller.supervisionExecution.index);
   router.post('/projects/:projectId/supervision-executions', controller.supervisionExecution.create);
   router.get('/project-overview', controller.project.overview);
+  router.get('/chapter-answers', controller.project.answers);
+  router.get('/chapter-answers/:standardVersionId', controller.project.standardAnswers);
   router.get('/standards', controller.standardCatalog.index);
   router.post('/standards', controller.standardCatalog.createStandard);
   router.post('/standards/import', controller.standardCatalog.importStandard);

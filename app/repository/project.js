@@ -192,6 +192,131 @@ class ProjectRepository {
     return { project: projectResult.rows[0], versions: versions.rows, items: items.rows };
   }
 
+  async getProjectAnswerOverview(projectId) {
+    const projectResult = await this.pool.query(`
+      SELECT id, name FROM projects WHERE id = $1`, [ projectId ]);
+    if (!projectResult.rowCount) return null;
+    const versions = await this.pool.query(`
+      SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
+             s.name AS standard_name, s.standard_type,
+             count(psi.standard_item_id)::integer AS item_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.id IS NOT NULL)::integer AS answered_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'satisfied')::integer AS satisfied_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'partially_satisfied')::integer AS partially_satisfied_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count
+      FROM project_standard_versions psv
+      JOIN standard_versions sv ON sv.id = psv.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
+      LEFT JOIN project_standard_items psi ON psi.project_id = psv.project_id
+        AND psi.standard_item_id IN (SELECT id FROM standard_items WHERE standard_version_id = sv.id)
+      LEFT JOIN project_standard_answers psa ON psa.project_id = psv.project_id
+        AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
+      WHERE psv.project_id = $1
+      GROUP BY sv.id, s.id
+      ORDER BY s.code, sv.version`, [ projectId ]);
+    return { project: projectResult.rows[0], standards: versions.rows };
+  }
+
+  async getProjectStandardAnswers({ projectId, standardVersionId, search = '', chapterCode = '', status = '', sortBy = 'standardNumber', sortDirection = 'asc', page = 1, pageSize = 50 }) {
+    const versionResult = await this.pool.query(`
+      SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
+             s.name AS standard_name, s.standard_type, p.name AS project_name
+      FROM project_standard_versions psv
+      JOIN standard_versions sv ON sv.id = psv.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
+      JOIN projects p ON p.id = psv.project_id
+      WHERE psv.project_id = $1 AND psv.standard_version_id = $2`, [ projectId, standardVersionId ]);
+    if (!versionResult.rowCount) return null;
+    const chaptersResult = await this.pool.query(`
+      SELECT DISTINCT psi.chapter_code_snapshot AS code,
+             COALESCE(sc.name, psi.chapter_code_snapshot) AS name,
+             COALESCE(sc.sort_order, 0) AS sort_order
+      FROM project_standard_items psi
+      JOIN standard_items si ON si.id = psi.standard_item_id
+      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
+      WHERE psi.project_id = $1 AND si.standard_version_id = $2
+      ORDER BY sort_order, psi.chapter_code_snapshot`, [ projectId, standardVersionId ]);
+
+    const validSorts = {
+      standardNumber: 'psi.standard_number_snapshot',
+      itemCode: 'psi.item_code_snapshot',
+      chapter: 'psi.chapter_code_snapshot',
+      status: "COALESCE(psa.status, 'unassessed')",
+    };
+    const orderBy = validSorts[sortBy] || validSorts.standardNumber;
+    const direction = sortDirection === 'desc' ? 'DESC' : 'ASC';
+    const params = [ projectId, standardVersionId ];
+    const predicates = [ 'psi.project_id = $1', 'si.standard_version_id = $2' ];
+    if (chapterCode) {
+      params.push(chapterCode);
+      predicates.push(`psi.chapter_code_snapshot = $${params.length}`);
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      predicates.push(`(
+        psi.standard_number_snapshot ILIKE $${params.length}
+        OR psi.item_code_snapshot ILIKE $${params.length}
+        OR COALESCE(si.title, '') ILIKE $${params.length}
+        OR psi.content_snapshot ILIKE $${params.length}
+        OR COALESCE(psi.explanation_snapshot, '') ILIKE $${params.length}
+        OR psi.heading_path_snapshot::text ILIKE $${params.length}
+      )`);
+    }
+    if ([ 'satisfied', 'partially_satisfied', 'not_satisfied', 'unassessed' ].includes(status)) {
+      params.push(status);
+      predicates.push(`COALESCE(psa.status, 'unassessed') = $${params.length}`);
+    }
+    const where = predicates.join(' AND ');
+    const count = await this.pool.query(`
+      SELECT count(*)::integer AS total
+      FROM project_standard_items psi
+      JOIN standard_items si ON si.id = psi.standard_item_id
+      LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
+        AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
+      WHERE ${where}`, params);
+    const total = count.rows[0]?.total || 0;
+    const normalizedPageSize = [ 20, 50, 100 ].includes(Number(pageSize)) ? Number(pageSize) : 50;
+    const pageCount = Math.max(1, Math.ceil(total / normalizedPageSize));
+    const currentPage = Math.min(Math.max(1, Number(page) || 1), pageCount);
+    const offset = (currentPage - 1) * normalizedPageSize;
+    const dataParams = [ ...params, normalizedPageSize, offset ];
+    const items = await this.pool.query(`
+      SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
+             CASE WHEN NULLIF(btrim(psi.explanation_snapshot), '') IS NULL THEN psi.content_snapshot
+               ELSE '条款说明：' || psi.explanation_snapshot || '；标准内容：' || psi.content_snapshot END AS content_snapshot,
+             psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
+             si.title, COALESCE(sc.name, psi.chapter_code_snapshot) AS chapter_name,
+             COALESCE(psa.standard_level, '') AS standard_level,
+             COALESCE(psa.is_key, false) AS is_key,
+             COALESCE(psa.clause_assignment, '') AS clause_assignment,
+             COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
+             COALESCE(psa.unified_requirement, '') AS unified_requirement,
+             COALESCE(psa.expected_evidence, '') AS expected_evidence,
+             COALESCE(psa.pending_evidence, '') AS pending_evidence,
+             COALESCE(psa.responsible_text, '') AS responsible_text,
+             COALESCE(psa.applicability, 'unspecified') AS applicability,
+             COALESCE(psa.applicability_scope, '') AS applicability_scope,
+             COALESCE(psa.status, 'unassessed') AS answer_status,
+             COALESCE(psa.actual_evidence, '') AS actual_evidence,
+             COALESCE(psa.measure_description, '') AS measure_description,
+             COALESCE(psa.problem_description, '') AS problem_description
+      FROM project_standard_items psi
+      JOIN standard_items si ON si.id = psi.standard_item_id
+      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
+      LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
+        AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
+      WHERE ${where}
+      ORDER BY ${orderBy} ${direction}, psi.standard_number_snapshot ASC
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`, dataParams);
+    return {
+      project: versionResult.rows[0],
+      chapters: chaptersResult.rows,
+      items: items.rows,
+      pagination: { page: currentPage, pageSize: normalizedPageSize, pageCount, total },
+      filters: { search, chapterCode, status, sortBy: validSorts[sortBy] ? sortBy : 'standardNumber', sortDirection: direction.toLowerCase() },
+    };
+  }
+
   async updateProjectName(projectId, name) {
     const result = await this.pool.query(`
       UPDATE projects SET name = $2, updated_at = now()

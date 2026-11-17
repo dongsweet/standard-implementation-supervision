@@ -55,3 +55,45 @@ test('rejects a version without standard items and rolls back', async () => {
   assert.equal(queries.some(query => query.statement === 'COMMIT'), false);
   assert.equal(isReleased(), true);
 });
+
+test('lists project baseline standards for the chapter answer overview', async () => {
+  const queries = [];
+  const repository = new ProjectRepository({
+    async query(sql, values) {
+      queries.push({ sql: sql.replace(/\s+/g, ' ').trim(), values });
+      if (queries.length === 1) return { rowCount: 1, rows: [ { id: 'project-1', name: '多云统管' } ] };
+      return { rowCount: 1, rows: [ { standard_version_id: 'version-1', item_count: 526, answered_count: 12 } ] };
+    },
+  });
+  const result = await repository.getProjectAnswerOverview('project-1');
+  assert.equal(result.project.name, '多云统管');
+  assert.equal(result.standards[0].standard_version_id, 'version-1');
+  assert.match(queries[1].sql, /LEFT JOIN project_standard_answers/);
+  assert.deepEqual(queries[0].values, [ 'project-1' ]);
+});
+
+test('filters, sorts, and paginates project standard answers', async () => {
+  const queries = [];
+  const repository = new ProjectRepository({
+    async query(sql, values) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      queries.push({ statement, values });
+      if (statement.includes('FROM project_standard_versions psv')) return { rowCount: 1, rows: [ { standard_version_id: 'version-1', project_name: '多云统管' } ] };
+      if (statement.startsWith('SELECT DISTINCT psi.chapter_code_snapshot')) return { rowCount: 1, rows: [ { code: '6', name: '系统开发与供应链' } ] };
+      if (statement.startsWith('SELECT count(*)::integer AS total')) return { rowCount: 1, rows: [ { total: 121 } ] };
+      return { rowCount: 1, rows: [ { standard_item_id: 'item-1' } ] };
+    },
+  });
+  const result = await repository.getProjectStandardAnswers({
+    projectId: 'project-1', standardVersionId: 'version-1', search: '账号', chapterCode: '6',
+    status: 'not_satisfied', sortBy: 'status', sortDirection: 'desc', page: 2, pageSize: 50,
+  });
+  assert.equal(result.pagination.total, 121);
+  assert.equal(result.pagination.page, 2);
+  assert.equal(result.pagination.pageCount, 3);
+  assert.equal(result.items.length, 1);
+  const dataQuery = queries[3];
+  assert.match(dataQuery.statement, /ORDER BY COALESCE\(psa\.status, 'unassessed'\) DESC/);
+  assert.match(dataQuery.statement, /LIMIT \$6 OFFSET \$7/);
+  assert.deepEqual(dataQuery.values, [ 'project-1', 'version-1', '6', '%账号%', 'not_satisfied', 50, 50 ]);
+});

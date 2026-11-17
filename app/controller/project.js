@@ -31,6 +31,36 @@ class ProjectController extends Controller {
     });
   }
 
+  async answers() {
+    const currentProject = this.ctx.state.currentProject;
+    if (!currentProject) {
+      await this.ctx.render('projects/overview-empty', { title: '章节应答', csrf: this.ctx.csrf });
+      return;
+    }
+    requireProject(this.ctx, currentProject.id);
+    const overview = await this.ctx.service.project.getProjectAnswerOverview(currentProject.id);
+    await this.ctx.render('projects/answer-overview', {
+      title: '章节应答',
+      ...overview,
+      csrf: this.ctx.csrf,
+    });
+  }
+
+  async standardAnswers() {
+    const currentProject = this.ctx.state.currentProject;
+    if (!currentProject) {
+      await this.ctx.render('projects/overview-empty', { title: '章节应答', csrf: this.ctx.csrf });
+      return;
+    }
+    requireProject(this.ctx, currentProject.id);
+    const detail = await this.ctx.service.project.getProjectStandardAnswers(currentProject.id, this.ctx.params.standardVersionId, this.ctx.query);
+    await this.ctx.render('projects/answer-standard', {
+      title: `章节应答 · ${detail.project.standard_code} · ${detail.project.version}`,
+      ...detail,
+      csrf: this.ctx.csrf,
+    });
+  }
+
   async create() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.project.createProject(this.ctx.request.body || {});
@@ -116,7 +146,11 @@ class ProjectController extends Controller {
   async saveAnswer() {
     requireProject(this.ctx, this.ctx.params.projectId, true);
     await this.ctx.service.project.saveAnswer(this.ctx.params.projectId, this.ctx.params.standardItemId, this.ctx.request.body || {}, this.ctx.session.userId);
-    this.ctx.redirect(`/projects/${this.ctx.params.projectId}?notice=` + encodeURIComponent('章节应答已保存'));
+    const requestedReturnTo = String((this.ctx.request.body || {}).returnTo || '');
+    const returnTo = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//')
+      ? requestedReturnTo
+      : `/projects/${this.ctx.params.projectId}`;
+    this.ctx.redirect(returnTo + (returnTo.includes('?') ? '&' : '?') + 'notice=' + encodeURIComponent('章节应答已保存'));
   }
 }
 

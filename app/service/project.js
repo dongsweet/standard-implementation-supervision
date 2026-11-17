@@ -41,6 +41,28 @@ class ProjectService extends Service {
     return result;
   }
 
+  async getProjectAnswerOverview(projectId) {
+    const result = await this.repository.getProjectAnswerOverview(projectId);
+    if (!result) this.ctx.throw(404, '项目不存在');
+    return result;
+  }
+
+  async getProjectStandardAnswers(projectId, standardVersionId, query = {}) {
+    const result = await this.repository.getProjectStandardAnswers({
+      projectId,
+      standardVersionId,
+      search: String(query.search || '').trim().slice(0, 100),
+      chapterCode: String(query.chapterCode || '').trim().slice(0, 100),
+      status: String(query.status || '').trim(),
+      sortBy: String(query.sortBy || 'standardNumber').trim(),
+      sortDirection: String(query.sortDirection || 'asc').trim(),
+      page: Number.parseInt(query.page, 10) || 1,
+      pageSize: Number.parseInt(query.pageSize, 10) || 50,
+    });
+    if (!result) this.ctx.throw(404, '项目规范不存在');
+    return result;
+  }
+
   async getProjectManageDetail(projectId) {
     const result = await this.repository.getProjectManageDetail(projectId);
     if (!result) this.ctx.throw(404, '项目不存在');
