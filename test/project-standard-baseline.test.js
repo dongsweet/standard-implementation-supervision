@@ -56,6 +56,23 @@ test('rejects a version without standard items and rolls back', async () => {
   assert.equal(isReleased(), true);
 });
 
+test('backfills only missing explanatory parent items from a project standard version', async () => {
+  let captured;
+  const repository = new ProjectRepository({
+    async query(sql, values) {
+      captured = { sql: sql.replace(/\s+/g, ' ').trim(), values };
+      return { rowCount: 2, rows: [ { standard_item_id: 'note-1' }, { standard_item_id: 'note-2' } ] };
+    },
+  });
+  const inserted = await repository.ensureProjectExplanationItems('project-1', 'version-1');
+  assert.equal(inserted, 2);
+  assert.deepEqual(captured.values, [ 'project-1', 'version-1' ]);
+  assert.match(captured.sql, /NULLIF\(btrim\(si\.explanation\), ''\) IS NOT NULL/);
+  assert.match(captured.sql, /si\.content ~ '\(赋值\|选择\)\[：:\]'/);
+  assert.match(captured.sql, /child\.item_code_snapshot/);
+  assert.match(captured.sql, /ON CONFLICT \(project_id, standard_item_id\) DO NOTHING/);
+});
+
 test('lists project baseline standards for the chapter answer overview', async () => {
   const queries = [];
   const repository = new ProjectRepository({
@@ -68,7 +85,10 @@ test('lists project baseline standards for the chapter answer overview', async (
   const result = await repository.getProjectAnswerOverview('project-1');
   assert.equal(result.project.name, '多云统管');
   assert.equal(result.standards[0].standard_version_id, 'version-1');
-  assert.match(queries[1].sql, /LEFT JOIN project_standard_answers/);
+  assert.ok(queries.some(query => /LEFT JOIN project_standard_answers/.test(query.sql)));
+  const explanationBackfill = queries.find(query => query.sql.startsWith('INSERT INTO project_standard_items'));
+  assert.match(explanationBackfill.sql, /NULLIF\(btrim\(si\.explanation\), ''\) IS NOT NULL/);
+  assert.match(explanationBackfill.sql, /child\.item_code_snapshot/);
   assert.deepEqual(queries[0].values, [ 'project-1' ]);
 });
 

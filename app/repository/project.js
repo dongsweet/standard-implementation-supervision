@@ -196,6 +196,7 @@ class ProjectRepository {
     const projectResult = await this.pool.query(`
       SELECT id, name FROM projects WHERE id = $1`, [ projectId ]);
     if (!projectResult.rowCount) return null;
+    await this.ensureProjectExplanationItems(projectId);
     const versions = await this.pool.query(`
       SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
              s.name AS standard_name, s.standard_type,
@@ -227,6 +228,7 @@ class ProjectRepository {
       JOIN projects p ON p.id = psv.project_id
       WHERE psv.project_id = $1 AND psv.standard_version_id = $2`, [ projectId, standardVersionId ]);
     if (!versionResult.rowCount) return null;
+    await this.ensureProjectExplanationItems(projectId, standardVersionId);
     const validSorts = {
       standardNumber: 'psi.standard_number_snapshot',
       itemCode: 'psi.item_code_snapshot',
@@ -288,18 +290,8 @@ class ProjectRepository {
     const chapterOffset = (currentPage - 1) * normalizedPageSize;
     const chapters = filteredChapters.slice(chapterOffset, chapterOffset + normalizedPageSize);
     const chapterCodes = chapters.map(chapter => chapter.code);
-    let explanations = [];
     let items = { rows: [] };
     if (chapterCodes.length) {
-      const explanationResult = await this.pool.query(`
-        SELECT DISTINCT psi.chapter_code_snapshot AS chapter_code, psi.explanation_snapshot
-        FROM project_standard_items psi
-        JOIN standard_items si ON si.id = psi.standard_item_id
-        WHERE psi.project_id = $1 AND si.standard_version_id = $2
-          AND psi.chapter_code_snapshot = ANY($3::text[])
-          AND NULLIF(btrim(psi.explanation_snapshot), '') IS NOT NULL
-        ORDER BY psi.chapter_code_snapshot, psi.explanation_snapshot`, [ projectId, standardVersionId, chapterCodes ]);
-      explanations = explanationResult.rows;
       const dataParams = [ ...params, chapterCodes ];
       items = await this.pool.query(`
       SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
@@ -328,18 +320,9 @@ class ProjectRepository {
       WHERE ${where} AND psi.chapter_code_snapshot = ANY($${dataParams.length}::text[])
       ORDER BY COALESCE(sc.sort_order, 0), psi.chapter_code_snapshot, ${orderBy} ${direction}, psi.standard_number_snapshot ASC`, dataParams);
     }
-    const explanationsByChapter = new Map();
-    for (const explanation of explanations) {
-      if (!explanationsByChapter.has(explanation.chapter_code)) explanationsByChapter.set(explanation.chapter_code, []);
-      explanationsByChapter.get(explanation.chapter_code).push(explanation.explanation_snapshot);
-    }
-    const chaptersWithExplanations = chapters.map(chapter => ({
-      ...chapter,
-      explanations: explanationsByChapter.get(chapter.code) || [],
-    }));
     return {
       project: versionResult.rows[0],
-      chapters: chaptersWithExplanations,
+      chapters,
       chapterOptions: chapterOptionsResult.rows,
       items: items.rows,
       pagination: {
@@ -353,6 +336,34 @@ class ProjectRepository {
       },
       filters: { search, chapterCode, status, sortBy: validSorts[sortBy] ? sortBy : 'standardNumber', sortDirection: direction.toLowerCase() },
     };
+  }
+
+  async ensureProjectExplanationItems(projectId, standardVersionId = null) {
+    const values = [ projectId ];
+    const versionPredicate = standardVersionId ? 'AND psv.standard_version_id = $2' : '';
+    if (standardVersionId) values.push(standardVersionId);
+    const result = await this.pool.query(`
+      INSERT INTO project_standard_items
+        (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
+         explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
+      SELECT psv.project_id, si.id, si.standard_number, si.item_code,
+             si.explanation, si.content, sc.code, si.heading_path, now()
+      FROM project_standard_versions psv
+      JOIN standard_items si ON si.standard_version_id = psv.standard_version_id
+      JOIN standard_chapters sc ON sc.id = si.chapter_id
+      WHERE psv.project_id = $1 ${versionPredicate}
+        AND (NULLIF(btrim(si.explanation), '') IS NOT NULL
+          OR si.content ~ '(赋值|选择)[：:]')
+        AND EXISTS (
+          SELECT 1 FROM project_standard_items child
+          WHERE child.project_id = psv.project_id
+            AND child.standard_item_id <> si.id
+            AND left(child.item_code_snapshot, length(si.item_code) + 1) = si.item_code || ' '
+            AND child.item_code_snapshot ~ '[[:space:]]+[a-z][[:space:]]*[)）)_][[:space:]]*$'
+        )
+      ON CONFLICT (project_id, standard_item_id) DO NOTHING
+      RETURNING standard_item_id`, values);
+    return result.rowCount;
   }
 
   async updateProjectName(projectId, name) {
