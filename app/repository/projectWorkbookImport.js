@@ -14,17 +14,6 @@ function standardContentForComparison(item) {
     : item.content_snapshot;
 }
 
-function parentItemCode(itemCode) {
-  const match = String(itemCode || '').normalize('NFKC').trim().match(/^(.+?)\s+[a-z]\s*[)）)_]\s*$/i);
-  return match ? normalizeKey(match[1]) : '';
-}
-
-function hasImportAnswerData(row) {
-  return Boolean(row.assignmentText || (row.assignmentDetails && row.assignmentDetails.length)
-    || row.unifiedRequirement || row.expectedEvidence || row.actualEvidence
-    || row.pendingEvidence || row.problem || row.responsible);
-}
-
 function hasAssignmentPlaceholder(item) {
   const text = standardContentForComparison(item);
   return /[\[［【]\s*[赋賦]值/u.test(String(text || ''));
@@ -136,33 +125,6 @@ class ProjectWorkbookImportRepository {
     return result.rows;
   }
 
-  addMissingExplanationCandidates(byCode, standardItems, sourceItems) {
-    const snapshotIds = new Set(standardItems.map(item => item.standard_item_id));
-    const parentCodes = new Set(sourceItems.map(item => parentItemCode(item.item_code)).filter(Boolean));
-    for (const source of sourceItems) {
-      const sourceNumber = normalizeKey(source.standard_number);
-      const sourceCode = normalizeKey(source.item_code);
-      if (!sourceNumber || !sourceCode || snapshotIds.has(source.id) || !parentCodes.has(sourceCode)) continue;
-      const candidate = {
-        standard_item_id: source.id,
-        item_code_snapshot: source.item_code,
-        standard_number_snapshot: source.standard_number,
-        explanation_snapshot: source.explanation ?? source.explanation_snapshot,
-        content_snapshot: source.content ?? source.content_snapshot,
-        chapter_code_snapshot: source.chapter_code,
-        heading_path_snapshot: source.heading_path || [],
-        title: source.title,
-        snapshot_missing: true,
-      };
-      for (const key of [ source.standard_number, source.item_code ]) {
-        const normalized = normalizeKey(key);
-        if (!normalized) continue;
-        if (!byCode.has(normalized)) byCode.set(normalized, []);
-        byCode.get(normalized).push(candidate);
-      }
-    }
-  }
-
   async getReview(projectId, jobId) {
     const [ job, cloudCenters, standardItems ] = await Promise.all([
       this.getJob(projectId, jobId),
@@ -180,7 +142,15 @@ class ProjectWorkbookImportRepository {
         byCode.get(normalized).push(item);
       }
     }
-    if (job.payload.importMode === 'answer') this.addMissingExplanationCandidates(byCode, standardItems, sourceItems);
+    const sourceByCode = new Map();
+    for (const item of sourceItems) {
+      for (const key of [ item.item_code, item.standard_number ]) {
+        const normalized = normalizeKey(key);
+        if (!normalized) continue;
+        if (!sourceByCode.has(normalized)) sourceByCode.set(normalized, []);
+        sourceByCode.get(normalized).push(item);
+      }
+    }
     const matches = [];
     const unmatched = [];
     const contentDifferences = [];
@@ -189,10 +159,16 @@ class ProjectWorkbookImportRepository {
       const candidates = byCode.get(normalizeKey(lookupValue)) || [];
       const unique = [ ...new Map(candidates.map(item => [ item.standard_item_id, item ])).values() ];
       if (unique.length !== 1) {
-        unmatched.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber || lookupValue, standardNumber: row.standardNumber, reason: unique.length ? '项目中存在多个同号标准项' : '项目基线中未找到该标准化编号' });
+        const sourceMatches = sourceByCode.get(normalizeKey(lookupValue)) || [];
+        const reason = unique.length
+          ? '项目中存在多个同号标准项'
+          : sourceMatches.length
+            ? '该标准项存在于项目所选规范版本，但项目快照缺少此项；请返回章节应答刷新项目基线后重新预览'
+            : '项目基线中未找到该标准化编号';
+        unmatched.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber || lookupValue, standardNumber: row.standardNumber, reason });
         continue;
       }
-      const match = normalizeAnswerRow({ ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot, snapshotMissing: Boolean(unique[0].snapshot_missing) }, unique[0]);
+      const match = normalizeAnswerRow({ ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot }, unique[0]);
       matches.push(match);
       if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(unique[0]))) {
         contentDifferences.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, snapshotContent: standardContentForComparison(unique[0]), importedContent: row.content });
@@ -221,9 +197,9 @@ class ProjectWorkbookImportRepository {
         assignmentDetailCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).length, 0),
         assignmentReviewCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).filter(detail => detail.reviewRequired).length, 0),
         assignmentIgnoredCount: matches.filter(row => row.assignmentIgnoredReason).length,
-        pendingSnapshotCount: matches.filter(row => row.snapshotMissing && hasImportAnswerData(row)).length,
+        snapshotMissingCount: unmatched.filter(row => /项目快照缺少此项/.test(row.reason || '')).length,
       },
-      previewRows: matches.slice(0, 8).map(row => ({ clauseNumber: row.clauseNumber || row.standardNumber, content: row.content || row.unifiedRequirement, assignmentText: row.assignmentText, assignmentDetails: row.assignmentDetails || [], sourceSheet: row.sourceSheet, snapshotMissing: row.snapshotMissing })),
+      previewRows: matches.slice(0, 8).map(row => ({ clauseNumber: row.clauseNumber || row.standardNumber, content: row.content || row.unifiedRequirement, assignmentText: row.assignmentText, assignmentDetails: row.assignmentDetails || [], sourceSheet: row.sourceSheet })),
     };
   }
 
@@ -295,7 +271,15 @@ class ProjectWorkbookImportRepository {
           byCode.get(key).push(item);
         }
       }
-      if (job.payload.importMode === 'answer') this.addMissingExplanationCandidates(byCode, snapshotItems, sourceItems);
+      const sourceByCode = new Map();
+      for (const item of sourceItems) {
+        for (const key of [ item.item_code, item.standard_number ]) {
+          const normalized = normalizeKey(key);
+          if (!normalized) continue;
+          if (!sourceByCode.has(normalized)) sourceByCode.set(normalized, []);
+          sourceByCode.get(normalized).push(item);
+        }
+      }
       const matches = [];
       const unmatched = [];
       const contentDifferences = [];
@@ -303,10 +287,16 @@ class ProjectWorkbookImportRepository {
         const lookupValue = row.sourceKind === 'answer' ? row.standardNumber : row.clauseNumber;
         const candidates = [ ...new Map((byCode.get(normalizeKey(lookupValue)) || []).map(item => [ item.standard_item_id, item ])).values() ];
         if (candidates.length !== 1) {
-          unmatched.push(row);
+          const sourceMatches = sourceByCode.get(normalizeKey(lookupValue)) || [];
+          const reason = candidates.length
+            ? '项目中存在多个同号标准项'
+            : sourceMatches.length
+              ? '该标准项存在于项目所选规范版本，但项目快照缺少此项；请返回章节应答刷新项目基线后重新预览'
+              : '项目基线中未找到该标准化编号';
+          unmatched.push({ ...row, reason });
           continue;
         }
-        matches.push(normalizeAnswerRow({ ...row, standardItemId: candidates[0].standard_item_id, snapshotMissing: Boolean(candidates[0].snapshot_missing) }, candidates[0]));
+        matches.push(normalizeAnswerRow({ ...row, standardItemId: candidates[0].standard_item_id }, candidates[0]));
         if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(candidates[0]))) contentDifferences.push(row);
       }
       if (unmatched.length && !acknowledgeUnmatched) {
@@ -335,26 +325,6 @@ class ProjectWorkbookImportRepository {
       let answerCount = 0;
       let cloudAnswerCount = 0;
       let evidenceCount = 0;
-      let snapshotAddedCount = 0;
-      for (const row of matches) {
-        if (job.payload.importMode !== 'answer' || !row.snapshotMissing || !hasImportAnswerData(row)) continue;
-        const inserted = await client.query(`
-          INSERT INTO project_standard_items
-            (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
-             explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-          SELECT $1, si.id, si.standard_number, si.item_code, si.explanation, si.content,
-                 sc.code, si.heading_path, now()
-          FROM standard_items si
-          JOIN standard_chapters sc ON sc.id = si.chapter_id
-          WHERE si.id = $2
-            AND EXISTS (
-              SELECT 1 FROM project_standard_versions psv
-              WHERE psv.project_id = $1 AND psv.standard_version_id = si.standard_version_id
-            )
-          ON CONFLICT (project_id, standard_item_id) DO NOTHING
-          RETURNING standard_item_id`, [ projectId, row.standardItemId ]);
-        snapshotAddedCount += inserted.rowCount;
-      }
       const evidenceCache = new Map();
       const addEvidence = async (answerId, value, metadata) => {
         for (const name of splitEvidence(value)) {
@@ -536,7 +506,6 @@ class ProjectWorkbookImportRepository {
         executionCount,
         resultCount,
         evidenceCount,
-        snapshotAddedCount,
         skippedObservationCount,
       };
     } catch (error) {

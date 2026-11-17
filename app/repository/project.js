@@ -355,11 +355,11 @@ class ProjectRepository {
         AND (NULLIF(btrim(si.explanation), '') IS NOT NULL
           OR si.content ~ '(赋值|选择)[：:]')
         AND EXISTS (
-          SELECT 1 FROM project_standard_items child
-          WHERE child.project_id = psv.project_id
-            AND child.standard_item_id <> si.id
-            AND left(child.item_code_snapshot, length(si.item_code) + 1) = si.item_code || ' '
-            AND child.item_code_snapshot ~ '[[:space:]]+[a-z][[:space:]]*[)）)_][[:space:]]*$'
+          SELECT 1 FROM standard_items child
+          WHERE child.id <> si.id
+            AND child.standard_version_id = si.standard_version_id
+            AND left(child.item_code, length(si.item_code) + 1) = si.item_code || ' '
+            AND child.item_code ~ '[[:space:]]+[a-z][[:space:]]*[)）)_][[:space:]]*$'
         )
       ON CONFLICT (project_id, standard_item_id) DO NOTHING
       RETURNING standard_item_id`, values);
@@ -376,6 +376,7 @@ class ProjectRepository {
   }
 
   async getProjectManageDetail(projectId) {
+    await this.ensureProjectExplanationItems(projectId);
     const detail = await this.getProjectDetail(projectId);
     if (!detail) return null;
     const members = await this.pool.query(`

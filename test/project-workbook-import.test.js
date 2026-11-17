@@ -95,7 +95,7 @@ test('does not import an assignment value when the matched standard item has no 
   assert.equal(review.summary.assignmentIgnoredCount, 1);
 });
 
-test('matches an answer on a missing parent explanation item by its own standard number', async () => {
+test('does not match an answer to a parent explanation absent from the project snapshot', async () => {
   const repository = new ProjectWorkbookImportRepository({ query: async () => ({ rows: [] }) });
   repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
     sourceKind: 'answer', sourceSheet: 'Sheet1', sourceRow: 12, standardNumber: '31168-2023-08037',
@@ -111,10 +111,10 @@ test('matches an answer on a missing parent explanation item by its own standard
     { id: 'item-08038', item_code: '8.1.1 a)', standard_number: '31168-2023-08038', explanation: '云服务商应：', content: '执行访问控制。', chapter_code: '8' },
   ];
   const review = await repository.getReview('project-1', 'job-1');
-  assert.equal(review.summary.matchedCount, 1);
-  assert.equal(review.summary.pendingSnapshotCount, 1);
-  assert.equal(review.matches[0].standardItemId, 'item-08037');
-  assert.equal(review.matches[0].snapshotMissing, true);
+  assert.equal(review.summary.matchedCount, 0);
+  assert.equal(review.summary.unmatchedCount, 1);
+  assert.equal(review.summary.snapshotMissingCount, 1);
+  assert.match(review.unmatched[0].reason, /项目快照缺少此项/);
 });
 
 test('writes assignment details, implementation requirements, and real evidence in answer-import mode', async () => {
@@ -164,7 +164,7 @@ test('writes assignment details, implementation requirements, and real evidence 
   assert.equal(result.cloudAnswerCount, 0);
 });
 
-test('adds a missing parent explanation to the project snapshot before saving its assignment', async () => {
+test('does not add a missing parent standard item during answer import', async () => {
   const calls = [];
   const payload = { importMode: 'answer', rows: [ {
     sourceKind: 'answer', standardNumber: '31168-2023-08037',
@@ -191,16 +191,17 @@ test('adds a missing parent explanation to the project snapshot before saving it
     release() {},
   };
   const repository = new ProjectWorkbookImportRepository({ connect: async () => client });
-  const result = await repository.apply({
-    projectId: 'project-1', jobId: 'job-1', cloudCenterIds: [],
-    acknowledgeUnmatched: false, acknowledgeContentDifferences: false,
-    acknowledgeAssignmentReview: false, actorId: 'user-1',
-  });
-  const snapshotWrite = calls.findIndex(statement => statement.startsWith('INSERT INTO project_standard_items'));
-  const answerWrite = calls.findIndex(statement => statement.startsWith('INSERT INTO project_standard_answers'));
-  assert.ok(snapshotWrite >= 0 && snapshotWrite < answerWrite);
-  assert.equal(result.snapshotAddedCount, 1);
-  assert.equal(result.matchedCount, 1);
+  await assert.rejects(
+    repository.apply({
+      projectId: 'project-1', jobId: 'job-1', cloudCenterIds: [],
+      acknowledgeUnmatched: false, acknowledgeContentDifferences: false,
+      acknowledgeAssignmentReview: false, actorId: 'user-1',
+    }),
+    error => error.code === 'PROJECT_IMPORT_UNMATCHED',
+  );
+  assert.ok(calls.includes('ROLLBACK'));
+  assert.equal(calls.some(statement => statement.startsWith('INSERT INTO project_standard_items')), false);
+  assert.equal(calls.some(statement => statement.startsWith('INSERT INTO project_standard_answers')), false);
 });
 
 test('blocks unresolved assignment links until the reviewer acknowledges them', async () => {

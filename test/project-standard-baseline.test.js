@@ -69,7 +69,10 @@ test('backfills only missing explanatory parent items from a project standard ve
   assert.deepEqual(captured.values, [ 'project-1', 'version-1' ]);
   assert.match(captured.sql, /NULLIF\(btrim\(si\.explanation\), ''\) IS NOT NULL/);
   assert.match(captured.sql, /si\.content ~ '\(赋值\|选择\)\[：:\]'/);
-  assert.match(captured.sql, /child\.item_code_snapshot/);
+  assert.match(captured.sql, /FROM standard_items child/);
+  assert.match(captured.sql, /child\.standard_version_id = si\.standard_version_id/);
+  assert.match(captured.sql, /child\.item_code/);
+  assert.doesNotMatch(captured.sql, /child\.item_code_snapshot/);
   assert.match(captured.sql, /ON CONFLICT \(project_id, standard_item_id\) DO NOTHING/);
 });
 
@@ -88,7 +91,8 @@ test('lists project baseline standards for the chapter answer overview', async (
   assert.ok(queries.some(query => /LEFT JOIN project_standard_answers/.test(query.sql)));
   const explanationBackfill = queries.find(query => query.sql.startsWith('INSERT INTO project_standard_items'));
   assert.match(explanationBackfill.sql, /NULLIF\(btrim\(si\.explanation\), ''\) IS NOT NULL/);
-  assert.match(explanationBackfill.sql, /child\.item_code_snapshot/);
+  assert.match(explanationBackfill.sql, /FROM standard_items child/);
+  assert.match(explanationBackfill.sql, /child\.standard_version_id = si\.standard_version_id/);
   assert.deepEqual(queries[0].values, [ 'project-1' ]);
 });
 
