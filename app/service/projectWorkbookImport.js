@@ -3,7 +3,6 @@
 const Service = require('egg').Service;
 const { parseProjectWorkbookFile } = require('../lib/projectWorkbookImport');
 const { ProjectWorkbookImportRepository } = require('../repository/projectWorkbookImport');
-const ProjectRepository = require('../repository/project');
 
 class ProjectWorkbookImportService extends Service {
   get repository() {
@@ -21,14 +20,12 @@ class ProjectWorkbookImportService extends Service {
   }
 
   async getReview(projectId, jobId) {
-    await new ProjectRepository(this.ctx.app.db).ensureProjectExplanationItems(projectId);
     const result = await this.repository.getReview(projectId, jobId);
     if (!result) this.ctx.throw(404, '项目数据导入任务不存在');
     return result;
   }
 
   async apply(projectId, jobId, payload, actorId) {
-    await new ProjectRepository(this.ctx.app.db).ensureProjectExplanationItems(projectId);
     const value = payload.cloudCenterIds;
     const cloudCenterIds = Array.isArray(value) ? value : [ value ];
     try {

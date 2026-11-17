@@ -129,6 +129,26 @@ class ProjectController extends Controller {
     this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('规范版本已纳入项目基线'));
   }
 
+  async syncStandardVersion() {
+    const { projectId, standardVersionId } = this.ctx.params;
+    requireProjectAdmin(this.ctx, projectId);
+    try {
+      const result = await this.ctx.service.project.syncProjectStandardVersion(
+        projectId,
+        standardVersionId,
+        this.ctx.session.userId,
+      );
+      const notice = `同步完成：新增${result.addedCount}项，更新${result.updatedCount}项，${result.unchangedCount}项无变化`;
+      this.ctx.redirect(`/projects/${projectId}/manage?notice=` + encodeURIComponent(notice));
+    } catch (error) {
+      if ([ 400, 404, 409 ].includes(error.status)) {
+        this.ctx.redirect(`/projects/${projectId}/manage?notice=` + encodeURIComponent('同步失败：' + error.message));
+        return;
+      }
+      throw error;
+    }
+  }
+
   async saveCloudCenters() {
     requireProjectAdmin(this.ctx, this.ctx.params.projectId);
     await this.ctx.service.project.replaceProjectCloudCenters(

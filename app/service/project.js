@@ -137,6 +137,15 @@ class ProjectService extends Service {
     }
   }
 
+  async syncProjectStandardVersion(projectId, standardVersionId, actorId) {
+    try {
+      return await this.repository.syncProjectStandardVersion({ projectId, standardVersionId, actorId });
+    } catch (error) {
+      if (error.code === 'PROJECT_STANDARD_VERSION_NOT_FOUND') this.ctx.throw(404, error.message);
+      throw error;
+    }
+  }
+
   async replaceProjectCloudCenters(projectId, value, ownerUserId) {
     const values = Array.isArray(value) ? value : [ value ];
     return this.repository.replaceProjectCloudCenters({

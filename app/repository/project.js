@@ -79,8 +79,8 @@ class ProjectRepository {
       WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
       INSERT INTO project_standard_items (project_id, standard_item_id, standard_number_snapshot,
-        item_code_snapshot, explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-      SELECT $2, standard_item_id, standard_number_snapshot, item_code_snapshot,
+        item_code_snapshot, title_snapshot, explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
+      SELECT $2, standard_item_id, standard_number_snapshot, item_code_snapshot, title_snapshot,
         explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at
       FROM project_standard_items WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
     await client.query(`
@@ -167,7 +167,7 @@ class ProjectRepository {
                ELSE '条款说明：' || psi.explanation_snapshot || '；标准内容：' || psi.content_snapshot
              END AS content_snapshot,
              psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
-             si.title,
+             psi.title_snapshot AS title,
              COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
@@ -196,7 +196,6 @@ class ProjectRepository {
     const projectResult = await this.pool.query(`
       SELECT id, name FROM projects WHERE id = $1`, [ projectId ]);
     if (!projectResult.rowCount) return null;
-    await this.ensureProjectExplanationItems(projectId);
     const versions = await this.pool.query(`
       SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
              s.name AS standard_name, s.standard_type,
@@ -228,7 +227,6 @@ class ProjectRepository {
       JOIN projects p ON p.id = psv.project_id
       WHERE psv.project_id = $1 AND psv.standard_version_id = $2`, [ projectId, standardVersionId ]);
     if (!versionResult.rowCount) return null;
-    await this.ensureProjectExplanationItems(projectId, standardVersionId);
     const validSorts = {
       standardNumber: 'psi.standard_number_snapshot',
       itemCode: 'psi.item_code_snapshot',
@@ -257,7 +255,7 @@ class ProjectRepository {
       predicates.push(`(
         psi.standard_number_snapshot ILIKE $${params.length}
         OR psi.item_code_snapshot ILIKE $${params.length}
-        OR COALESCE(si.title, '') ILIKE $${params.length}
+        OR COALESCE(psi.title_snapshot, '') ILIKE $${params.length}
         OR psi.content_snapshot ILIKE $${params.length}
         OR COALESCE(psi.explanation_snapshot, '') ILIKE $${params.length}
         OR psi.heading_path_snapshot::text ILIKE $${params.length}
@@ -297,7 +295,7 @@ class ProjectRepository {
       SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
              psi.content_snapshot,
              psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
-             si.title, COALESCE(sc.name, psi.chapter_code_snapshot) AS chapter_name,
+             psi.title_snapshot AS title, COALESCE(sc.name, psi.chapter_code_snapshot) AS chapter_name,
              COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
@@ -338,34 +336,6 @@ class ProjectRepository {
     };
   }
 
-  async ensureProjectExplanationItems(projectId, standardVersionId = null) {
-    const values = [ projectId ];
-    const versionPredicate = standardVersionId ? 'AND psv.standard_version_id = $2' : '';
-    if (standardVersionId) values.push(standardVersionId);
-    const result = await this.pool.query(`
-      INSERT INTO project_standard_items
-        (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
-         explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-      SELECT psv.project_id, si.id, si.standard_number, si.item_code,
-             si.explanation, si.content, sc.code, si.heading_path, now()
-      FROM project_standard_versions psv
-      JOIN standard_items si ON si.standard_version_id = psv.standard_version_id
-      JOIN standard_chapters sc ON sc.id = si.chapter_id
-      WHERE psv.project_id = $1 ${versionPredicate}
-        AND (NULLIF(btrim(si.explanation), '') IS NOT NULL
-          OR si.content ~ '(赋值|选择)[：:]')
-        AND EXISTS (
-          SELECT 1 FROM standard_items child
-          WHERE child.id <> si.id
-            AND child.standard_version_id = si.standard_version_id
-            AND left(child.item_code, length(si.item_code) + 1) = si.item_code || ' '
-            AND child.item_code ~ '[[:space:]]+[a-z][[:space:]]*[)）)_][[:space:]]*$'
-        )
-      ON CONFLICT (project_id, standard_item_id) DO NOTHING
-      RETURNING standard_item_id`, values);
-    return result.rowCount;
-  }
-
   async updateProjectName(projectId, name) {
     const result = await this.pool.query(`
       UPDATE projects SET name = $2, updated_at = now()
@@ -376,7 +346,6 @@ class ProjectRepository {
   }
 
   async getProjectManageDetail(projectId) {
-    await this.ensureProjectExplanationItems(projectId);
     const detail = await this.getProjectDetail(projectId);
     if (!detail) return null;
     const members = await this.pool.query(`
@@ -460,9 +429,9 @@ class ProjectRepository {
         ON CONFLICT DO NOTHING`, [ projectId, standardVersionId ]);
       await client.query(`
         INSERT INTO project_standard_items
-          (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot,
+          (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot, title_snapshot,
            explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
-        SELECT $1, si.id, si.standard_number, si.item_code,
+        SELECT $1, si.id, si.standard_number, si.item_code, si.title,
                COALESCE(si.explanation, parent.explanation), si.content, sc.code, si.heading_path, now()
         FROM standard_items si
         JOIN standard_chapters sc ON sc.id = si.chapter_id
@@ -471,6 +440,98 @@ class ProjectRepository {
         WHERE si.standard_version_id = $2
         ON CONFLICT DO NOTHING`, [ projectId, standardVersionId, '\\s+[a-z]\\s*[)）)_]\\s*$', '' ]);
       await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async syncProjectStandardVersion({ projectId, standardVersionId, actorId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const baseline = await client.query(`
+        SELECT psv.project_id, psv.standard_version_id, s.code AS standard_code,
+               s.name AS standard_name, sv.version
+        FROM project_standard_versions psv
+        JOIN standard_versions sv ON sv.id = psv.standard_version_id
+        JOIN standards s ON s.id = sv.standard_id
+        WHERE psv.project_id = $1 AND psv.standard_version_id = $2
+        FOR UPDATE OF psv, sv`, [ projectId, standardVersionId ]);
+      if (!baseline.rowCount) {
+        const error = new Error('该规范版次不在当前项目中');
+        error.code = 'PROJECT_STANDARD_VERSION_NOT_FOUND';
+        throw error;
+      }
+
+      const counts = await client.query(`
+        SELECT count(si.id)::integer AS total_count,
+               count(*) FILTER (WHERE psi.standard_item_id IS NULL)::integer AS added_count,
+               count(*) FILTER (WHERE psi.standard_item_id IS NOT NULL AND (
+                 psi.standard_number_snapshot IS DISTINCT FROM si.standard_number
+                 OR psi.item_code_snapshot IS DISTINCT FROM si.item_code
+                 OR psi.title_snapshot IS DISTINCT FROM si.title
+                 OR psi.explanation_snapshot IS DISTINCT FROM COALESCE(si.explanation, parent.explanation)
+                 OR psi.content_snapshot IS DISTINCT FROM si.content
+                 OR psi.chapter_code_snapshot IS DISTINCT FROM sc.code
+                 OR psi.heading_path_snapshot IS DISTINCT FROM si.heading_path
+               ))::integer AS updated_count
+        FROM standard_items si
+        JOIN standard_chapters sc ON sc.id = si.chapter_id
+        LEFT JOIN standard_items parent ON parent.standard_version_id = si.standard_version_id
+          AND parent.item_code = regexp_replace(si.item_code, $3, $4)
+        LEFT JOIN project_standard_items psi
+          ON psi.project_id = $1 AND psi.standard_item_id = si.id
+        WHERE si.standard_version_id = $2`, [ projectId, standardVersionId, '\\s+[a-z]\\s*[)）)_]\\s*$', '' ]);
+      const summary = counts.rows[0];
+      await client.query(`
+        INSERT INTO project_standard_items
+          (project_id, standard_item_id, standard_number_snapshot, item_code_snapshot, title_snapshot,
+           explanation_snapshot, content_snapshot, chapter_code_snapshot, heading_path_snapshot, snapshotted_at)
+        SELECT $1, si.id, si.standard_number, si.item_code, si.title,
+               COALESCE(si.explanation, parent.explanation), si.content,
+               sc.code, si.heading_path, now()
+        FROM standard_items si
+        JOIN standard_chapters sc ON sc.id = si.chapter_id
+        LEFT JOIN standard_items parent ON parent.standard_version_id = si.standard_version_id
+          AND parent.item_code = regexp_replace(si.item_code, $3, $4)
+        WHERE si.standard_version_id = $2
+        ON CONFLICT (project_id, standard_item_id) DO UPDATE SET
+          standard_number_snapshot = EXCLUDED.standard_number_snapshot,
+          item_code_snapshot = EXCLUDED.item_code_snapshot,
+          title_snapshot = EXCLUDED.title_snapshot,
+          explanation_snapshot = EXCLUDED.explanation_snapshot,
+          content_snapshot = EXCLUDED.content_snapshot,
+          chapter_code_snapshot = EXCLUDED.chapter_code_snapshot,
+          heading_path_snapshot = EXCLUDED.heading_path_snapshot,
+          snapshotted_at = now()
+        WHERE project_standard_items.standard_number_snapshot IS DISTINCT FROM EXCLUDED.standard_number_snapshot
+          OR project_standard_items.item_code_snapshot IS DISTINCT FROM EXCLUDED.item_code_snapshot
+          OR project_standard_items.title_snapshot IS DISTINCT FROM EXCLUDED.title_snapshot
+          OR project_standard_items.explanation_snapshot IS DISTINCT FROM EXCLUDED.explanation_snapshot
+          OR project_standard_items.content_snapshot IS DISTINCT FROM EXCLUDED.content_snapshot
+          OR project_standard_items.chapter_code_snapshot IS DISTINCT FROM EXCLUDED.chapter_code_snapshot
+          OR project_standard_items.heading_path_snapshot IS DISTINCT FROM EXCLUDED.heading_path_snapshot`, [ projectId, standardVersionId, '\\s+[a-z]\\s*[)）)_]\\s*$', '' ]);
+      await client.query(`
+        UPDATE project_standard_versions SET snapshot_at = now()
+        WHERE project_id = $1 AND standard_version_id = $2`, [ projectId, standardVersionId ]);
+      const result = {
+        totalCount: Number(summary.total_count || 0),
+        addedCount: Number(summary.added_count || 0),
+        updatedCount: Number(summary.updated_count || 0),
+        unchangedCount: Number(summary.total_count || 0) - Number(summary.added_count || 0) - Number(summary.updated_count || 0),
+      };
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'sync_project_standard_snapshot', 'project_standard_version', $2, $3::jsonb)`, [
+        actorId || null,
+        standardVersionId,
+        JSON.stringify({ projectId, ...baseline.rows[0], ...result }),
+      ]);
+      await client.query('COMMIT');
+      return result;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
