@@ -153,43 +153,21 @@ class ProjectRepository {
     if (!projectResult.rowCount) return null;
     const versions = await this.pool.query(`
       SELECT psv.snapshot_at, sv.id, sv.version, s.code AS standard_code, s.name AS standard_name,
-             count(psi.standard_item_id)::integer AS item_count
+             count(psi.standard_item_id)::integer AS item_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.id IS NOT NULL)::integer AS answered_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'satisfied')::integer AS satisfied_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'partially_satisfied')::integer AS partially_satisfied_count,
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count
       FROM project_standard_versions psv
       JOIN standard_versions sv ON sv.id = psv.standard_version_id
       JOIN standards s ON s.id = sv.standard_id
       LEFT JOIN project_standard_items psi ON psi.project_id = psv.project_id AND psi.standard_item_id IN (SELECT id FROM standard_items WHERE standard_version_id = sv.id)
+      LEFT JOIN project_standard_answers psa ON psa.project_id = psv.project_id
+        AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
       WHERE psv.project_id = $1
       GROUP BY psv.project_id, psv.snapshot_at, sv.id, s.id
       ORDER BY s.code, sv.version`, [ projectId ]);
-    const items = await this.pool.query(`
-      SELECT psi.standard_item_id, psi.standard_number_snapshot, psi.item_code_snapshot,
-             CASE WHEN NULLIF(btrim(psi.explanation_snapshot), '') IS NULL THEN psi.content_snapshot
-               ELSE '条款说明：' || psi.explanation_snapshot || '；标准内容：' || psi.content_snapshot
-             END AS content_snapshot,
-             psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
-             psi.title_snapshot AS title,
-             COALESCE(psa.standard_level, '') AS standard_level,
-             COALESCE(psa.is_key, false) AS is_key,
-             COALESCE(psa.clause_assignment, '') AS clause_assignment,
-             COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
-             COALESCE(psa.unified_requirement, '') AS unified_requirement,
-             COALESCE(psa.expected_evidence, '') AS expected_evidence,
-             COALESCE(psa.pending_evidence, '') AS pending_evidence,
-             COALESCE(psa.responsible_text, '') AS responsible_text,
-             COALESCE(psa.applicability, 'unspecified') AS applicability,
-             COALESCE(psa.applicability_scope, '') AS applicability_scope,
-             COALESCE(psa.status, 'unassessed') AS answer_status,
-             COALESCE(psa.actual_evidence, '') AS actual_evidence,
-             COALESCE(psa.measure_description, '') AS measure_description,
-             COALESCE(psa.problem_description, '') AS problem_description,
-             psa.updated_at AS answer_updated_at
-      FROM project_standard_items psi
-      JOIN standard_items si ON si.id = psi.standard_item_id
-      LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
-        AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
-      WHERE psi.project_id = $1
-      ORDER BY psi.chapter_code_snapshot, psi.item_code_snapshot`, [ projectId ]);
-    return { project: projectResult.rows[0], versions: versions.rows, items: items.rows };
+    return { project: projectResult.rows[0], versions: versions.rows, items: [] };
   }
 
   async getProjectAnswerOverview(projectId) {

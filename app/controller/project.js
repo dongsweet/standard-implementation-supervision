@@ -23,7 +23,7 @@ class ProjectController extends Controller {
     requireProject(this.ctx, currentProject.id);
     const detail = await this.ctx.service.project.getProjectDetail(currentProject.id);
     await this.ctx.render('projects/detail', {
-      title: detail.project.name,
+      title: '项目总览',
       ...detail,
       versionsInProject: detail.versions,
       csrf: this.ctx.csrf,

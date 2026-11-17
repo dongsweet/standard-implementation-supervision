@@ -56,6 +56,24 @@ test('rejects a version without standard items and rolls back', async () => {
   assert.equal(isReleased(), true);
 });
 
+test('loads project overview as summaries without querying all standard item rows', async () => {
+  const queries = [];
+  const repository = new ProjectRepository({
+    async query(sql, values) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      queries.push(statement);
+      if (statement.startsWith('SELECT p.*, source_project.name')) return { rows: [ { id: 'project-1', name: '项目A' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT psv.snapshot_at')) return { rows: [ { standard_code: '31168', item_count: 526, answered_count: 120 } ], rowCount: 1 };
+      throw new Error(`Unexpected query: ${statement}`);
+    },
+  });
+  const result = await repository.getProjectDetail('project-1');
+  assert.equal(result.versions[0].item_count, 526);
+  assert.equal(result.versions[0].answered_count, 120);
+  assert.equal(queries.length, 2);
+  assert.equal(queries.some(statement => statement.includes('ORDER BY psi.chapter_code_snapshot')), false);
+});
+
 test('syncs a project standard snapshot atomically while preserving project answers', async () => {
   const calls = [];
   const client = {
