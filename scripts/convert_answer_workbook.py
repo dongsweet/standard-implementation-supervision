@@ -1,4 +1,5 @@
 from pathlib import Path
+import collections
 import json
 import re
 import subprocess
@@ -10,8 +11,11 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'reference-docs' / '规范满足情况-赋值提取复核-终版.xlsx'
-OUTPUT = ROOT / 'outputs' / '项目应答导入模板转换结果-新版.xlsx'
+REFERENCE = ROOT / 'reference-docs' / '最终留用资料'
+SOURCE = REFERENCE / '规范满足情况-赋值提取复核-终版.xlsx'
+PROJECT_SOURCE = REFERENCE / '曙光云多云同构项目表-261115.xlsx'
+MAPPING_SOURCE = REFERENCE / '31168-2023标准编号与多云同构项目编号对应关系-章节顺序同步.xlsx'
+OUTPUT = REFERENCE / '项目应答导入数据-261115.xlsx'
 NODE = Path(r'C:\Users\dq\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe')
 
 SUMMARY_HEADERS = [
@@ -47,6 +51,41 @@ def set_widths(ws, widths):
         ws.column_dimensions[get_column_letter(index)].width = width
 
 
+def extract_status_markers():
+    project = load_workbook(PROJECT_SOURCE, data_only=True)
+    mapping = load_workbook(MAPPING_SOURCE, data_only=True)
+    sheets = { str(worksheet.title): worksheet for worksheet in project.worksheets }
+    markers = {}
+    for row in mapping['编号对应关系'].iter_rows(min_row=2, values_only=True):
+        standard_number, project_number, source_sheet, source_row = row[0], row[8], row[17], row[18]
+        if not standard_number or not project_number or not source_sheet or not source_row:
+            continue
+        sheet = sheets[str(source_sheet).split('-', 1)[0]]
+        header = next(sheet.iter_rows(min_row=2, max_row=2, values_only=True), ())
+        status_columns = [
+            index for index, value in enumerate(header)
+            if value and '满足情况' in str(value)
+        ]
+        values = [ sheet.cell(int(source_row), column + 1).value for column in status_columns ]
+        normalized = [
+            str(value).strip() for value in values
+            if value is not None and str(value).strip() and str(value).strip() != '/'
+        ]
+        if normalized and all(value == '不适用' for value in normalized):
+            markers[str(standard_number)] = ('不适用', '未标记')
+        elif any(value in ('不满足', '缺渗透报告') for value in normalized):
+            markers[str(standard_number)] = ('适用', '不符合')
+        elif '部分满足' in normalized:
+            markers[str(standard_number)] = ('适用', '部分符合')
+        elif any(value in ('满足', '符合') for value in normalized):
+            markers[str(standard_number)] = ('适用', '符合')
+        else:
+            # 第 6 章原表有实际条款和描述，但满足情况整列未填，保留为未标记。
+            markers[str(standard_number)] = ('适用', '未标记')
+    return markers
+
+
+status_markers = extract_status_markers()
 source = load_workbook(SOURCE, data_only=False)
 summary_source = source['Sheet1']
 detail_source = source['赋值提取复核']
@@ -151,6 +190,7 @@ summary.append(SUMMARY_HEADERS)
 style_header(summary[1])
 for record in summary_rows:
     clause_numbers = sorted({row['clauseNumber'] for row in detail_by_number.get(record['standardNumber'], []) if row['clauseNumber']})
+    applicability, compliance = status_markers.get(record['standardNumber'], ('', ''))
     summary.append([
         record['standardNumber'],
         '；'.join(clause_numbers),
@@ -158,8 +198,8 @@ for record in summary_rows:
         record['assignmentText'],
         record['complianceDescription'],
         record['actualEvidence'],
-        '',
-        '',
+        applicability,
+        compliance,
         '',
     ])
 for row in summary.iter_rows(min_row=2):
@@ -211,6 +251,13 @@ for path in [payload_path, mapped_path, OUTPUT.with_suffix('.mapping.js')]:
     path.unlink(missing_ok=True)
 
 check = load_workbook(OUTPUT, data_only=False)
+status_rows = check['应答汇总']
+applicability_counts = collections.Counter(
+    status_rows.cell(row, 7).value for row in range(2, status_rows.max_row + 1)
+)
+compliance_counts = collections.Counter(
+    status_rows.cell(row, 8).value for row in range(2, status_rows.max_row + 1)
+)
 print(json.dumps({
     'output': str(OUTPUT.resolve()),
     'sheets': check.sheetnames,
@@ -218,4 +265,7 @@ print(json.dumps({
     'detailRows': check['赋值明细'].max_row - 1,
     'sourceSummaryRows': len(summary_rows),
     'sourceDetailRows': len(detail_rows),
+    'statusMarkers': len(status_markers),
+    'applicabilityCounts': dict(applicability_counts),
+    'complianceCounts': dict(compliance_counts),
 }, ensure_ascii=False, indent=2))
