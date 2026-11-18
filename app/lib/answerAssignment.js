@@ -146,7 +146,7 @@ function buildAssignmentForm(source, existingDetails = []) {
           selectedValues.push(option.value);
         }
       }
-      const optionStates = options.map(option => {
+      const optionStates = options.map((option, optionIndex) => {
         const child = option.assignmentPlaceholder
           ? findExisting(details, 'assignment', option.assignmentPlaceholder, existing?.placeholderId || key)
           : null;
@@ -154,7 +154,7 @@ function buildAssignmentForm(source, existingDetails = []) {
           ...option,
           selected: selectedValues.includes(option.value),
           assignmentValue: child?.value || '',
-          assignmentPlaceholderId: child?.placeholderId || `${key}:assignment:${options.indexOf(option) + 1}`,
+          assignmentPlaceholderId: `${key}:assignment:${optionIndex + 1}`,
         };
       });
       controls.push({
@@ -284,6 +284,7 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
       );
       if (candidate) consumedAssignments.add(candidate);
       const assignmentValue = text(candidate?.value);
+      const optionIndex = control.options.findIndex(candidateOption => candidateOption.value === option.value);
       normalized.push({
         type: 'assignment',
         label: option.assignmentLabel,
@@ -291,7 +292,7 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
         value: assignmentValue || null,
         selected: true,
         selectedValues: [],
-        placeholderId: option.assignmentPlaceholderId,
+        placeholderId: `${selectionKey}:assignment:${optionIndex + 1}`,
         parentSelectionId: selectionKey,
         reviewRequired: !assignmentValue,
         reviewReason: !assignmentValue ? `已选择“${option.label}”，请填写对应赋值。` : candidate?.reviewReason || null,
