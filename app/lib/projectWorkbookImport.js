@@ -2,6 +2,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { formatSubmittedDetails, normalizeDetails } = require('./answerAssignment');
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_SHEETS = 100;
@@ -221,14 +222,14 @@ function labelValueForDetail(detail, labeled) {
   return '';
 }
 
-function buildAnswerAssignmentDetails(detailRows, fallbackText) {
+function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '') {
   const details = detailRows.filter(row => row.type === '赋值' || row.type === '选择');
   if (!details.length) return [];
   const sourceText = details.map(row => row.rawCurrentAssignment || row.currentAssignment).find(Boolean) || fallbackText || '';
   const numbered = numberedAssignmentSegments(sourceText);
   const labeled = labeledAssignmentSegments(sourceText);
   const hasNestedChoice = details.some(row => row.type === '选择' && /\[\s*[赋賦]值\s*[:：;]/u.test(row.placeholder || ''));
-  return details.map((row, index) => {
+  const mapped = details.map((row, index) => {
     let value = row.currentAssignment || (row.hasMappedValue ? '' : sourceText);
     const genericReviewReason = /当前赋值可能对应一个或多个占位符/.test(row.reviewReason || '');
     let reviewRequired = row.needsReview === true && !genericReviewReason;
@@ -292,19 +293,23 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText) {
       placeholderId: row.placeholderId || null,
       parentSelectionId: row.parentSelectionId,
       selected: row.isActive,
+      selectedValues: row.type === '选择' && value ? [ selectedChoiceValue(row, value) ] : [],
       reviewRequired,
       reviewReason: reviewReason || null,
     };
   });
+  const placeholderSource = [ ...new Set(details.map(row => row.placeholder).filter(Boolean)) ].join('\n');
+  const normalized = normalizeDetails(
+    mapped,
+    standardText || placeholderSource || fallbackText || '',
+    { preserveUnmatched: true }
+  );
+  return normalized.details;
 }
 
 function formatAnswerAssignments(details, fallbackText = '') {
-  const visibleDetails = details.filter(detail => detail.selected !== false);
-  if (!visibleDetails.length) return details.length ? '' : fallbackText || '';
-  return visibleDetails.map(detail => {
-    const label = detail.label || (detail.type === 'selection' ? '选择项' : '需赋值项');
-    return `${label}：${detail.selected === false ? '未选中' : detail.value || '待确认'}`;
-  }).join('\n');
+  if (!details.length) return fallbackText || '';
+  return formatSubmittedDetails(details).clauseAssignment;
 }
 
 function parseAnswerWorkbookRows(sheets) {
@@ -451,7 +456,11 @@ function parseAnswerWorkbookRows(sheets) {
       }
     }
     for (const [key, row] of byNumber) {
-      const details = buildAnswerAssignmentDetails(detailByNumber.get(key) || [], row.assignmentText);
+      const details = buildAnswerAssignmentDetails(
+        detailByNumber.get(key) || [],
+        row.assignmentText,
+        row.content || row.explanation || ''
+      );
       if (details.length) {
         row.assignmentDetails = details;
         row.assignmentText = formatAnswerAssignments(details, row.assignmentText);

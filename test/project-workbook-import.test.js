@@ -70,7 +70,7 @@ test('maps labeled depth, coverage, and choice values to their own placeholders'
     ] },
   ]);
   const row = result.rows[0];
-  assert.equal(row.assignmentDetails[0].value, '深度：漏洞扫描、渗透测试、关键代码审计\n广度：云平台所有关键组件');
+  assert.equal(row.assignmentDetails[0].value, '深度:漏洞扫描、渗透测试、关键代码审计\n广度:云平台所有关键组件');
   assert.equal(row.assignmentDetails[1].value, '系统');
   assert.equal(row.assignmentDetails[0].reviewRequired, false);
   assert.equal(row.assignmentDetails[1].reviewRequired, false);
@@ -91,13 +91,13 @@ test('renders selected nested choice and omits inactive child values from the su
   ]);
   const row = result.rows[0];
   assert.equal(row.assignmentDetails[0].label, '选择');
-  assert.equal(row.assignmentDetails[0].value, '[赋值：云服务商定义的频率]');
+  assert.equal(row.assignmentDetails[0].value, '[赋值:云服务商定义的频率]');
+  assert.deepEqual(row.assignmentDetails[0].selectedValues, [ '[赋值:云服务商定义的频率]' ]);
   assert.equal(row.assignmentDetails[1].value, '每年一次');
   assert.equal(row.assignmentDetails[1].parentSelectionId, '31168-2023-06042#1');
-  assert.equal(row.assignmentDetails[2].value, null);
-  assert.equal(row.assignmentDetails[2].selected, false);
-  assert.equal(row.assignmentDetails[2].reviewRequired, false);
-  assert.equal(row.assignmentText, '选择：[赋值：云服务商定义的频率]\n云服务商定义的频率：每年一次');
+  assert.equal(row.assignmentDetails.length, 2);
+  assert.equal(row.assignmentDetails.some(detail => detail.label === '云服务商定义的项目审查里程碑'), false);
+  assert.equal(row.assignmentText, '选择：云服务商定义的频率\n云服务商定义的频率：每年一次');
   assert.doesNotMatch(row.assignmentText, /项目审查里程碑|未选中/);
   assert.doesNotMatch(row.assignmentText, /待确认/);
 });

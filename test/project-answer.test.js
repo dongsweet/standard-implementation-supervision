@@ -19,6 +19,10 @@ test('saves project applicability and evidence separately from satisfaction stat
     standardLevel: '增强要求',
     isKey: true,
     clauseAssignment: '7天；禁用',
+    assignmentDetails: [ {
+      type: 'selection', label: '选择', placeholderId: 'selection:1',
+      selectedValues: [ '7天' ], value: '7天', selected: true, parentSelectionId: null,
+    } ],
     unifiedRequirement: '临时账号默认7天，到期自动禁用。',
     expectedEvidence: '账号管理制度、配置截图',
     applicability: 'applicable',
@@ -31,13 +35,17 @@ test('saves project applicability and evidence separately from satisfaction stat
   });
 
   assert.equal(result.id, 'answer-1');
-  assert.match(queries[0].sql, /standard_level, is_key, clause_assignment, unified_requirement/);
+  assert.match(queries[0].sql, /clause_assignment, assignment_details/);
   assert.deepEqual(queries[0].values, [
     'project-1',
     'item-1',
     '增强要求',
     true,
     '7天；禁用',
+    JSON.stringify([ {
+      type: 'selection', label: '选择', placeholderId: 'selection:1',
+      selectedValues: [ '7天' ], value: '7天', selected: true, parentSelectionId: null,
+    } ]),
     '临时账号默认7天，到期自动禁用。',
     '账号管理制度、配置截图',
     'applicable',

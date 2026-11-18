@@ -2,6 +2,7 @@
 
 const Service = require('egg').Service;
 const ProjectRepository = require('../repository/project');
+const { buildAssignmentForm, normalizeDetails } = require('../lib/answerAssignment');
 
 const ANSWER_STATUSES = new Set([ 'unassessed', 'satisfied', 'partially_satisfied', 'not_satisfied' ]);
 const APPLICABILITIES = new Set([ 'unspecified', 'applicable', 'not_applicable' ]);
@@ -60,6 +61,15 @@ class ProjectService extends Service {
       chapterPageSize: String(query.chapterPageSize || '1'),
     });
     if (!result) this.ctx.throw(404, '项目规范不存在');
+    result.items = (result.items || []).map(item => {
+      const source = [ item.explanation_snapshot, item.content_snapshot ]
+        .filter(Boolean)
+        .join('\n');
+      return {
+        ...item,
+        assignment_form: buildAssignmentForm(source, item.assignment_details || []),
+      };
+    });
     return result;
   }
 
@@ -162,12 +172,34 @@ class ProjectService extends Service {
       : String(payload.status || 'unassessed');
     if (!APPLICABILITIES.has(applicability)) this.ctx.throw(400, '无效的适用性状态');
     if (!ANSWER_STATUSES.has(status)) this.ctx.throw(400, '无效的应答状态');
+    const item = await this.repository.getProjectStandardItemContext(projectId, standardItemId);
+    if (!item) this.ctx.throw(404, '项目标准项不存在');
+    let assignmentDetails = [];
+    if (payload.assignmentDetails) {
+      try {
+        assignmentDetails = typeof payload.assignmentDetails === 'string'
+          ? JSON.parse(payload.assignmentDetails)
+          : payload.assignmentDetails;
+      } catch {
+        this.ctx.throw(400, '占位符赋值数据格式无效');
+      }
+    }
+    if (!Array.isArray(assignmentDetails) || assignmentDetails.length > 200) {
+      this.ctx.throw(400, '占位符赋值数据格式无效');
+    }
+    const source = [ item.explanation_snapshot, item.content_snapshot ].filter(Boolean).join('\n');
+    const form = buildAssignmentForm(source, []);
+    const normalized = normalizeDetails(assignmentDetails, source);
+    const clauseAssignment = form.hasStructuredControls
+      ? normalized.clauseAssignment || null
+      : String(payload.clauseAssignment || '').trim() || null;
     return this.repository.saveAnswer({
       projectId,
       standardItemId,
       standardLevel: String(payload.standardLevel || '').trim() || null,
       isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
-      clauseAssignment: String(payload.clauseAssignment || '').trim() || null,
+      clauseAssignment,
+      assignmentDetails: form.hasStructuredControls ? normalized.details : assignmentDetails,
       unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
       expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       applicability,

@@ -18,15 +18,21 @@ const buildUrl = overrides => {
 };
 const chapterPageUrl = page => buildUrl({ chapterPage: page });
 const assignmentDisplayValue = detail => {
-  const value = String(detail.value || '').trim();
-  if (detail.type !== 'selection' || !value || !detail.placeholder) return value;
   const normalizeOption = input => String(input || '').normalize('NFKC')
     .replace(/^\s*\[?\s*赋值\s*[:：]?\s*/, '')
     .replace(/\]\s*$/, '')
     .replace(/[^\p{L}\p{N}]/gu, '')
     .toLowerCase();
-  const nestedOptions = String(detail.placeholder).match(/[\[［【]\s*赋值\s*[:：]\s*[^\]］】\r\n]+[\]］】]/gu) || [];
-  return nestedOptions.find(option => normalizeOption(option) === normalizeOption(value)) || value;
+  if (detail.type !== 'selection') return String(detail.value || '').trim();
+  const values = Array.isArray(detail.selectedValues)
+    ? detail.selectedValues
+    : detail.value ? [ detail.value ] : [];
+  if (!values.length) return '未选择';
+  const nestedOptions = String(detail.placeholder || '').match(/[\[［【]\s*赋值\s*[:：]\s*[^\]］】\r\n]+[\]］】]/gu) || [];
+  return values.map(value => {
+    const matched = nestedOptions.find(option => normalizeOption(option) === normalizeOption(value));
+    return matched ? matched.replace(/^[\[［【]\s*赋值\s*[:：]\s*/, '').replace(/[\]］】]\s*$/, '') : value;
+  }).join('；');
 };
 %>
 
@@ -121,12 +127,46 @@ const assignmentDisplayValue = detail => {
 
 <% items.forEach(item => { %>
 <div class="modal fade" id="answerModal-<%= item.standard_item_id %>" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-  <form method="post" action="/projects/<%= currentProject.id %>/answers/<%= item.standard_item_id %>"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="<%= buildUrl({}) %>">
+  <form method="post" action="/projects/<%= currentProject.id %>/answers/<%= item.standard_item_id %>" data-answer-form><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="returnTo" value="<%= buildUrl({}) %>">
     <div class="modal-header"><h2 class="modal-title fs-5">编辑章节应答 · <%= item.item_code_snapshot %></h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body"><p class="small text-secondary"><%= item.chapter_code_snapshot %> · <%= item.title || '' %></p><div class="border rounded p-3 mb-3 bg-body-tertiary"><% if (item.explanation_snapshot) { %><div class="answer-item-explanation"><span class="answer-item-explanation-label">说明：</span><span><%= item.explanation_snapshot %></span></div><% } %><% if (item.content_snapshot && item.content_snapshot !== item.explanation_snapshot) { %><div class="answer-item-copy"><%= item.content_snapshot %></div><% } %></div><div class="row g-3">
       <div class="col-md-4"><label class="form-label">级别</label><input class="form-control" name="standardLevel" value="<%= item.standard_level %>"></div>
       <div class="col-md-4 d-flex align-items-end"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="isKey" value="true" <%= item.is_key ? 'checked' : '' %>><label class="form-check-label">重点项</label></div></div>
-      <div class="col-md-4"><label class="form-label">云服务商赋值</label><input class="form-control" name="clauseAssignment" value="<%= item.clause_assignment %>"></div>
+      <div class="col-12"><label class="form-label">占位符赋值</label>
+        <% if (item.assignment_form && item.assignment_form.hasStructuredControls) { %>
+          <div class="assignment-editor border rounded p-3 bg-body-tertiary" data-assignment-editor>
+            <% item.assignment_form.controls.forEach(control => { %>
+              <% if (control.kind === 'selection') { %>
+                <div class="assignment-selection mb-3" data-role="selection-control" data-selection-key="<%= control.key %>" data-placeholder="<%= control.placeholder %>">
+                  <div class="form-label mb-2">选择项 <span class="text-secondary small">可多选</span></div>
+                  <% control.options.forEach(option => { %>
+                    <div class="assignment-choice">
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="<%= item.standard_item_id %>-<%= control.key %>-<%= option.label.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '') %>" data-role="selection-option" data-value="<%= option.value %>" data-label="<%= option.label %>" data-assignment-label="<%= option.assignmentLabel %>" data-assignment-placeholder="<%= option.assignmentPlaceholder %>" data-assignment-key="<%= option.assignmentPlaceholderId %>" <%= option.selected ? 'checked' : '' %>>
+                        <label class="form-check-label" for="<%= item.standard_item_id %>-<%= control.key %>-<%= option.label.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, '') %>"><%= option.label %></label>
+                      </div>
+                      <% if (option.assignmentPlaceholder) { %>
+                        <div class="assignment-branch ms-4 mt-1 mb-2" data-role="assignment-branch">
+                          <label class="form-label small mb-1"><%= option.assignmentLabel %> 的赋值</label>
+                          <input class="form-control form-control-sm" data-role="assignment-value" data-label="<%= option.assignmentLabel %>" data-placeholder="<%= option.assignmentPlaceholder %>" data-assignment-key="<%= option.assignmentPlaceholderId %>" value="<%= option.assignmentValue %>" placeholder="请填写<%= option.assignmentLabel %>" required>
+                        </div>
+                      <% } %>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <div class="assignment-standalone mb-2" data-role="standalone-assignment">
+                  <label class="form-label small mb-1"><%= control.label %></label>
+                  <input class="form-control form-control-sm" data-role="standalone-value" data-label="<%= control.label %>" data-placeholder="<%= control.placeholder %>" data-assignment-key="<%= control.key %>" value="<%= control.value %>" placeholder="请填写<%= control.label %>">
+                </div>
+              <% } %>
+            <% }) %>
+          </div>
+        <% } else { %>
+          <input class="form-control" name="clauseAssignment" value="<%= item.clause_assignment %>" placeholder="该条款没有结构化占位符，可直接填写赋值说明">
+        <% } %>
+        <input type="hidden" name="assignmentDetails" data-role="assignment-details">
+      </div>
       <div class="col-md-6"><label class="form-label">多云统管体系具体要求</label><textarea class="form-control" name="unifiedRequirement" rows="3"><%= item.unified_requirement %></textarea></div>
       <div class="col-md-6"><label class="form-label">统一规范实施证据列表</label><textarea class="form-control" name="expectedEvidence" rows="3"><%= item.expected_evidence %></textarea></div>
       <div class="col-md-5"><label class="form-label">适用性标记</label><select class="form-select" name="applicability"><option value="unspecified" <%= item.applicability === 'unspecified' ? 'selected' : '' %>>未标记</option><option value="applicable" <%= item.applicability === 'applicable' ? 'selected' : '' %>>适用</option><option value="not_applicable" <%= item.applicability === 'not_applicable' ? 'selected' : '' %>>不适用</option></select></div>
@@ -143,6 +183,82 @@ const assignmentDisplayValue = detail => {
 
 <script>
 (() => {
+  document.querySelectorAll('[data-assignment-editor]').forEach(editor => {
+    const refreshBranches = () => {
+      editor.querySelectorAll('[data-role="selection-option"]').forEach(option => {
+        const branch = option.closest('.assignment-choice')?.querySelector('[data-role="assignment-branch"]');
+        if (!branch) return;
+        branch.classList.toggle('d-none', !option.checked);
+        const input = branch.querySelector('[data-role="assignment-value"]');
+        if (input) {
+          input.disabled = !option.checked;
+          input.required = option.checked;
+        }
+      });
+    };
+    editor.querySelectorAll('[data-role="selection-option"]').forEach(option => {
+      option.addEventListener('change', refreshBranches);
+    });
+    refreshBranches();
+  });
+
+  document.querySelectorAll('form[data-answer-form]').forEach(form => {
+    form.addEventListener('submit', event => {
+      const details = [];
+      const emptySelectedAssignment = Array.from(form.querySelectorAll('[data-role="assignment-branch"]:not(.d-none) [data-role="assignment-value"]'))
+        .find(input => !input.value.trim());
+      if (emptySelectedAssignment) {
+        event.preventDefault();
+        emptySelectedAssignment.focus();
+        emptySelectedAssignment.reportValidity();
+        return;
+      }
+      form.querySelectorAll('[data-role="selection-control"]').forEach(control => {
+        const options = Array.from(control.querySelectorAll('[data-role="selection-option"]:checked'));
+        if (!options.length) return;
+        const selectionKey = control.dataset.selectionKey;
+        details.push({
+          type: 'selection',
+          label: '选择',
+          placeholder: control.dataset.placeholder,
+          placeholderId: selectionKey,
+          parentSelectionId: null,
+          selected: true,
+          selectedValues: options.map(option => option.dataset.value),
+          value: options[0].dataset.value,
+        });
+        for (const option of options) {
+          const branch = option.closest('.assignment-choice')?.querySelector('[data-role="assignment-branch"]');
+          const input = branch?.querySelector('[data-role="assignment-value"]');
+          if (!input) continue;
+          details.push({
+            type: 'assignment',
+            label: input.dataset.label,
+            placeholder: input.dataset.placeholder,
+            placeholderId: input.dataset.assignmentKey,
+            parentSelectionId: selectionKey,
+            selected: true,
+            value: input.value.trim(),
+          });
+        }
+      });
+      form.querySelectorAll('[data-role="standalone-value"]').forEach(input => {
+        if (!input.value.trim()) return;
+        details.push({
+          type: 'assignment',
+          label: input.dataset.label,
+          placeholder: input.dataset.placeholder,
+          placeholderId: input.dataset.assignmentKey,
+          parentSelectionId: null,
+          selected: true,
+          value: input.value.trim(),
+        });
+      });
+      const target = form.querySelector('[data-role="assignment-details"]');
+      if (target) target.value = JSON.stringify(details);
+    });
+  });
+
   const tables = Array.from(document.querySelectorAll('.answer-items-table'));
   const collapsedByTable = new Map();
   const headingKey = heading => [heading.number || '', heading.title || ''].join(' ').trim();
