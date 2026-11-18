@@ -9,8 +9,8 @@ test('parses the wide project workbook shape into answers, cloud groups and supe
   const result = parseProjectRows([ {
     name: '安全域',
     rows: [
-      [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '云服务商赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
-      [ null, null, null, null, null, null, null, null, null, null, null, '多云统管制度规范体系具体要求', '统一规范实施证据列表', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', '监督检查内容-统一运维', '监督检查结果-统一运维', '监督检查内容-抚州', '监督检查结果-抚州', '监督检查内容-新疆', '监督检查结果-新疆' ],
+      [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '应答赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
+      [ null, null, null, null, null, null, null, null, null, null, null, '制度符合性描述', '所需证据', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', '监督检查内容-统一运维', '监督检查结果-统一运维', '监督检查内容-抚州', '监督检查结果-抚州', '监督检查内容-新疆', '监督检查结果-新疆' ],
       [ 6001, '6', '系统开发与供应链安全', 'GB/T 31168', '云计算服务安全能力要求', '6.1.1', '一般要求', '6.1.1 a)', '标准正文', '是', '云服务商', '统一要求', '证据列表', '满足', '措施A', '证据A\n无', '部分满足', '措施B', '证据B', '不满足', '措施C', '证据C', null, '待提供', '问题A', '张三', '检查频率：年度\n检查方法：材料核查', '统一运维检查内容\n2025/09/20', '符合', '抚州检查内容\n2025/07/01', '符合', '新疆检查内容', '不满足' ],
     ],
   } ]);
@@ -22,6 +22,34 @@ test('parses the wide project workbook shape into answers, cloud groups and supe
   assert.equal(result.rows[0].supervision.length, 1);
   assert.equal(result.rows[0].supervision[0].method, '材料核查');
   assert.equal(result.rows[0].supervision[0].observations.length, 3);
+});
+
+test('accepts both generic and legacy answer headers while preserving semantics', () => {
+  const result = parseProjectRows([ {
+    name: '兼容表头',
+    rows: [
+      [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '应答赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
+      [ null, null, null, null, null, null, null, null, null, null, null, '制度符合性描述', '所需证据', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', null, null, null, null, null, null ],
+      [ 6001, '6', '系统开发与供应链', 'GB/T 31168', '云计算服务安全能力要求', '6.1.1', '一般要求', '6.1.1 a)', '标准正文', '是', '应答赋值A', '制度符合性描述A', '所需证据A', '符合', '措施A', '证据A', '符合', '措施B', '证据B', '符合', '措施C', '证据C', null, '待提供', '问题A', '张三', '检查频率：年度', null, null, null, null, null, null ],
+    ],
+  } ]);
+  assert.equal(result.rows[0].providerAssignment, '应答赋值A');
+  assert.equal(result.rows[0].complianceDescription, '制度符合性描述A');
+  assert.equal(result.rows[0].expectedEvidence, '所需证据A');
+});
+
+test('keeps legacy workbook headers importable', () => {
+  const result = parseProjectRows([ {
+    name: '旧表头',
+    rows: [
+      [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '云服务商赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
+      [ null, null, null, null, null, null, null, null, null, null, null, '多云统管制度规范体系具体要求', '统一规范实施证据列表', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', null, null, null, null, null, null ],
+      [ 6001, '6', '系统开发与供应链', 'GB/T 31168', '云计算服务安全能力要求', '6.1.1', '一般要求', '6.1.1 a)', '标准正文', '是', '旧赋值', '旧制度描述', '旧证据', '符合', '措施A', '证据A', '符合', '措施B', '证据B', '符合', '措施C', '证据C', null, '待提供', '问题A', '张三', '检查频率：年度', null, null, null, null, null, null ],
+    ],
+  } ]);
+  assert.equal(result.rows[0].providerAssignment, '旧赋值');
+  assert.equal(result.rows[0].complianceDescription, '旧制度描述');
+  assert.equal(result.rows[0].expectedEvidence, '旧证据');
 });
 
 test('normalizes simple status and skips default empty evidence', () => {
@@ -127,7 +155,7 @@ test('does not import an assignment value when the matched standard item has no 
   const repository = new ProjectWorkbookImportRepository({ query: async () => ({ rows: [] }) });
   repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
     sourceKind: 'answer', sourceSheet: 'Sheet1', sourceRow: 120, standardNumber: '31168-2023-12055',
-    assignmentText: '赋值：每日', assignmentDetails: [], unifiedRequirement: '制度要求', expectedEvidence: '制度文件',
+    assignmentText: '赋值：每日', assignmentDetails: [], complianceDescription: '制度要求', expectedEvidence: '制度文件',
   } ] } });
   repository.listProjectCloudCenters = async () => [];
   repository.listProjectStandardItems = async () => [ {
@@ -168,7 +196,7 @@ test('writes assignment details, implementation requirements, and real evidence 
     sourceKind: 'answer', standardNumber: '31168-2023-06033', clauseNumber: '6.3.1 a)',
     assignmentText: '云服务商定义的安全要求：采购合同',
     assignmentDetails: [ { type: 'assignment', label: '云服务商定义的安全要求', placeholder: '[赋值：云服务商定义的安全要求]', placeholderId: '31168-2023-06033#1', parentSelectionId: null, selected: true, value: '采购合同', reviewRequired: false } ],
-    unifiedRequirement: '制定统一要求。', expectedEvidence: '', actualEvidence: '《采购管理规范》',
+    complianceDescription: '制定统一要求。', expectedEvidence: '', actualEvidence: '《采购管理规范》',
     cloudCenters: {}, supervision: [],
   } ] };
   const client = {

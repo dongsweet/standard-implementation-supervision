@@ -65,9 +65,9 @@ function findHeader(rows) {
     clauseNumber: findColumn(rows, [ '条款号', '对应标准号', '标准编号' ]),
     content: findColumn(rows, [ '标准内容', '标准项内容', '标准要求' ]),
     isKey: findColumn(rows, [ '是否为重点项' ]),
-    providerAssignment: findColumn(rows, [ '云服务商赋值' ]),
-    unifiedRequirement: findColumn(rows, [ '多云统管制度规范体系具体要求', '多云统管体系具体要求', '统一规范要求' ]),
-    expectedEvidence: findColumn(rows, [ '统一规范实施证据列表' ]),
+    providerAssignment: findColumn(rows, [ '应答赋值', '云服务商赋值' ]),
+    complianceDescription: findColumn(rows, [ '制度符合性描述', '制度符合性情况描述', '多云统管制度规范体系具体要求', '多云统管体系具体要求', '统一规范要求' ]),
+    expectedEvidence: findColumn(rows, [ '所需证据', '统一规范实施证据列表' ]),
     pendingEvidence: findColumn(rows, [ '待提供证据' ]),
     problem: findColumn(rows, [ '问题列' ]),
     responsible: findColumn(rows, [ '负责人' ]),
@@ -340,7 +340,7 @@ function parseAnswerWorkbookRows(sheets) {
         content: '',
         assignmentText: '',
         assignmentDetails: [],
-        unifiedRequirement: '',
+        complianceDescription: '',
         expectedEvidence: '',
         actualEvidence: '',
         pendingEvidence: '',
@@ -359,9 +359,9 @@ function parseAnswerWorkbookRows(sheets) {
     const map = {
       standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
       projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
-      assignment: findAnswerColumn(headers, [ '赋值', '云服务商赋值', '当前赋值' ]),
-      unifiedRequirement: findAnswerColumn(headers, [ '规范体系具体要求', '多云统管制度规范体系具体要求' ]),
-      expectedEvidence: findAnswerColumn(headers, [ '统一规范实施证据列表', '应提供证据' ]),
+      assignment: findAnswerColumn(headers, [ '应答赋值', '赋值', '云服务商赋值', '当前赋值' ]),
+      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述', '制度符合性情况描述', '规范体系具体要求', '多云统管制度规范体系具体要求' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '所需证据', '统一规范实施证据列表', '应提供证据' ]),
       actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
     };
     for (let rowIndex = found.rowIndex + 1; rowIndex < summarySheet.rows.length; rowIndex += 1) {
@@ -372,7 +372,7 @@ function parseAnswerWorkbookRows(sheets) {
       const row = getRow(rawNumber, summarySheet.name, rowIndex + 1);
       row.projectSequence = row.projectSequence || projectSequence;
       row.assignmentText = row.assignmentText || answerField(source[map.assignment], { hasProjectSequence: Boolean(projectSequence) });
-      row.unifiedRequirement = row.unifiedRequirement || answerField(source[map.unifiedRequirement], { hasProjectSequence: Boolean(projectSequence) });
+      row.complianceDescription = row.complianceDescription || answerField(source[map.complianceDescription], { hasProjectSequence: Boolean(projectSequence) });
       row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence: Boolean(projectSequence) });
       row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence: Boolean(projectSequence) });
     }
@@ -402,8 +402,8 @@ function parseAnswerWorkbookRows(sheets) {
       rawCurrentAssignment: findAnswerColumn(headers, [ '原始当前赋值（导入）', '原始当前赋值' ]),
       currentAssignment: findAnswerColumn(headers, [ '当前赋值' ]),
       label: findAnswerColumn(headers, [ '需赋值项或选择项', '占位符提示' ]),
-      unifiedRequirement: findAnswerColumn(headers, [ '规范体系具体要求' ]),
-      expectedEvidence: findAnswerColumn(headers, [ '统一规范实施证据列表', '应提供证据' ]),
+      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述', '制度符合性情况描述', '规范体系具体要求' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '所需证据', '统一规范实施证据列表', '应提供证据' ]),
       actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
       review: findAnswerColumn(headers, [ '需要复核' ]),
       reviewReason: findAnswerColumn(headers, [ '复核原因' ]),
@@ -424,7 +424,7 @@ function parseAnswerWorkbookRows(sheets) {
       row.title = row.title || answerField(source[map.title], { hasProjectSequence });
       row.explanation = row.explanation || answerField(source[map.explanation], { hasProjectSequence });
       row.content = row.content || answerField(source[map.content], { hasProjectSequence });
-      row.unifiedRequirement = row.unifiedRequirement || answerField(source[map.unifiedRequirement], { hasProjectSequence });
+      row.complianceDescription = row.complianceDescription || answerField(source[map.complianceDescription], { hasProjectSequence });
       row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence });
       row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence });
       const detail = {
@@ -468,7 +468,7 @@ function parseAnswerWorkbookRows(sheets) {
     }
   }
 
-  const rows = [ ...byNumber.values() ].filter(row => row.assignmentText || row.unifiedRequirement || row.expectedEvidence
+  const rows = [ ...byNumber.values() ].filter(row => row.assignmentText || row.complianceDescription || row.expectedEvidence
     || row.actualEvidence || row.assignmentDetails.length || row.projectSequence || row.content || row.explanation);
   if (!rows.length) throw importError('未找到可导入的规范满足数据；请确认文件包含“标准化编号”列');
   const assignmentDetailCount = rows.reduce((sum, row) => sum + row.assignmentDetails.length, 0);
@@ -588,7 +588,7 @@ function parseProjectRows(sheets) {
         content,
         isKey: isKeyText ? /是|重点|重要|yes|true/i.test(isKeyText) : null,
         providerAssignment: value(map.providerAssignment),
-        unifiedRequirement: value(map.unifiedRequirement),
+        complianceDescription: value(map.complianceDescription),
         expectedEvidence: value(map.expectedEvidence),
         pendingEvidence: value(map.pendingEvidence),
         problem: value(map.problem),

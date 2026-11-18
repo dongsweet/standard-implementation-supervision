@@ -200,13 +200,17 @@ class ProjectService extends Service {
       isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
       clauseAssignment,
       assignmentDetails: form.hasStructuredControls ? normalized.details : assignmentDetails,
-      unifiedRequirement: String(payload.unifiedRequirement || '').trim() || null,
+      complianceDescription: String(
+        payload.complianceDescription
+        || payload.measureDescription
+        || payload.unifiedRequirement
+        || ''
+      ).trim() || null,
       expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       applicability,
       applicabilityScope: String(payload.applicabilityScope || '').trim() || null,
       status,
       actualEvidence: String(payload.actualEvidence || '').trim() || null,
-      measureDescription: payload.measureDescription,
       problemDescription: payload.problemDescription,
       ownerUserId,
     });
