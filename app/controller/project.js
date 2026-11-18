@@ -1,6 +1,7 @@
 'use strict';
 
 const Controller = require('egg').Controller;
+const { buildProjectAnswerWorkbook } = require('../lib/projectAnswerTemplate');
 const { canWriteProject, requireGlobalWrite, requireProject, requireProjectAdmin } = require('../lib/authorization');
 
 class ProjectController extends Controller {
@@ -163,6 +164,19 @@ class ProjectController extends Controller {
     await this.ctx.service.project.switchProject(String(this.ctx.request.body.projectId || ''));
     const returnTo = String(this.ctx.request.body.returnTo || '/').trim();
     this.ctx.redirect(returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/');
+  }
+
+  async downloadAnswerTemplate() {
+    const projectId = this.ctx.params.projectId;
+    requireProject(this.ctx, projectId);
+    const project = (this.ctx.state.projects || []).find(item => item.id === projectId) || this.ctx.state.currentProject;
+    if (!project) this.ctx.throw(404, '项目不存在');
+    const rows = await this.ctx.service.project.listAnswerTemplateRows(projectId);
+    const workbook = await buildProjectAnswerWorkbook({ rows });
+    const safeName = String(project.name || '项目').replace(/[\\/:*?"<>|]/g, '_');
+    this.ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    this.ctx.set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`${safeName}-应答导入模板.xlsx`)}`);
+    this.ctx.body = workbook;
   }
 
   async saveAnswer() {

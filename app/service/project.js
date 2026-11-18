@@ -73,6 +73,10 @@ class ProjectService extends Service {
     return result;
   }
 
+  async listAnswerTemplateRows(projectId) {
+    return this.repository.listAnswerTemplateRows(projectId);
+  }
+
   async getProjectManageDetail(projectId) {
     const result = await this.repository.getProjectManageDetail(projectId);
     if (!result) this.ctx.throw(404, '项目不存在');

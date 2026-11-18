@@ -4,6 +4,67 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseProjectRows, parseAnswerWorkbookRows, parseStatus, splitEvidence } = require('../app/lib/projectWorkbookImport');
 const { ProjectWorkbookImportRepository } = require('../app/repository/projectWorkbookImport');
+let ExcelJS;
+let buildProjectAnswerWorkbook;
+try {
+  ExcelJS = require('exceljs');
+  ({ buildProjectAnswerWorkbook } = require('../app/lib/projectAnswerTemplate'));
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+}
+
+test('generates a downloadable answer workbook that parses back into all current fields', { skip: !ExcelJS }, async () => {
+  const buffer = await buildProjectAnswerWorkbook({ rows: [ {
+    standardNumber: '31168-2023-06042',
+    clauseNumber: '6.8.2 b)',
+    isKey: true,
+    assignmentText: '选择：云服务商定义的频率\n云服务商定义的频率：每年一次',
+    assignmentDetails: [
+      {
+        type: 'selection', label: '选择',
+        placeholder: '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]',
+        placeholderId: '31168-2023-06042#1', selectedValues: [ '[赋值：云服务商定义的频率]' ], selected: true,
+      },
+      {
+        type: 'assignment', label: '云服务商定义的频率',
+        placeholder: '[赋值：云服务商定义的频率]', placeholderId: '31168-2023-06042#1:assignment:1',
+        parentSelectionId: '31168-2023-06042#1', value: '每年一次', selected: true,
+      },
+    ],
+    complianceDescription: '每年检查质量度量标准落实情况。',
+    expectedEvidence: '检查记录',
+    actualEvidence: '年度检查记录',
+    applicability: 'applicable',
+    answerStatus: 'partially_satisfied',
+    answerNotes: '待补充整改闭环材料。',
+  } ] });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), [ '填写说明', '应答汇总', '赋值明细' ]);
+  const summary = workbook.getWorksheet('应答汇总');
+  assert.deepEqual(summary.getRow(1).values.slice(1), [
+    '标准化编号', '条款号', '项目表序号(A列)', '是否重点项', '应答赋值',
+    '制度符合性描述', '所需证据', '实际证据', '适用性标记', '符合性标记', '备注',
+  ]);
+  assert.equal(summary.getCell('A2').value, '31168-2023-06042');
+  assert.equal(summary.getCell('D2').value, '是');
+  assert.equal(summary.getCell('J2').value, '部分符合');
+
+  const sheets = workbook.worksheets.map(sheet => ({
+    name: sheet.name,
+    rows: Array.from({ length: sheet.rowCount }, (_, rowIndex) =>
+      sheet.getRow(rowIndex + 1).values.slice(1).map(value => value == null ? null : String(value))),
+  }));
+  const parsed = parseAnswerWorkbookRows(sheets);
+  assert.equal(parsed.rows.length, 1);
+  assert.equal(parsed.rows[0].complianceDescription, '每年检查质量度量标准落实情况。');
+  assert.equal(parsed.rows[0].expectedEvidence, '检查记录');
+  assert.equal(parsed.rows[0].actualEvidence, '年度检查记录');
+  assert.equal(parsed.rows[0].applicability, 'applicable');
+  assert.equal(parsed.rows[0].answerStatus, 'partially_satisfied');
+  assert.equal(parsed.rows[0].answerNotes, '待补充整改闭环材料。');
+  assert.equal(parsed.rows[0].isKey, true);
+});
 
 test('parses the wide project workbook shape into answers, cloud groups and supervision data', () => {
   const result = parseProjectRows([ {
@@ -219,7 +280,9 @@ test('writes assignment details, implementation requirements, and real evidence 
   assert.equal(JSON.parse(answerWrite.values[4])[0].selected, true);
   assert.equal(answerWrite.values[5], '制定统一要求。');
   assert.equal(answerWrite.values[7], '《采购管理规范》');
-  assert.equal(answerWrite.values[11], true);
+  assert.equal(answerWrite.values[8], 'unspecified');
+  assert.equal(answerWrite.values[9], 'unassessed');
+  assert.equal(answerWrite.values[13], true);
   assert.equal(result.matchedCount, 1);
   assert.equal(result.evidenceCount, 1);
   assert.equal(result.cloudAnswerCount, 0);

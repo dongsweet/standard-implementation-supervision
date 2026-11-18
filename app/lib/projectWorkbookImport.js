@@ -87,6 +87,27 @@ function parseStatus(value) {
   return { status: 'unassessed', applicability: 'unspecified' };
 }
 
+function parseApplicability(value) {
+  const text = cellText(value).trim();
+  if (!text || /未标记|未评估/.test(text)) return 'unspecified';
+  if (/不适用|不涉及/.test(text)) return 'not_applicable';
+  if (/适用/.test(text)) return 'applicable';
+  return 'unspecified';
+}
+
+function parseAnswerStatus(value) {
+  const parsed = parseStatus(value);
+  return parsed?.status || 'unassessed';
+}
+
+function parseBooleanFlag(value) {
+  const text = cellText(value).trim();
+  if (!text) return null;
+  if (/^(?:是|重点|true|yes|1)$/i.test(text)) return true;
+  if (/^(?:否|非重点|false|no|0)$/i.test(text)) return false;
+  return null;
+}
+
 function isEmptyEvidence(value) {
   const text = cellText(value).trim();
   return !text || /^(默认\s*[:：]?\s*)?无$/i.test(text) || text.length <= 3 && /^无[。.]?$/.test(text);
@@ -229,7 +250,14 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
   const numbered = numberedAssignmentSegments(sourceText);
   const labeled = labeledAssignmentSegments(sourceText);
   const hasNestedChoice = details.some(row => row.type === '选择' && /\[\s*[赋賦]值\s*[:：;]/u.test(row.placeholder || ''));
+  const generatedIds = new Map();
   const mapped = details.map((row, index) => {
+    if (!row.explicitPlaceholderId && row.placeholder) {
+      const placeholderKey = `${row.parentSelectionId || ''}|${row.placeholder}`;
+      const ordinal = (generatedIds.get(placeholderKey) || 0) + 1;
+      generatedIds.set(placeholderKey, ordinal);
+      row.placeholderId = `${row.parentSelectionId || 'root'}:assignment:${ordinal}`;
+    }
     let value = row.currentAssignment || (row.hasMappedValue ? '' : sourceText);
     const genericReviewReason = /当前赋值可能对应一个或多个占位符/.test(row.reviewReason || '');
     let reviewRequired = row.needsReview === true && !genericReviewReason;
@@ -281,6 +309,11 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
     if (genericReviewReason && mappingResolved
       && (!hasNestedChoice || row.hasMappedValue)
       && (row.parentSelectionId === null || row.isActive !== null || row.hasMappedValue)) {
+      reviewRequired = false;
+      reviewReason = '';
+    }
+    if (row.explicitPlaceholderId && row.hasMappedValue
+      && row.parentSelectionId === null && details.length > 1) {
       reviewRequired = false;
       reviewReason = '';
     }
@@ -343,6 +376,10 @@ function parseAnswerWorkbookRows(sheets) {
         complianceDescription: '',
         expectedEvidence: '',
         actualEvidence: '',
+        applicability: 'unspecified',
+        answerStatus: 'unassessed',
+        answerNotes: '',
+        isKey: null,
         pendingEvidence: '',
         problem: '',
         responsible: '',
@@ -358,11 +395,16 @@ function parseAnswerWorkbookRows(sheets) {
     const headers = found.headers;
     const map = {
       standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
+      clauseNumber: findAnswerColumn(headers, [ '条款号' ]),
       projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
       assignment: findAnswerColumn(headers, [ '应答赋值' ]),
       complianceDescription: findAnswerColumn(headers, [ '制度符合性描述' ]),
       expectedEvidence: findAnswerColumn(headers, [ '所需证据' ]),
       actualEvidence: findAnswerColumn(headers, [ '实际证据' ]),
+      applicability: findAnswerColumn(headers, [ '适用性标记' ]),
+      answerStatus: findAnswerColumn(headers, [ '符合性标记' ]),
+      answerNotes: findAnswerColumn(headers, [ '备注' ]),
+      isKey: findAnswerColumn(headers, [ '是否重点项' ]),
     };
     for (let rowIndex = found.rowIndex + 1; rowIndex < summarySheet.rows.length; rowIndex += 1) {
       const source = summarySheet.rows[rowIndex] || [];
@@ -370,11 +412,16 @@ function parseAnswerWorkbookRows(sheets) {
       if (!rawNumber) continue;
       const projectSequence = answerField(source[map.projectSequence], { hasProjectSequence: Boolean(cellText(source[map.projectSequence]).trim()) });
       const row = getRow(rawNumber, summarySheet.name, rowIndex + 1);
+      row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence: Boolean(projectSequence) });
       row.projectSequence = row.projectSequence || projectSequence;
       row.assignmentText = row.assignmentText || answerField(source[map.assignment], { hasProjectSequence: Boolean(projectSequence) });
       row.complianceDescription = row.complianceDescription || answerField(source[map.complianceDescription], { hasProjectSequence: Boolean(projectSequence) });
       row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence: Boolean(projectSequence) });
       row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence: Boolean(projectSequence) });
+      row.applicability = parseApplicability(source[map.applicability]);
+      row.answerStatus = parseAnswerStatus(source[map.answerStatus]);
+      row.answerNotes = answerField(source[map.answerNotes], { hasProjectSequence: Boolean(projectSequence) });
+      row.isKey = parseBooleanFlag(source[map.isKey]);
     }
   }
 
@@ -384,7 +431,7 @@ function parseAnswerWorkbookRows(sheets) {
     const map = {
       standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
       projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
-      clauseNumber: findAnswerColumn(headers, [ '原标准项编号', '条款号', '标准项编号' ]),
+      clauseNumber: findAnswerColumn(headers, [ '条款号' ]),
       chapterCode: findAnswerColumn(headers, [ '章节编号', '章节号' ]),
       chapterName: findAnswerColumn(headers, [ '章节名称' ]),
       headingPath: findAnswerColumn(headers, [ '标题路径' ]),
@@ -396,6 +443,7 @@ function parseAnswerWorkbookRows(sheets) {
       placeholderId: findAnswerColumn(headers, [ '占位符ID' ]) >= 0
         ? findAnswerColumn(headers, [ '占位符ID' ])
         : findAnswerColumn(headers, [ '占位符序号', '提取序号' ]),
+      explicitPlaceholderId: findAnswerColumn(headers, [ '占位符ID' ]) >= 0,
       parentSelectionId: findAnswerColumn(headers, [ '所属选择项ID', '所属选择项序号', '所属选择项编号' ]),
       active: findAnswerColumn(headers, [ '是否选中/生效', '是否生效', '是否选中' ]),
       mappedValue: findAnswerColumn(headers, [ '对应占位符的当前值', '对应占位符当前值', '映射后当前赋值' ]),
@@ -416,6 +464,9 @@ function parseAnswerWorkbookRows(sheets) {
       if (!rawNumber) continue;
       const hasProjectSequence = Boolean(cellText(source[map.projectSequence]).trim());
       const row = getRow(rawNumber, detailSheet.name, rowIndex + 1);
+      if (map.clauseNumber >= 0) {
+        row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence });
+      }
       row.projectSequence = row.projectSequence || answerField(source[map.projectSequence], { hasProjectSequence });
       row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence });
       row.chapterCode = row.chapterCode || answerField(source[map.chapterCode], { hasProjectSequence });
@@ -442,6 +493,8 @@ function parseAnswerWorkbookRows(sheets) {
           || Boolean(answerField(source[map.active], { hasProjectSequence })
             && answerField(source[map.review], { hasProjectSequence }) === '否'
             && answerField(source[map.extractionStatus], { hasProjectSequence }) === '已完成映射')
+          || (map.explicitPlaceholderId
+            && answerField(source[map.review], { hasProjectSequence }) === '否')
         ),
         placeholderId: answerField(source[map.placeholderId], { hasProjectSequence }),
         parentSelectionId: answerField(source[map.parentSelectionId], { hasProjectSequence }) || null,
@@ -449,6 +502,8 @@ function parseAnswerWorkbookRows(sheets) {
         sourceRow: rowIndex + 1,
         needsReview: /是|待核对|复核/.test(cellText(source[map.review])),
         reviewReason: answerField(source[map.reviewReason], { hasProjectSequence }),
+        extractionStatus: answerField(source[map.extractionStatus], { hasProjectSequence }),
+        explicitPlaceholderId: map.explicitPlaceholderId,
       };
       if (detail.type === '赋值' || detail.type === '选择') {
         if (!detailByNumber.has(normalizeKey(rawNumber))) detailByNumber.set(normalizeKey(rawNumber), []);
@@ -469,7 +524,8 @@ function parseAnswerWorkbookRows(sheets) {
   }
 
   const rows = [ ...byNumber.values() ].filter(row => row.assignmentText || row.complianceDescription || row.expectedEvidence
-    || row.actualEvidence || row.assignmentDetails.length || row.projectSequence || row.content || row.explanation);
+    || row.actualEvidence || row.answerNotes || row.isKey !== null || row.applicability !== 'unspecified'
+    || row.answerStatus !== 'unassessed' || row.assignmentDetails.length || row.projectSequence || row.content || row.explanation);
   if (!rows.length) throw importError('未找到可导入的规范满足数据；请确认文件包含“标准化编号”列');
   const assignmentDetailCount = rows.reduce((sum, row) => sum + row.assignmentDetails.length, 0);
   const assignmentReviewCount = rows.reduce((sum, row) => sum + row.assignmentDetails.filter(item => item.reviewRequired).length, 0);
@@ -639,6 +695,7 @@ async function parseProjectWorkbookFile(filePath, fileName) {
 }
 
 module.exports = {
+  buildAnswerAssignmentDetails,
   DEFAULT_CLOUD_CENTERS,
   parseProjectRows,
   parseAnswerWorkbookRows,
