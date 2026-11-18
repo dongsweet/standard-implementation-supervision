@@ -294,8 +294,10 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
         selectedValues: [],
         placeholderId: `${selectionKey}:assignment:${optionIndex + 1}`,
         parentSelectionId: selectionKey,
-        reviewRequired: !assignmentValue,
-        reviewReason: !assignmentValue ? `已选择“${option.label}”，请填写对应赋值。` : candidate?.reviewReason || null,
+        reviewRequired: !assignmentValue || Boolean(candidate?.reviewRequired),
+        reviewReason: !assignmentValue
+          ? `已选择“${option.label}”，请填写对应赋值。`
+          : candidate?.reviewReason || null,
       });
     }
   }
