@@ -29,6 +29,7 @@ test('generates a downloadable answer workbook that parses back into all current
         type: 'assignment', label: '云服务商定义的频率',
         placeholder: '[赋值：云服务商定义的频率]', placeholderId: '31168-2023-06042#1:assignment:1',
         parentSelectionId: '31168-2023-06042#1', value: '每年一次', selected: true,
+        reviewRequired: true, reviewReason: '请确认频率对应关系。',
       },
     ],
     complianceDescription: '每年检查质量度量标准落实情况。',
@@ -64,6 +65,8 @@ test('generates a downloadable answer workbook that parses back into all current
   assert.equal(parsed.rows[0].answerStatus, 'partially_satisfied');
   assert.equal(parsed.rows[0].answerNotes, '待补充整改闭环材料。');
   assert.equal(parsed.rows[0].isKey, true);
+  assert.equal(parsed.assignmentReviewCount, 1);
+  assert.equal(parsed.rows[0].assignmentDetails[1].reviewReason, '请确认频率对应关系。');
 });
 
 test('parses the wide project workbook shape into answers, cloud groups and supervision data', () => {

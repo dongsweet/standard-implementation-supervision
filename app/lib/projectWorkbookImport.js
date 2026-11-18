@@ -302,7 +302,8 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
       reviewRequired = true;
       reviewReason = reviewReason || '该赋值属于嵌套选择分支，但尚未确认此分支是否选中。';
     }
-    if (row.hasMappedValue && mappingResolved && (row.isActive === false || Boolean(String(value || '').trim()))) {
+    if (!row.needsReview && row.hasMappedValue && mappingResolved
+      && (row.isActive === false || Boolean(String(value || '').trim()))) {
       reviewRequired = false;
       reviewReason = '';
     }
@@ -312,7 +313,7 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
       reviewRequired = false;
       reviewReason = '';
     }
-    if (row.explicitPlaceholderId && row.hasMappedValue
+    if (!row.needsReview && row.explicitPlaceholderId && row.hasMappedValue
       && row.parentSelectionId === null && details.length > 1) {
       reviewRequired = false;
       reviewReason = '';
