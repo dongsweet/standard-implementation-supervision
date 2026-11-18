@@ -352,14 +352,13 @@ class ProjectWorkbookImportRepository {
         if (hasGlobalData) {
           const globalAnswer = await client.query(`
             INSERT INTO project_standard_answers
-              (project_id, standard_item_id, standard_level, is_key, clause_assignment,
+              (project_id, standard_item_id, is_key, clause_assignment,
                assignment_details, compliance_description, expected_evidence, actual_evidence,
-               pending_evidence, responsible_text, problem_description)
-            VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12)
+               pending_evidence, responsible_text, answer_notes)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (project_id, standard_item_id) WHERE cloud_center_id IS NULL
             DO UPDATE SET
-              standard_level = COALESCE(EXCLUDED.standard_level, project_standard_answers.standard_level),
-              is_key = CASE WHEN $13 THEN project_standard_answers.is_key ELSE EXCLUDED.is_key END,
+              is_key = CASE WHEN $12 THEN project_standard_answers.is_key ELSE EXCLUDED.is_key END,
               clause_assignment = COALESCE(EXCLUDED.clause_assignment, project_standard_answers.clause_assignment),
               assignment_details = CASE WHEN jsonb_array_length(EXCLUDED.assignment_details) > 0 THEN EXCLUDED.assignment_details ELSE project_standard_answers.assignment_details END,
               compliance_description = COALESCE(EXCLUDED.compliance_description, project_standard_answers.compliance_description),
@@ -367,10 +366,10 @@ class ProjectWorkbookImportRepository {
               actual_evidence = COALESCE(EXCLUDED.actual_evidence, project_standard_answers.actual_evidence),
               pending_evidence = COALESCE(EXCLUDED.pending_evidence, project_standard_answers.pending_evidence),
               responsible_text = COALESCE(EXCLUDED.responsible_text, project_standard_answers.responsible_text),
-              problem_description = COALESCE(EXCLUDED.problem_description, project_standard_answers.problem_description),
+              answer_notes = COALESCE(EXCLUDED.answer_notes, project_standard_answers.answer_notes),
               updated_at = now()
             RETURNING id`, [
-            projectId, row.standardItemId, row.level || null, Boolean(row.isKey), row.providerAssignment || row.assignmentText || null,
+            projectId, row.standardItemId, Boolean(row.isKey), row.providerAssignment || row.assignmentText || null,
             JSON.stringify(row.assignmentDetails || []), row.complianceDescription || null, row.expectedEvidence || null,
             row.actualEvidence || null, row.pendingEvidence || null, row.responsible || null, row.problem || null,
             row.sourceKind === 'answer',

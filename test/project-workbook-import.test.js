@@ -214,12 +214,12 @@ test('writes assignment details, implementation requirements, and real evidence 
   });
   const answerWrite = calls.find(call => call.statement.startsWith('INSERT INTO project_standard_answers'));
   assert.ok(answerWrite);
-  assert.equal(JSON.parse(answerWrite.values[5])[0].value, '采购合同');
-  assert.equal(JSON.parse(answerWrite.values[5])[0].placeholderId, '31168-2023-06033#1');
-  assert.equal(JSON.parse(answerWrite.values[5])[0].selected, true);
-  assert.equal(answerWrite.values[6], '制定统一要求。');
-  assert.equal(answerWrite.values[8], '《采购管理规范》');
-  assert.equal(answerWrite.values[12], true);
+  assert.equal(JSON.parse(answerWrite.values[4])[0].value, '采购合同');
+  assert.equal(JSON.parse(answerWrite.values[4])[0].placeholderId, '31168-2023-06033#1');
+  assert.equal(JSON.parse(answerWrite.values[4])[0].selected, true);
+  assert.equal(answerWrite.values[5], '制定统一要求。');
+  assert.equal(answerWrite.values[7], '《采购管理规范》');
+  assert.equal(answerWrite.values[11], true);
   assert.equal(result.matchedCount, 1);
   assert.equal(result.evidenceCount, 1);
   assert.equal(result.cloudAnswerCount, 0);

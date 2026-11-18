@@ -97,24 +97,24 @@ class ProjectRepository {
       WHERE project_id = $1 ON CONFLICT DO NOTHING`, [ sourceProjectId, targetProjectId ]);
 
     const answers = await client.query(`
-      SELECT id, standard_item_id, cloud_center_id, applicability, applicability_scope,
-             status, actual_evidence, problem_description, owner_user_id,
-             standard_level, is_key, clause_assignment, assignment_details,
+      SELECT id, standard_item_id, cloud_center_id, applicability,
+             status, actual_evidence, answer_notes, owner_user_id,
+             is_key, clause_assignment, assignment_details,
              compliance_description, expected_evidence, pending_evidence, responsible_text, updated_at
       FROM project_standard_answers WHERE project_id = $1`, [ sourceProjectId ]);
     const answerMap = new Map();
     for (const answer of answers.rows) {
       const inserted = await client.query(`
         INSERT INTO project_standard_answers
-          (project_id, standard_item_id, cloud_center_id, applicability, applicability_scope,
-           status, actual_evidence, problem_description, owner_user_id,
-           standard_level, is_key, clause_assignment, assignment_details,
+          (project_id, standard_item_id, cloud_center_id, applicability,
+           status, actual_evidence, answer_notes, owner_user_id,
+           is_key, clause_assignment, assignment_details,
            compliance_description, expected_evidence, pending_evidence, responsible_text, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15, $16, $17, $18)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16)
         ON CONFLICT DO NOTHING RETURNING id`,
       [ targetProjectId, answer.standard_item_id, answer.cloud_center_id, answer.applicability,
-        answer.applicability_scope, answer.status, answer.actual_evidence,
-        answer.problem_description, answer.owner_user_id, answer.standard_level,
+        answer.status, answer.actual_evidence,
+        answer.answer_notes, answer.owner_user_id,
         answer.is_key, answer.clause_assignment, JSON.stringify(answer.assignment_details || []),
         answer.compliance_description, answer.expected_evidence, answer.pending_evidence, answer.responsible_text,
         answer.updated_at ]);
@@ -274,7 +274,6 @@ class ProjectRepository {
              psi.content_snapshot,
              psi.explanation_snapshot, psi.chapter_code_snapshot, psi.heading_path_snapshot,
              psi.title_snapshot AS title, COALESCE(sc.name, psi.chapter_code_snapshot) AS chapter_name,
-             COALESCE(psa.standard_level, '') AS standard_level,
              COALESCE(psa.is_key, false) AS is_key,
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
              COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
@@ -283,11 +282,9 @@ class ProjectRepository {
              COALESCE(psa.pending_evidence, '') AS pending_evidence,
              COALESCE(psa.responsible_text, '') AS responsible_text,
              COALESCE(psa.applicability, 'unspecified') AS applicability,
-             COALESCE(psa.applicability_scope, '') AS applicability_scope,
              COALESCE(psa.status, 'unassessed') AS answer_status,
              COALESCE(psa.actual_evidence, '') AS actual_evidence,
-
-             COALESCE(psa.problem_description, '') AS problem_description
+             COALESCE(psa.answer_notes, '') AS answer_notes
       FROM project_standard_items psi
       JOIN standard_items si ON si.id = psi.standard_item_id
       LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
@@ -645,29 +642,29 @@ class ProjectRepository {
     return result.rows[0] || null;
   }
 
-  async saveAnswer({ projectId, standardItemId, standardLevel, isKey, clauseAssignment, assignmentDetails, complianceDescription, expectedEvidence, applicability, applicabilityScope, status, actualEvidence, problemDescription, ownerUserId }) {
+  async saveAnswer({ projectId, standardItemId, isKey, clauseAssignment, assignmentDetails, complianceDescription, expectedEvidence, applicability, status, actualEvidence, answerNotes, ownerUserId }) {
     const result = await this.pool.query(`
       INSERT INTO project_standard_answers
-        (project_id, standard_item_id, standard_level, is_key, clause_assignment, assignment_details,
-         compliance_description, expected_evidence, applicability, applicability_scope, status, actual_evidence,
-         problem_description, owner_user_id, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, now())
+        (project_id, standard_item_id, is_key, clause_assignment, assignment_details,
+         compliance_description, expected_evidence, applicability, status, actual_evidence,
+         answer_notes, owner_user_id, updated_at)
+      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, now())
       ON CONFLICT (project_id, standard_item_id) WHERE cloud_center_id IS NULL DO UPDATE SET
-        standard_level = EXCLUDED.standard_level, is_key = EXCLUDED.is_key,
+        is_key = EXCLUDED.is_key,
         clause_assignment = EXCLUDED.clause_assignment,
         assignment_details = EXCLUDED.assignment_details,
         compliance_description = EXCLUDED.compliance_description,
         expected_evidence = EXCLUDED.expected_evidence,
-        applicability = EXCLUDED.applicability, applicability_scope = EXCLUDED.applicability_scope,
+        applicability = EXCLUDED.applicability,
         status = EXCLUDED.status, actual_evidence = EXCLUDED.actual_evidence,
-        problem_description = EXCLUDED.problem_description, owner_user_id = EXCLUDED.owner_user_id,
+        answer_notes = EXCLUDED.answer_notes, owner_user_id = EXCLUDED.owner_user_id,
         updated_at = now()
       RETURNING *`, [
-      projectId, standardItemId, standardLevel || null, isKey === true,
+      projectId, standardItemId, isKey === true,
       clauseAssignment || null, JSON.stringify(assignmentDetails || []),
       complianceDescription || null, expectedEvidence || null,
-      applicability, applicabilityScope || null, status, actualEvidence || null,
-      problemDescription || null, ownerUserId || null,
+      applicability, status, actualEvidence || null,
+      answerNotes || null, ownerUserId || null,
     ]);
     return result.rows[0];
   }

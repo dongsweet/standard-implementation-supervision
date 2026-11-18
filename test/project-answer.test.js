@@ -16,7 +16,6 @@ test('saves project applicability and evidence separately from satisfaction stat
   const result = await repository.saveAnswer({
     projectId: 'project-1',
     standardItemId: 'item-1',
-    standardLevel: '增强要求',
     isKey: true,
     clauseAssignment: '7天；禁用',
     assignmentDetails: [ {
@@ -26,21 +25,20 @@ test('saves project applicability and evidence separately from satisfaction stat
     complianceDescription: '临时账号默认7天，到期自动禁用。',
     expectedEvidence: '账号管理制度、配置截图',
     applicability: 'applicable',
-    applicabilityScope: '抚州政务云、新疆政务云',
     status: 'partially_satisfied',
     actualEvidence: '账号管理制度、堡垒机配置截图',
 
-    problemDescription: '新疆云中心双人复核待补证。',
+    answerNotes: '新疆云中心双人复核待补证。',
     ownerUserId: 'user-1',
   });
 
   assert.equal(result.id, 'answer-1');
   assert.match(queries[0].sql, /clause_assignment, assignment_details/);
   assert.match(queries[0].sql, /compliance_description/);
+  assert.match(queries[0].sql, /answer_notes/);
   assert.deepEqual(queries[0].values, [
     'project-1',
     'item-1',
-    '增强要求',
     true,
     '7天；禁用',
     JSON.stringify([ {
@@ -50,7 +48,6 @@ test('saves project applicability and evidence separately from satisfaction stat
     '临时账号默认7天，到期自动禁用。',
     '账号管理制度、配置截图',
     'applicable',
-    '抚州政务云、新疆政务云',
     'partially_satisfied',
     '账号管理制度、堡垒机配置截图',
     '新疆云中心双人复核待补证。',
