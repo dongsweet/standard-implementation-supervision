@@ -131,8 +131,8 @@ const assignmentDisplayValue = detail => {
     <div class="modal-header"><h2 class="modal-title fs-5">编辑章节应答 · <%= item.item_code_snapshot %></h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body"><p class="small text-secondary"><%= item.chapter_code_snapshot %> · <%= item.title || '' %></p><div class="border rounded p-3 mb-3 bg-body-tertiary"><% if (item.explanation_snapshot) { %><div class="answer-item-explanation"><span class="answer-item-explanation-label">说明：</span><span><%= item.explanation_snapshot %></span></div><% } %><% if (item.content_snapshot && item.content_snapshot !== item.explanation_snapshot) { %><div class="answer-item-copy"><%= item.content_snapshot %></div><% } %></div><div class="row g-3">
       <div class="col-md-12 d-flex align-items-end"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="isKey" value="true" <%= item.is_key ? 'checked' : '' %>><label class="form-check-label">重点项</label></div></div>
-      <div class="col-12"><label class="form-label">占位符赋值</label>
-        <% if (item.assignment_form && item.assignment_form.hasStructuredControls) { %>
+      <% if (item.assignment_form && item.assignment_form.hasStructuredControls) { %>
+        <div class="col-12"><label class="form-label">占位符赋值</label>
           <div class="assignment-editor border rounded p-3 bg-body-tertiary" data-assignment-editor>
             <% item.assignment_form.controls.forEach(control => { %>
               <% if (control.kind === 'selection') { %>
@@ -161,11 +161,9 @@ const assignmentDisplayValue = detail => {
               <% } %>
             <% }) %>
           </div>
-        <% } else { %>
-          <input class="form-control" name="clauseAssignment" value="<%= item.clause_assignment %>" placeholder="该条款没有结构化占位符，可直接填写赋值说明">
-        <% } %>
-        <input type="hidden" name="assignmentDetails" data-role="assignment-details">
-      </div>
+          <input type="hidden" name="assignmentDetails" data-role="assignment-details">
+        </div>
+      <% } %>
       <div class="col-md-6"><label class="form-label">制度符合性描述</label><textarea class="form-control" name="complianceDescription" rows="3"><%= item.compliance_description %></textarea></div>
       <div class="col-md-6"><label class="form-label">所需证据</label><textarea class="form-control" name="expectedEvidence" rows="3"><%= item.expected_evidence %></textarea></div>
       <div class="col-md-5"><label class="form-label">适用性标记</label><select class="form-select" name="applicability"><option value="unspecified" <%= item.applicability === 'unspecified' ? 'selected' : '' %>>未标记</option><option value="applicable" <%= item.applicability === 'applicable' ? 'selected' : '' %>>适用</option><option value="not_applicable" <%= item.applicability === 'not_applicable' ? 'selected' : '' %>>不适用</option></select></div>
