@@ -82,6 +82,7 @@ class ProjectController extends Controller {
     await this.ctx.render('projects/manage', {
       title: `项目管理 · ${detail.project.name}`,
       ...detail,
+      user: this.ctx.state.user,
       csrf: this.ctx.csrf,
     });
   }

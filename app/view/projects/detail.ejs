@@ -1,7 +1,9 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div class="text-secondary">当前项目：<strong><%= project.name %></strong>　状态：<span class="badge text-bg-secondary"><%= project.status %></span><% if (project.project_manager_name) { %>　项目管理员：<strong><%= project.project_manager_name %></strong><% } %></div>
-  <div class="ms-auto d-flex gap-2"><a class="btn btn-sm btn-primary" href="/chapter-answers">进入章节应答</a><a class="btn btn-sm btn-outline-primary" href="/projects/<%= project.id %>/manage">项目配置与权限</a></div>
+  <div class="ms-auto d-flex gap-2"><a class="btn btn-sm btn-primary" href="/chapter-answers">进入章节应答</a><a class="btn btn-sm btn-outline-primary" href="/projects/<%= project.id %>/manage">管理项目规范快照</a></div>
 </div>
+<% const outdatedVersions = (versionsInProject || []).filter(version => version.snapshot_outdated); %>
+<% if (outdatedVersions.length) { %><div class="alert alert-warning d-flex flex-wrap align-items-center gap-2"><strong>项目规范快照需要同步。</strong><span>规范库内容已更新：<%= outdatedVersions.map(version => `${version.standard_code} 有 ${version.stale_count || 0} 项变更${version.snapshot_missing_count ? `、缺少 ${version.snapshot_missing_count} 项` : ''}`).join('；') %>。</span><a class="btn btn-sm btn-warning ms-auto" href="/projects/<%= project.id %>/manage">前往同步</a></div><% } %>
 
 <div class="row g-3 mb-3">
   <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="small text-secondary">纳入规范</div><div class="fs-3 fw-semibold"><%= (versionsInProject || []).length %></div><div class="small text-secondary">个规范版次</div></div></div></div>

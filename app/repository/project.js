@@ -157,7 +157,23 @@ class ProjectRepository {
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.id IS NOT NULL)::integer AS answered_count,
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'satisfied')::integer AS satisfied_count,
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'partially_satisfied')::integer AS partially_satisfied_count,
-             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count,
+             (SELECT count(*)::integer FROM standard_items library_item
+              WHERE library_item.standard_version_id = sv.id) AS library_item_count,
+             (SELECT count(*)::integer
+              FROM project_standard_items stale
+              JOIN standard_items source ON source.id = stale.standard_item_id
+              JOIN standard_chapters chapter ON chapter.id = source.chapter_id
+              LEFT JOIN standard_items parent ON parent.standard_version_id = source.standard_version_id
+                AND parent.item_code = regexp_replace(source.item_code, '\\s+[a-z]\\s*[)）)_]\\s*$', '')
+              WHERE stale.project_id = psv.project_id AND source.standard_version_id = sv.id
+                AND (stale.standard_number_snapshot IS DISTINCT FROM source.standard_number
+                  OR stale.item_code_snapshot IS DISTINCT FROM source.item_code
+                  OR stale.title_snapshot IS DISTINCT FROM source.title
+                  OR stale.explanation_snapshot IS DISTINCT FROM COALESCE(source.explanation, parent.explanation)
+                  OR stale.content_snapshot IS DISTINCT FROM source.content
+                  OR stale.chapter_code_snapshot IS DISTINCT FROM chapter.code
+                  OR stale.heading_path_snapshot IS DISTINCT FROM source.heading_path)) AS stale_count
       FROM project_standard_versions psv
       JOIN standard_versions sv ON sv.id = psv.standard_version_id
       JOIN standards s ON s.id = sv.standard_id
@@ -167,6 +183,12 @@ class ProjectRepository {
       WHERE psv.project_id = $1
       GROUP BY psv.project_id, psv.snapshot_at, sv.id, s.id
       ORDER BY s.code, sv.version`, [ projectId ]);
+    versions.rows = versions.rows.map(version => ({
+      ...version,
+      snapshot_outdated: Number(version.stale_count || 0) > 0
+        || Number(version.library_item_count || 0) > Number(version.item_count || 0),
+      snapshot_missing_count: Math.max(0, Number(version.library_item_count || 0) - Number(version.item_count || 0)),
+    }));
     return { project: projectResult.rows[0], versions: versions.rows, items: [] };
   }
 
@@ -181,7 +203,23 @@ class ProjectRepository {
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.id IS NOT NULL)::integer AS answered_count,
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'satisfied')::integer AS satisfied_count,
              count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'partially_satisfied')::integer AS partially_satisfied_count,
-             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count
+             count(DISTINCT psa.standard_item_id) FILTER (WHERE psa.status = 'not_satisfied')::integer AS not_satisfied_count,
+             (SELECT count(*)::integer FROM standard_items library_item
+              WHERE library_item.standard_version_id = sv.id) AS library_item_count,
+             (SELECT count(*)::integer
+              FROM project_standard_items stale
+              JOIN standard_items source ON source.id = stale.standard_item_id
+              JOIN standard_chapters chapter ON chapter.id = source.chapter_id
+              LEFT JOIN standard_items parent ON parent.standard_version_id = source.standard_version_id
+                AND parent.item_code = regexp_replace(source.item_code, '\\s+[a-z]\\s*[)）)_]\\s*$', '')
+              WHERE stale.project_id = psv.project_id AND source.standard_version_id = sv.id
+                AND (stale.standard_number_snapshot IS DISTINCT FROM source.standard_number
+                  OR stale.item_code_snapshot IS DISTINCT FROM source.item_code
+                  OR stale.title_snapshot IS DISTINCT FROM source.title
+                  OR stale.explanation_snapshot IS DISTINCT FROM COALESCE(source.explanation, parent.explanation)
+                  OR stale.content_snapshot IS DISTINCT FROM source.content
+                  OR stale.chapter_code_snapshot IS DISTINCT FROM chapter.code
+                  OR stale.heading_path_snapshot IS DISTINCT FROM source.heading_path)) AS stale_count
       FROM project_standard_versions psv
       JOIN standard_versions sv ON sv.id = psv.standard_version_id
       JOIN standards s ON s.id = sv.standard_id
@@ -190,9 +228,17 @@ class ProjectRepository {
       LEFT JOIN project_standard_answers psa ON psa.project_id = psv.project_id
         AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
       WHERE psv.project_id = $1
-      GROUP BY sv.id, s.id
+      GROUP BY sv.id, s.id, psv.project_id
       ORDER BY s.code, sv.version`, [ projectId ]);
-    return { project: projectResult.rows[0], standards: versions.rows };
+    return {
+      project: projectResult.rows[0],
+      standards: versions.rows.map(version => ({
+        ...version,
+        snapshot_outdated: Number(version.stale_count || 0) > 0
+          || Number(version.library_item_count || 0) > Number(version.item_count || 0),
+        snapshot_missing_count: Math.max(0, Number(version.library_item_count || 0) - Number(version.item_count || 0)),
+      })),
+    };
   }
 
   async getProjectStandardAnswers({ projectId, standardVersionId, search = '', chapterCode = '', status = '', sortBy = 'standardNumber', sortDirection = 'asc', chapterPage = 1, chapterPageSize = '1' }) {

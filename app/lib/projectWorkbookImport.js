@@ -318,6 +318,10 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
       reviewRequired = false;
       reviewReason = '';
     }
+    if (/占位符使用分号|分隔符|修正为中文冒号/.test(reviewReason)) {
+      reviewRequired = false;
+      reviewReason = '';
+    }
     return {
       type: row.type === '选择' ? 'selection' : 'assignment',
       label: row.type === '选择' ? '选择' : answerPlaceholderLabel(row.placeholder),

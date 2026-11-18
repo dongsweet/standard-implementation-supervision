@@ -201,6 +201,42 @@ test('compares imported source text against the reconstructed parent explanation
   assert.equal(review.summary.contentDifferenceCount, 0);
 });
 
+test('revalidates assignments against the current standard and drops stale semicolon warnings', async () => {
+  const repository = new ProjectWorkbookImportRepository({
+    async query(sql) {
+      if (sql.includes('FROM project_cloud_centers')) return { rows: [] };
+      if (sql.includes('FROM project_standard_versions psv')) return { rows: [ {
+        id: 'item-12004', item_code: '12.1.1 c)', standard_number: '31168-2023-12004',
+        explanation: null, content: '按照[赋值：云服务商定义的频率]，审查事件处理计划。',
+      } ] };
+      if (sql.includes('FROM project_standard_items')) return { rows: [ {
+        standard_item_id: 'item-12004', item_code_snapshot: '12.1.1 c)', standard_number_snapshot: '31168-2023-12004',
+        explanation_snapshot: null, content_snapshot: '按照[赋值：云服务商定义的频率]，审查事件处理计划。',
+      } ] };
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  });
+  repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
+    sourceKind: 'answer', sourceSheet: '应答汇总', sourceRow: 2, standardNumber: '31168-2023-12004',
+    assignmentText: '云服务商定义的频率：一年一次',
+    assignmentDetails: [ {
+      type: 'assignment', label: '云服务商定义的频率', placeholder: '[赋值;云服务商定义的频率]',
+      placeholderId: 'assignment:1', parentSelectionId: null, value: '一年一次', selected: true,
+      reviewRequired: true, reviewReason: '赋值占位符使用分号作为提示与说明的分隔符，建议在系统条款编辑中修正为中文冒号。',
+    } ],
+  } ] } });
+  repository.listProjectCloudCenters = async () => [];
+  repository.listProjectStandardItems = async () => [ {
+    standard_item_id: 'item-12004', item_code_snapshot: '12.1.1 c)', standard_number_snapshot: '31168-2023-12004',
+    explanation_snapshot: null, content_snapshot: '按照[赋值;云服务商定义的频率],审查事件处理计划。',
+  } ];
+  const review = await repository.getReview('project-1', 'job-1');
+  assert.equal(review.summary.assignmentReviewCount, 0);
+  assert.equal(review.matches[0].assignmentDetails[0].value, '一年一次');
+  assert.equal(review.matches[0].assignmentDetails[0].reviewRequired, false);
+  assert.equal(review.matches[0].assignmentDetails[0].reviewReason, null);
+});
+
 test('does not import an assignment value when the matched standard item has no assignment placeholder', async () => {
   const repository = new ProjectWorkbookImportRepository({ query: async () => ({ rows: [] }) });
   repository.getJob = async () => ({ payload: { importMode: 'answer', rows: [ {
@@ -258,6 +294,13 @@ test('writes assignment details, implementation requirements, and real evidence 
         return { rowCount: 1, rows: [ { id: 'job-1', status: 'ready', original_filename: 'answers.xlsx', payload, cloud_mapping: {} } ] };
       }
       if (statement.includes('FROM project_cloud_centers')) return { rowCount: 0, rows: [] };
+      if (statement.includes('WITH project_items AS')) return { rowCount: 1, rows: [ {
+        standard_item_id: 'item-1', source_item_id: 'item-1', item_code_snapshot: '6.3.1 a)', standard_number_snapshot: '31168-2023-06033',
+        explanation_snapshot: null, content_snapshot: '采购合同中提出安全要求[赋值：云服务商定义的安全要求]。',
+        item_code: '6.3.1 a)', standard_number: '31168-2023-06033',
+        explanation: null, content: '采购合同中提出安全要求[赋值：云服务商定义的安全要求]。',
+        snapshot_missing: false,
+      } ] };
       if (statement.includes('FROM project_standard_items')) return { rowCount: 1, rows: [ {
         standard_item_id: 'item-1', item_code_snapshot: '6.3.1 a)', standard_number_snapshot: '31168-2023-06033',
         explanation_snapshot: null, content_snapshot: '采购合同中提出安全要求[赋值：云服务商定义的安全要求]。',
@@ -335,7 +378,10 @@ test('blocks unresolved assignment links until the reviewer acknowledges them', 
   const calls = [];
   const payload = { importMode: 'answer', rows: [ {
     sourceKind: 'answer', standardNumber: '31168-2023-06033', clauseNumber: '6.3.1 a)',
-    assignmentText: '赋值', assignmentDetails: [ { reviewRequired: true, value: 'x' } ],
+    assignmentText: '云服务商定义的安全要求：x', assignmentDetails: [ {
+      type: 'assignment', label: '云服务商定义的安全要求', placeholder: '[赋值：某项]',
+      value: 'x', reviewRequired: true, reviewReason: '请确认映射。',
+    } ],
     cloudCenters: {}, supervision: [],
   } ] };
   const client = {
@@ -345,6 +391,12 @@ test('blocks unresolved assignment links until the reviewer acknowledges them', 
       if ([ 'BEGIN', 'ROLLBACK' ].includes(statement)) return { rowCount: 0, rows: [] };
       if (statement.includes('FROM project_data_import_jobs') && statement.includes('FOR UPDATE')) return { rowCount: 1, rows: [ { status: 'ready', payload } ] };
       if (statement.includes('FROM project_cloud_centers')) return { rowCount: 0, rows: [] };
+      if (statement.includes('WITH project_items AS')) return { rowCount: 1, rows: [ {
+        standard_item_id: 'item-1', source_item_id: 'item-1', item_code_snapshot: '6.3.1 a)',
+        standard_number_snapshot: '31168-2023-06033', explanation_snapshot: null, content_snapshot: '条款[赋值：某项]',
+        item_code: '6.3.1 a)', standard_number: '31168-2023-06033', explanation: null,
+        content: '条款[赋值：某项]', snapshot_missing: false,
+      } ] };
       if (statement.includes('FROM project_standard_items')) return { rowCount: 1, rows: [ { standard_item_id: 'item-1', item_code_snapshot: '6.3.1 a)', standard_number_snapshot: '31168-2023-06033', explanation_snapshot: null, content_snapshot: '条款[赋值：某项]' } ] };
       throw new Error(`Unexpected query: ${statement}`);
     },

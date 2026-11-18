@@ -66,10 +66,10 @@
 </div>
 
 <div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title">项目规范快照</h3><button class="btn btn-sm btn-outline-primary ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#addStandardVersionModal">纳入规范版次</button></div><div class="table-responsive"><table class="table table-sm align-middle mb-0">
-  <thead><tr><th>规范</th><th>规范版次</th><th>最近同步</th><th>标准项数</th><th class="text-end">操作</th></tr></thead>
+  <thead><tr><th>规范</th><th>规范版次</th><th>最近同步</th><th>标准项数</th><th>状态</th><th class="text-end">操作</th></tr></thead>
   <tbody>
-    <% (versions || []).forEach(version => { %><tr><td><%= version.standard_code %> · <%= version.standard_name %></td><td><%= version.version %></td><td><%= new Date(version.snapshot_at).toLocaleString('zh-CN') %></td><td><%= version.item_count %></td><td class="text-end"><form method="post" action="/projects/<%= project.id %>/standard-versions/<%= version.id %>/sync" data-confirm="将用规范库中“<%= version.standard_code %> · <%= version.version %>”当前内容更新本项目快照。已保存的章节应答、证据和监督记录保留；项目快照中不再存在于规范库的旧项不会自动删除。确认同步？" data-confirm-title="同步项目规范快照"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm btn-outline-primary" type="submit">同步最新内容</button></form></td></tr><% }) %>
-    <% if (!(versions || []).length) { %><tr><td colspan="5" class="text-center text-secondary py-4">该项目尚未纳入规范。可从规范库纳入一个规范版次。</td></tr><% } %>
+    <% (versions || []).forEach(version => { %><tr><td><%= version.standard_code %> · <%= version.standard_name %></td><td><%= version.version %></td><td><%= new Date(version.snapshot_at).toLocaleString('zh-CN') %></td><td><%= version.item_count %></td><td><% if (version.snapshot_outdated) { %><span class="badge text-bg-warning">待同步</span><div class="small text-secondary mt-1"><%= version.stale_count || 0 %> 项变更<% if (version.snapshot_missing_count) { %>，缺少 <%= version.snapshot_missing_count %> 项<% } %></div><% } else { %><span class="badge text-bg-success">已同步</span><% } %></td><td class="text-end"><form method="post" action="/projects/<%= project.id %>/standard-versions/<%= version.id %>/sync" data-confirm="将用规范库中“<%= version.standard_code %> · <%= version.version %>”当前内容更新本项目快照。已保存的章节应答、证据和监督记录保留；项目快照中不再存在于规范库的旧项不会自动删除。确认同步？" data-confirm-title="同步项目规范快照"><input type="hidden" name="_csrf" value="<%= csrf %>"><button class="btn btn-sm <%= version.snapshot_outdated ? 'btn-warning' : 'btn-outline-primary' %>" type="submit"><%= version.snapshot_outdated ? '同步最新内容' : '重新同步' %></button></form></td></tr><% }) %>
+    <% if (!(versions || []).length) { %><tr><td colspan="6" class="text-center text-secondary py-4">该项目尚未纳入规范。可从规范库纳入一个规范版次。</td></tr><% } %>
   </tbody>
 </table></div></div>
 

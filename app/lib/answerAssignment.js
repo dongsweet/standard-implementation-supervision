@@ -239,7 +239,7 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
           value: assignmentValue,
           selected: true,
           selectedValues: [],
-          placeholderId: control.key,
+          placeholderId: text(candidate?.placeholderId) || control.key,
           parentSelectionId: null,
           reviewRequired: Boolean(candidate?.reviewRequired),
           reviewReason: candidate?.reviewReason || null,
@@ -292,7 +292,7 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
         value: assignmentValue || null,
         selected: true,
         selectedValues: [],
-        placeholderId: `${selectionKey}:assignment:${optionIndex + 1}`,
+        placeholderId: text(candidate?.placeholderId) || `${selectionKey}:assignment:${optionIndex + 1}`,
         parentSelectionId: selectionKey,
         reviewRequired: !assignmentValue || Boolean(candidate?.reviewRequired),
         reviewReason: !assignmentValue

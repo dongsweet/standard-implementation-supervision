@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizeKey, splitEvidence } = require('../lib/projectWorkbookImport');
+const { normalizeDetails } = require('../lib/answerAssignment');
 const { normalizeDefinition } = require('../lib/dedupe');
 
 function normalizedContent(value) {
@@ -8,25 +9,61 @@ function normalizedContent(value) {
 }
 
 function standardContentForComparison(item) {
-  if (normalizedContent(item.explanation_snapshot) === normalizedContent(item.content_snapshot)) return item.content_snapshot;
-  return item.explanation_snapshot
-    ? `${item.explanation_snapshot}\n${item.content_snapshot}`
-    : item.content_snapshot;
+  const explanation = item.explanation_snapshot ?? item.explanation;
+  const content = item.content_snapshot ?? item.content;
+  if (normalizedContent(explanation) === normalizedContent(content)) return content;
+  return explanation
+    ? `${explanation}\n${content}`
+    : content;
 }
 
 function hasAssignmentPlaceholder(item) {
   const text = standardContentForComparison(item);
-  return /[\[［【]\s*[赋賦]值/u.test(String(text || ''));
+  return /[\[［【]\s*(?:[赋賦]值|[选選]择)/u.test(String(text || ''));
 }
 
 function normalizeAnswerRow(row, item) {
-  if (row.sourceKind !== 'answer' || hasAssignmentPlaceholder(item)) return row;
+  if (row.sourceKind !== 'answer') return row;
+  if (!hasAssignmentPlaceholder(item)) {
+    return {
+      ...row,
+      assignmentText: '',
+      assignmentDetails: [],
+      assignmentIgnoredReason: '标准项正文和条款说明未发现赋值/选择占位符，工作簿中的赋值内容未写入。',
+    };
+  }
+  if (!Array.isArray(row.assignmentDetails) || !row.assignmentDetails.length) return row;
+  const originalReviews = row.assignmentDetails.map(detail => ({
+    reviewRequired: detail.reviewRequired,
+    reviewReason: detail.reviewReason,
+  }));
+  const normalized = normalizeDetails(
+    row.assignmentDetails.map(detail => ({
+      ...detail,
+      reviewRequired: false,
+      reviewReason: null,
+    })),
+    standardContentForComparison(item)
+  );
+  const details = normalized.details.map((detail, index) => {
+    const original = originalReviews[index];
+    const staleFormatWarning = /占位符使用分号|分隔符|修正为中文冒号/.test(original?.reviewReason || '');
+    return {
+      ...detail,
+      reviewRequired: staleFormatWarning ? false : Boolean(original?.reviewRequired || detail.reviewRequired),
+      reviewReason: staleFormatWarning ? null : original?.reviewReason || detail.reviewReason || null,
+    };
+  });
   return {
     ...row,
-    assignmentText: '',
-    assignmentDetails: [],
-    assignmentIgnoredReason: '标准项正文和条款说明未发现赋值占位符，工作簿中的赋值内容未写入。',
+    assignmentText: normalized.clauseAssignment || row.assignmentText,
+    assignmentDetails: details,
+    assignmentIgnoredReason: null,
   };
+}
+
+function sourceItemMap(items) {
+  return new Map(items.map(item => [ item.id, item ]));
 }
 
 function parseCheckedAt(value) {
@@ -143,6 +180,7 @@ class ProjectWorkbookImportRepository {
       }
     }
     const sourceByCode = new Map();
+    const sourceById = sourceItemMap(sourceItems);
     for (const item of sourceItems) {
       for (const key of [ item.item_code, item.standard_number ]) {
         const normalized = normalizeKey(key);
@@ -168,7 +206,11 @@ class ProjectWorkbookImportRepository {
         unmatched.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber || lookupValue, standardNumber: row.standardNumber, reason });
         continue;
       }
-      const match = normalizeAnswerRow({ ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot }, unique[0]);
+      const currentSource = sourceById.get(unique[0].standard_item_id);
+      const match = normalizeAnswerRow(
+        { ...row, standardItemId: unique[0].standard_item_id, itemCodeSnapshot: unique[0].item_code_snapshot },
+        currentSource || unique[0]
+      );
       matches.push(match);
       if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(unique[0]))) {
         contentDifferences.push({ sourceSheet: row.sourceSheet, sourceRow: row.sourceRow, clauseNumber: row.clauseNumber, snapshotContent: standardContentForComparison(unique[0]), importedContent: row.content });
@@ -272,6 +314,7 @@ class ProjectWorkbookImportRepository {
         }
       }
       const sourceByCode = new Map();
+      const sourceById = sourceItemMap(sourceItems);
       for (const item of sourceItems) {
         for (const key of [ item.item_code, item.standard_number ]) {
           const normalized = normalizeKey(key);
@@ -296,7 +339,11 @@ class ProjectWorkbookImportRepository {
           unmatched.push({ ...row, reason });
           continue;
         }
-        matches.push(normalizeAnswerRow({ ...row, standardItemId: candidates[0].standard_item_id }, candidates[0]));
+        const currentSource = sourceById.get(candidates[0].standard_item_id);
+        matches.push(normalizeAnswerRow(
+          { ...row, standardItemId: candidates[0].standard_item_id },
+          currentSource || candidates[0]
+        ));
         if (row.sourceKind !== 'answer' && row.content && normalizedContent(row.content) !== normalizedContent(standardContentForComparison(candidates[0]))) contentDifferences.push(row);
       }
       if (unmatched.length && !acknowledgeUnmatched) {
