@@ -415,7 +415,7 @@ class ProjectRepository {
       )
       GROUP BY sv.id, sv.version, s.code, s.name
       HAVING count(si.id) > 0
-      ORDER BY s.code, s.version`, [ projectId ]);
+      ORDER BY s.code, sv.version`, [ projectId ]);
     return {
       ...detail,
       members: members.rows,

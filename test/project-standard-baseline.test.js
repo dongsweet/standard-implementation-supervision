@@ -79,6 +79,24 @@ test('loads project overview as summaries without querying all standard item row
   assert.equal(queries.some(statement => statement.includes('ORDER BY psi.chapter_code_snapshot')), false);
 });
 
+test('loads project management data with version ordering from standard_versions', async () => {
+  const queries = [];
+  const repository = new ProjectRepository({
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      queries.push(statement);
+      if (statement.startsWith('SELECT p.*, source_project.name')) return { rows: [ { id: 'project-1', name: '项目A' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT psv.snapshot_at')) return { rows: [ { id: 'version-1', item_count: 1, stale_count: 0, library_item_count: 1 } ], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    },
+  });
+  const result = await repository.getProjectManageDetail('project-1');
+  assert.equal(result.project.name, '项目A');
+  const availableVersionsQuery = queries.find(statement => statement.startsWith('SELECT sv.id, sv.version'));
+  assert.match(availableVersionsQuery, /ORDER BY s\.code, sv\.version/);
+  assert.doesNotMatch(availableVersionsQuery, /ORDER BY s\.code, s\.version/);
+});
+
 test('syncs a project standard snapshot atomically while preserving project answers', async () => {
   const calls = [];
   const client = {
