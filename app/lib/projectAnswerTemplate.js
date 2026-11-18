@@ -5,11 +5,9 @@ const ExcelJS = require('exceljs');
 const SUMMARY_HEADERS = [
   '标准化编号',
   '条款号',
-  '项目表序号(A列)',
   '是否重点项',
   '应答赋值',
   '制度符合性描述',
-  '所需证据',
   '实际证据',
   '适用性标记',
   '符合性标记',
@@ -102,11 +100,9 @@ function addSummarySheet(workbook, rows) {
     sheet.addRow([
       text(row.standardNumber || row.standard_number_snapshot || row.standard_number),
       text(row.clauseNumber || row.itemCode || row.item_code_snapshot),
-      text(row.projectSequence),
       row.isKey === true ? '是' : row.isKey === false ? '否' : '',
       text(row.assignmentText || row.clause_assignment),
       text(row.complianceDescription || row.compliance_description),
-      text(row.expectedEvidence || row.expected_evidence),
       text(row.actualEvidence || row.actual_evidence),
       row.applicability === 'applicable' || row.applicability === 'not_applicable'
         ? APPLICABILITY_LABELS[row.applicability]
@@ -121,15 +117,15 @@ function addSummarySheet(workbook, rows) {
   for (let rowNumber = 2; rowNumber <= dataEnd; rowNumber += 1) {
     sheet.getRow(rowNumber).alignment = { vertical: 'top', wrapText: true };
   }
-  setColumns(sheet, [ 23, 14, 17, 12, 38, 52, 28, 38, 13, 13, 32 ]);
-  sheet.autoFilter = 'A1:K1';
-  sheet.dataValidations.add(`D2:D${dataEnd}`, {
+  setColumns(sheet, [ 23, 14, 12, 38, 52, 38, 13, 13, 32 ]);
+  sheet.autoFilter = 'A1:I1';
+  sheet.dataValidations.add(`C2:C${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"是,否"' ],
   });
-  sheet.dataValidations.add(`I2:I${dataEnd}`, {
+  sheet.dataValidations.add(`G2:G${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,适用,不适用"' ],
   });
-  sheet.dataValidations.add(`J2:J${dataEnd}`, {
+  sheet.dataValidations.add(`H2:H${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,符合,部分符合,不符合"' ],
   });
   return sheet;

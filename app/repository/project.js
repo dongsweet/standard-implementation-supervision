@@ -641,7 +641,6 @@ class ProjectRepository {
              COALESCE(psa.clause_assignment, '') AS clause_assignment,
              COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
              COALESCE(psa.compliance_description, '') AS compliance_description,
-             COALESCE(psa.expected_evidence, '') AS expected_evidence,
              COALESCE(psa.actual_evidence, '') AS actual_evidence,
              COALESCE(psa.applicability, 'unspecified') AS applicability,
              COALESCE(psa.status, 'unassessed') AS answer_status,

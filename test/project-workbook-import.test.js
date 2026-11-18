@@ -44,12 +44,12 @@ test('generates a downloadable answer workbook that parses back into all current
   assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), [ '填写说明', '应答汇总', '赋值明细' ]);
   const summary = workbook.getWorksheet('应答汇总');
   assert.deepEqual(summary.getRow(1).values.slice(1), [
-    '标准化编号', '条款号', '项目表序号(A列)', '是否重点项', '应答赋值',
-    '制度符合性描述', '所需证据', '实际证据', '适用性标记', '符合性标记', '备注',
+    '标准化编号', '条款号', '是否重点项', '应答赋值',
+    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
   ]);
   assert.equal(summary.getCell('A2').value, '31168-2023-06042');
-  assert.equal(summary.getCell('D2').value, '是');
-  assert.equal(summary.getCell('J2').value, '部分符合');
+  assert.equal(summary.getCell('C2').value, '是');
+  assert.equal(summary.getCell('H2').value, '部分符合');
 
   const sheets = workbook.worksheets.map(sheet => ({
     name: sheet.name,
@@ -59,7 +59,7 @@ test('generates a downloadable answer workbook that parses back into all current
   const parsed = parseAnswerWorkbookRows(sheets);
   assert.equal(parsed.rows.length, 1);
   assert.equal(parsed.rows[0].complianceDescription, '每年检查质量度量标准落实情况。');
-  assert.equal(parsed.rows[0].expectedEvidence, '检查记录');
+  assert.equal(parsed.rows[0].expectedEvidence, '');
   assert.equal(parsed.rows[0].actualEvidence, '年度检查记录');
   assert.equal(parsed.rows[0].applicability, 'applicable');
   assert.equal(parsed.rows[0].answerStatus, 'partially_satisfied');

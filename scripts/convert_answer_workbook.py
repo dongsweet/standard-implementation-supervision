@@ -11,12 +11,12 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'reference-docs' / '规范满足情况-赋值提取复核-终版.xlsx'
-OUTPUT = ROOT / 'outputs' / '项目应答导入模板转换结果.xlsx'
+OUTPUT = ROOT / 'outputs' / '项目应答导入模板转换结果-新版.xlsx'
 NODE = Path(r'C:\Users\dq\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe')
 
 SUMMARY_HEADERS = [
-    '标准化编号', '条款号', '项目表序号(A列)', '是否重点项', '应答赋值',
-    '制度符合性描述', '所需证据', '实际证据', '适用性标记', '符合性标记', '备注',
+    '标准化编号', '条款号', '是否重点项', '应答赋值',
+    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
 ]
 DETAIL_HEADERS = [
     '标准化编号', '条款号', '提取类型', '需赋值项或选择项', '原文占位符',
@@ -150,17 +150,13 @@ summary = output.create_sheet('应答汇总')
 summary.append(SUMMARY_HEADERS)
 style_header(summary[1])
 for record in summary_rows:
-    print_result = summary_by_number[record['standardNumber']]
-    details = mapped.get(record['standardNumber'], [])
     clause_numbers = sorted({row['clauseNumber'] for row in detail_by_number.get(record['standardNumber'], []) if row['clauseNumber']})
     summary.append([
         record['standardNumber'],
         '；'.join(clause_numbers),
-        record['projectSequence'],
         '',
         record['assignmentText'],
         record['complianceDescription'],
-        '',
         record['actualEvidence'],
         '',
         '',
@@ -169,10 +165,10 @@ for record in summary_rows:
 for row in summary.iter_rows(min_row=2):
     for cell in row:
         cell.alignment = Alignment(vertical='top', wrap_text=True)
-set_widths(summary, [23, 22, 17, 12, 38, 52, 28, 38, 13, 13, 32])
+set_widths(summary, [23, 22, 12, 38, 52, 38, 13, 13, 32])
 summary.freeze_panes = 'A2'
-summary.auto_filter.ref = f'A1:K{summary.max_row}'
-for col, values in [('D', '是,否'), ('I', '未标记,适用,不适用'), ('J', '未标记,符合,部分符合,不符合')]:
+summary.auto_filter.ref = f'A1:I{summary.max_row}'
+for col, values in [('C', '是,否'), ('G', '未标记,适用,不适用'), ('H', '未标记,符合,部分符合,不符合')]:
     validation = DataValidation(type='list', formula1=f'"{values}"', allow_blank=True)
     summary.add_data_validation(validation)
     validation.add(f'{col}2:{col}{summary.max_row}')
