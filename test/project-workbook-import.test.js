@@ -24,9 +24,9 @@ test('parses the wide project workbook shape into answers, cloud groups and supe
   assert.equal(result.rows[0].supervision[0].observations.length, 3);
 });
 
-test('accepts both generic and legacy answer headers while preserving semantics', () => {
+test('reads the current answer headers', () => {
   const result = parseProjectRows([ {
-    name: '兼容表头',
+    name: '当前表头',
     rows: [
       [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '应答赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
       [ null, null, null, null, null, null, null, null, null, null, null, '制度符合性描述', '所需证据', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', null, null, null, null, null, null ],
@@ -36,20 +36,6 @@ test('accepts both generic and legacy answer headers while preserving semantics'
   assert.equal(result.rows[0].providerAssignment, '应答赋值A');
   assert.equal(result.rows[0].complianceDescription, '制度符合性描述A');
   assert.equal(result.rows[0].expectedEvidence, '所需证据A');
-});
-
-test('keeps legacy workbook headers importable', () => {
-  const result = parseProjectRows([ {
-    name: '旧表头',
-    rows: [
-      [ '标准项编号', '章节号', '章节名称', '标准号', '标准名称', '级别号', '级别', '条款号', '标准内容', '是否为重点项', '云服务商赋值', null, null, null, null, null, null, null, null, null, null, null, null, '待提供证据', '问题列', '负责人', null, null, null, null, null, null ],
-      [ null, null, null, null, null, null, null, null, null, null, null, '多云统管制度规范体系具体要求', '统一规范实施证据列表', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', '满足情况', '安全措施运行情况描述', '举证', null, null, null, null, '监督检查措施', null, null, null, null, null, null ],
-      [ 6001, '6', '系统开发与供应链', 'GB/T 31168', '云计算服务安全能力要求', '6.1.1', '一般要求', '6.1.1 a)', '标准正文', '是', '旧赋值', '旧制度描述', '旧证据', '符合', '措施A', '证据A', '符合', '措施B', '证据B', '符合', '措施C', '证据C', null, '待提供', '问题A', '张三', '检查频率：年度', null, null, null, null, null, null ],
-    ],
-  } ]);
-  assert.equal(result.rows[0].providerAssignment, '旧赋值');
-  assert.equal(result.rows[0].complianceDescription, '旧制度描述');
-  assert.equal(result.rows[0].expectedEvidence, '旧证据');
 });
 
 test('normalizes simple status and skips default empty evidence', () => {
@@ -64,7 +50,7 @@ test('parses the standard answer workbook and keeps assignment details per place
     {
       name: 'Sheet1',
       rows: [
-        [ '标准化编号', '项目表序号(A列)', '赋值', '规范体系具体要求', '证据列表' ],
+        [ '标准化编号', '项目表序号(A列)', '应答赋值', '制度符合性描述', '所需证据' ],
         [ '31168-2023-06033', 6026, '1、采购合同\n2、安全协议', '制度要求', '制度文件A' ],
         [ '31168-2023-08037', null, '云服务商定义的强制实施的访问控制策略：\n1、租户默认策略', '', '' ],
       ],
@@ -72,7 +58,7 @@ test('parses the standard answer workbook and keeps assignment details per place
     {
       name: '赋值提取复核',
       rows: [
-        [ '标准化编号', '项目表序号(A列)', '原文占位符', '提取类型', '当前赋值', '规范体系具体要求', '证据列表', '需要复核', '复核原因' ],
+        [ '标准化编号', '项目表序号(A列)', '原文占位符', '提取类型', '当前赋值', '制度符合性描述', '实际证据', '需要复核', '复核原因' ],
         [ '31168-2023-06033', 6026, '[赋值：云服务商定义的安全要求]', '赋值', '1、采购合同\n2、安全协议', '制度要求', '制度文件A', '是', '已提取占位符；当前赋值可能对应一个或多个占位符。' ],
         [ '31168-2023-08037', null, '[赋值：云服务商定义的强制实施的访问控制策略]', '赋值', '云服务商定义的强制实施的访问控制策略：\n1、租户默认策略', '', '', '否', '用户确认：说明项保留赋值。' ],
       ],
@@ -88,7 +74,7 @@ test('parses the standard answer workbook and keeps assignment details per place
 test('maps labeled depth, coverage, and choice values to their own placeholders', () => {
   const result = parseAnswerWorkbookRows([
     { name: '汇总', rows: [
-      [ '标准化编号', '规范体系具体要求', '证据列表' ],
+      [ '标准化编号', '制度符合性描述', '实际证据' ],
       [ '31168-2023-06062', '落实系统测试。', '测试报告' ],
     ] },
     { name: '赋值提取复核', rows: [
@@ -107,7 +93,7 @@ test('maps labeled depth, coverage, and choice values to their own placeholders'
 test('renders selected nested choice and omits inactive child values from the summary', () => {
   const result = parseAnswerWorkbookRows([
     { name: '汇总', rows: [
-      [ '标准化编号', '规范体系具体要求', '证据列表' ],
+      [ '标准化编号', '制度符合性描述', '实际证据' ],
       [ '31168-2023-06042', '依据每年一次检查质量度量标准。', '检查记录' ],
     ] },
     { name: '赋值提取复核', rows: [

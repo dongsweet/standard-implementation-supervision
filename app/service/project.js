@@ -200,12 +200,7 @@ class ProjectService extends Service {
       isKey: payload.isKey === true || payload.isKey === 'true' || payload.isKey === 'on',
       clauseAssignment,
       assignmentDetails: form.hasStructuredControls ? normalized.details : assignmentDetails,
-      complianceDescription: String(
-        payload.complianceDescription
-        || payload.measureDescription
-        || payload.unifiedRequirement
-        || ''
-      ).trim() || null,
+      complianceDescription: String(payload.complianceDescription || '').trim() || null,
       expectedEvidence: String(payload.expectedEvidence || '').trim() || null,
       applicability,
       applicabilityScope: String(payload.applicabilityScope || '').trim() || null,

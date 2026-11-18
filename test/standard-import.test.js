@@ -14,7 +14,7 @@ const newline = String.fromCharCode(10);
 test('maps two-row headers and carries merged chapter names forward', () => {
   const result = parseStandardRows([ { name: '源工作表', rows: [
     [ '标准名称', '标准项编号', '标准项标题', '标准内容', '级别', '是否为重点项', '条款占位符赋值', '适用云服务商', '统管分组', '统管分组', '应答', '监督' ],
-    [ '', '', '', '', '', '', '', '', '多云统管体系具体要求', '统一规范实施证据列表', '满足情况', '检查频率' ],
+    [ '', '', '', '', '', '', '', '', '制度符合性描述', '所需证据', '满足情况', '检查频率' ],
     [ '8.1 用户标识与鉴别', '8.1.1', '账号管理', '应建立账号管理要求', '三级', '是', '火灾', '华为云、阿里云', '统一账号策略', '制度、配置截图', '满足', '每年' ],
     [ '', '8.1.2', '身份鉴别', '应采用身份鉴别措施', '三级', '否', '电磁泄漏', '腾讯云', '', '', '部分满足', '每季度' ],
   ] } ]);
@@ -25,7 +25,7 @@ test('maps two-row headers and carries merged chapter names forward', () => {
     title: '账号管理',
     content: '应建立账号管理要求',
   });
-  assert.equal(Object.hasOwn(result.chapters[0].items[0], 'unifiedRequirement'), false);
+  assert.equal(Object.hasOwn(result.chapters[0].items[0], 'complianceDescription'), false);
   assert.equal(Object.hasOwn(result.chapters[0].items[0], 'expectedEvidence'), false);
   assert.equal(Object.hasOwn(result.chapters[0].items[0], 'providerNames'), false);
   assert.equal(Object.hasOwn(result.chapters[0].items[0], 'satisfaction'), false);

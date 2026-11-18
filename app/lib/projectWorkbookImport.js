@@ -65,9 +65,9 @@ function findHeader(rows) {
     clauseNumber: findColumn(rows, [ '条款号', '对应标准号', '标准编号' ]),
     content: findColumn(rows, [ '标准内容', '标准项内容', '标准要求' ]),
     isKey: findColumn(rows, [ '是否为重点项' ]),
-    providerAssignment: findColumn(rows, [ '应答赋值', '云服务商赋值' ]),
-    complianceDescription: findColumn(rows, [ '制度符合性描述', '制度符合性情况描述', '多云统管制度规范体系具体要求', '多云统管体系具体要求', '统一规范要求' ]),
-    expectedEvidence: findColumn(rows, [ '所需证据', '统一规范实施证据列表' ]),
+    providerAssignment: findColumn(rows, [ '应答赋值' ]),
+    complianceDescription: findColumn(rows, [ '制度符合性描述' ]),
+    expectedEvidence: findColumn(rows, [ '所需证据' ]),
     pendingEvidence: findColumn(rows, [ '待提供证据' ]),
     problem: findColumn(rows, [ '问题列' ]),
     responsible: findColumn(rows, [ '负责人' ]),
@@ -315,8 +315,8 @@ function formatAnswerAssignments(details, fallbackText = '') {
 function parseAnswerWorkbookRows(sheets) {
   const detailSheet = sheets.find(sheet => findHeaderRow(sheet.rows || [], [ '标准化编号', '原文占位符' ]));
   const summarySheet = sheets.find(sheet => sheet !== detailSheet && findHeaderRow(sheet.rows || [], [ '标准化编号' ])
-    && (findHeaderRow(sheet.rows || [], [ '标准化编号', '规范体系具体要求' ])
-      || findHeaderRow(sheet.rows || [], [ '标准化编号', '证据列表' ])));
+    && (findHeaderRow(sheet.rows || [], [ '标准化编号', '制度符合性描述' ])
+      || findHeaderRow(sheet.rows || [], [ '标准化编号', '实际证据' ])));
   const onlyDetailSheet = !summarySheet && detailSheet ? detailSheet : null;
   if (!summarySheet && !detailSheet) return null;
 
@@ -359,10 +359,10 @@ function parseAnswerWorkbookRows(sheets) {
     const map = {
       standardNumber: findAnswerColumn(headers, [ '标准化编号' ]),
       projectSequence: findAnswerColumn(headers, [ '项目表序号(A列)', '项目表序号' ]),
-      assignment: findAnswerColumn(headers, [ '应答赋值', '赋值', '云服务商赋值', '当前赋值' ]),
-      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述', '制度符合性情况描述', '规范体系具体要求', '多云统管制度规范体系具体要求' ]),
-      expectedEvidence: findAnswerColumn(headers, [ '所需证据', '统一规范实施证据列表', '应提供证据' ]),
-      actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
+      assignment: findAnswerColumn(headers, [ '应答赋值' ]),
+      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '所需证据' ]),
+      actualEvidence: findAnswerColumn(headers, [ '实际证据' ]),
     };
     for (let rowIndex = found.rowIndex + 1; rowIndex < summarySheet.rows.length; rowIndex += 1) {
       const source = summarySheet.rows[rowIndex] || [];
@@ -402,9 +402,9 @@ function parseAnswerWorkbookRows(sheets) {
       rawCurrentAssignment: findAnswerColumn(headers, [ '原始当前赋值（导入）', '原始当前赋值' ]),
       currentAssignment: findAnswerColumn(headers, [ '当前赋值' ]),
       label: findAnswerColumn(headers, [ '需赋值项或选择项', '占位符提示' ]),
-      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述', '制度符合性情况描述', '规范体系具体要求' ]),
-      expectedEvidence: findAnswerColumn(headers, [ '所需证据', '统一规范实施证据列表', '应提供证据' ]),
-      actualEvidence: findAnswerColumn(headers, [ '证据列表', '制度文件' ]),
+      complianceDescription: findAnswerColumn(headers, [ '制度符合性描述' ]),
+      expectedEvidence: findAnswerColumn(headers, [ '所需证据' ]),
+      actualEvidence: findAnswerColumn(headers, [ '实际证据' ]),
       review: findAnswerColumn(headers, [ '需要复核' ]),
       reviewReason: findAnswerColumn(headers, [ '复核原因' ]),
       extractionStatus: findAnswerColumn(headers, [ '提取状态' ]),
