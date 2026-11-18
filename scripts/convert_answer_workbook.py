@@ -80,8 +80,29 @@ def extract_status_markers():
         elif any(value in ('满足', '符合') for value in normalized):
             markers[str(standard_number)] = ('适用', '符合')
         else:
-            # 第 6 章原表有实际条款和描述，但满足情况整列未填，保留为未标记。
-            markers[str(standard_number)] = ('适用', '未标记')
+            # 第6章没有单独的满足情况，但全部实际条款都有安全措施描述和证据；
+            # 按业务口径视为符合，不把已编写的应答错误留成未标记。
+            description_columns = [
+                index for index, value in enumerate(header)
+                if value and ('安全措施运行情况描述' in str(value) or '统一规范要求' in str(value))
+            ]
+            evidence_columns = [
+                index for index, value in enumerate(header)
+                if value and ('举证' in str(value) or '证据' in str(value))
+            ]
+            descriptions = [
+                sheet.cell(int(source_row), column + 1).value
+                for column in description_columns
+            ]
+            evidence = [
+                sheet.cell(int(source_row), column + 1).value
+                for column in evidence_columns
+            ]
+            has_answer = any(value is not None and str(value).strip() for value in descriptions)
+            has_evidence = any(value is not None and str(value).strip() for value in evidence)
+            markers[str(standard_number)] = (
+                ('适用', '符合') if has_answer and has_evidence else ('适用', '未标记')
+            )
     return markers
 
 
