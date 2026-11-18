@@ -140,6 +140,19 @@ function answerPlaceholderLabel(value) {
     .trim();
 }
 
+function selectedChoiceValue(row, value) {
+  const selected = cellText(value).trim();
+  if (row.type !== '选择' || !selected) return selected;
+  const normalizeLabel = label => cellText(label).normalize('NFKC')
+    .replace(/^\s*\[?\s*赋值\s*[:：]?\s*/i, '')
+    .replace(/\]\s*$/, '')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toLowerCase();
+  const selectedLabel = normalizeLabel(selected);
+  const nestedAssignments = cellText(row.placeholder).match(/[\[［【]\s*赋值\s*[:：]\s*[^\]］】\r\n]+[\]］】]/gu) || [];
+  return nestedAssignments.find(token => normalizeLabel(token) === selectedLabel) || selected;
+}
+
 function parseActiveFlag(value) {
   const text = cellText(value).trim().toLowerCase();
   if (!text) return null;
@@ -272,9 +285,9 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText) {
     }
     return {
       type: row.type === '选择' ? 'selection' : 'assignment',
-      label: answerPlaceholderLabel(row.placeholder),
+      label: row.type === '选择' ? '选择' : answerPlaceholderLabel(row.placeholder),
       placeholder: row.placeholder || null,
-      value: value || null,
+      value: (row.type === '选择' ? selectedChoiceValue(row, value) : value) || null,
       sourceRow: row.sourceRow,
       placeholderId: row.placeholderId || null,
       parentSelectionId: row.parentSelectionId,
@@ -286,8 +299,9 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText) {
 }
 
 function formatAnswerAssignments(details, fallbackText = '') {
-  if (!details.length) return fallbackText || '';
-  return details.map(detail => {
+  const visibleDetails = details.filter(detail => detail.selected !== false);
+  if (!visibleDetails.length) return details.length ? '' : fallbackText || '';
+  return visibleDetails.map(detail => {
     const label = detail.label || (detail.type === 'selection' ? '选择项' : '需赋值项');
     return `${label}：${detail.selected === false ? '未选中' : detail.value || '待确认'}`;
   }).join('\n');

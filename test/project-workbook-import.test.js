@@ -76,7 +76,7 @@ test('maps labeled depth, coverage, and choice values to their own placeholders'
   assert.equal(row.assignmentDetails[1].reviewRequired, false);
 });
 
-test('imports explicit nested choice mapping and preserves inactive assignments as unselected', () => {
+test('renders selected nested choice and omits inactive child values from the summary', () => {
   const result = parseAnswerWorkbookRows([
     { name: '汇总', rows: [
       [ '标准化编号', '规范体系具体要求', '证据列表' ],
@@ -84,19 +84,21 @@ test('imports explicit nested choice mapping and preserves inactive assignments 
     ] },
     { name: '赋值提取复核', rows: [
       [ '标准化编号', '占位符ID', '提取类型', '需赋值项或选择项', '原文占位符', '当前赋值', '所属选择项ID', '是否选中/生效', '对应占位符的当前值', '需要复核', '复核原因' ],
-      [ '31168-2023-06042', '31168-2023-06042#1', '选择', '[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时', '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]', '每年一次', '', '是', '[赋值：云服务商定义的频率]', '否', '' ],
+      [ '31168-2023-06042', '31168-2023-06042#1', '选择', '[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时', '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]', '云服务商定义的频率', '', '是', '云服务商定义的频率', '否', '' ],
       [ '31168-2023-06042', '31168-2023-06042#2', '赋值', '云服务商定义的频率', '[赋值：云服务商定义的频率]', '每年一次', '31168-2023-06042#1', '是', '每年一次', '否', '' ],
       [ '31168-2023-06042', '31168-2023-06042#3', '赋值', '云服务商定义的项目审查里程碑', '[赋值：云服务商定义的项目审查里程碑]', '每年一次', '31168-2023-06042#1', '否', '', '否', '' ],
     ] },
   ]);
   const row = result.rows[0];
+  assert.equal(row.assignmentDetails[0].label, '选择');
   assert.equal(row.assignmentDetails[0].value, '[赋值：云服务商定义的频率]');
   assert.equal(row.assignmentDetails[1].value, '每年一次');
   assert.equal(row.assignmentDetails[1].parentSelectionId, '31168-2023-06042#1');
   assert.equal(row.assignmentDetails[2].value, null);
   assert.equal(row.assignmentDetails[2].selected, false);
   assert.equal(row.assignmentDetails[2].reviewRequired, false);
-  assert.match(row.assignmentText, /未选中/);
+  assert.equal(row.assignmentText, '选择：[赋值：云服务商定义的频率]\n云服务商定义的频率：每年一次');
+  assert.doesNotMatch(row.assignmentText, /项目审查里程碑|未选中/);
   assert.doesNotMatch(row.assignmentText, /待确认/);
 });
 
