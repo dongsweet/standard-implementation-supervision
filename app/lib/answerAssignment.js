@@ -154,7 +154,7 @@ function buildAssignmentForm(source, existingDetails = []) {
           ...option,
           selected: selectedValues.includes(option.value),
           assignmentValue: child?.value || '',
-          assignmentPlaceholderId: child?.placeholderId || option.childKey,
+          assignmentPlaceholderId: child?.placeholderId || `${key}:assignment:${options.indexOf(option) + 1}`,
         };
       });
       controls.push({
