@@ -29,6 +29,11 @@ def text(value):
     return '' if value is None else str(value).strip()
 
 
+def summary_text(value):
+    value = text(value)
+    return '' if value == '658' else value
+
+
 def style_header(row):
     fill = PatternFill('solid', fgColor='28744A')
     for cell in row:
@@ -55,9 +60,9 @@ for row in summary_source.iter_rows(min_row=2, values_only=True):
     record = {
         'standardNumber': number,
         'projectSequence': text(row[1]),
-        'assignmentText': text(row[2]),
-        'complianceDescription': text(row[3]),
-        'actualEvidence': text(row[4]),
+        'assignmentText': summary_text(row[2]),
+        'complianceDescription': summary_text(row[3]),
+        'actualEvidence': summary_text(row[4]),
     }
     summary_rows.append(record)
     summary_by_number[number] = record
