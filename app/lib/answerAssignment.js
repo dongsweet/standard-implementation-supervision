@@ -8,7 +8,7 @@ const OPEN_TO_CLOSE = new Map([
 const CLOSERS = new Set(OPEN_TO_CLOSE.values());
 
 function text(value) {
-  return String(value || '').normalize('NFKC').replace(/\r\n?/g, '\n').trim();
+  return String(value || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
 }
 
 function compact(value) {
@@ -17,6 +17,7 @@ function compact(value) {
 
 function matchKey(value) {
   return compact(value)
+    .normalize('NFKC')
     .replace(/^[\[［【]\s*/, '')
     .replace(/[\]］】]\s*$/, '')
     .replace(/^(?:赋值|选择)\s*[:：;；]?\s*/i, '')
@@ -207,7 +208,18 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
 
   const input = Array.isArray(rawDetails) ? rawDetails : [];
   const selections = input.filter(detail => detail?.type === 'selection');
-  const assignments = input.filter(detail => detail?.type === 'assignment');
+  const assignmentByKey = new Map();
+  for (const detail of input.filter(item => item?.type === 'assignment')) {
+    const key = [
+      matchKey(detail.placeholder),
+      text(detail.parentSelectionId),
+    ].join('|');
+    const existing = assignmentByKey.get(key);
+    if (!existing || (!text(existing.value) && text(detail.value)) || existing.selected === false) {
+      assignmentByKey.set(key, detail);
+    }
+  }
+  const assignments = [ ...assignmentByKey.values() ];
   const normalized = [];
   const consumedAssignments = new Set();
 

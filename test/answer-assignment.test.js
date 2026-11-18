@@ -48,8 +48,8 @@ test('parses nested placeholders and keeps semicolons inside assignment brackets
   assert.equal(tokens.length, 1);
   assert.equal(tokens[0].type, 'selection');
   assert.deepEqual(splitOptions(tokens[0].body), [
-    '[赋值:云服务商定义的频率]',
-    '[赋值:云服务商定义的项目审查里程碑]',
+    '[赋值：云服务商定义的频率]',
+    '[赋值：云服务商定义的项目审查里程碑]',
     '交付时',
   ]);
 });
@@ -90,7 +90,7 @@ test('normalizes selected branches and never persists an unselected marker', () 
   assert.equal(result.clauseAssignment, '选择：云服务商定义的频率\n云服务商定义的频率：每年一次');
   assert.equal(result.details.length, 2);
   assert.equal(result.details[0].type, 'selection');
-  assert.deepEqual(result.details[0].selectedValues, [ '[赋值:云服务商定义的频率]' ]);
+  assert.deepEqual(result.details[0].selectedValues, [ '[赋值：云服务商定义的频率]' ]);
   assert.equal(result.details[1].parentSelectionId, 'selection:1');
   assert.equal(result.details.some(detail => detail.value === '未选中'), false);
 });
@@ -146,7 +146,7 @@ test('does not create child assignment details for an unselected option', () => 
   } ], standardText);
 
   assert.deepEqual(result.details.map(detail => detail.placeholder), [
-    '[选择:[赋值:云服务商定义的频率];[赋值:云服务商定义的项目审查里程碑];交付时]',
-    '[赋值:云服务商定义的频率]',
+    '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]',
+    '[赋值：云服务商定义的频率]',
   ]);
 });

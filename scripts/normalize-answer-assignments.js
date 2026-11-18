@@ -17,7 +17,7 @@ async function main() {
         ON psi.project_id = psa.project_id
        AND psi.standard_item_id = psa.standard_item_id
       WHERE psa.cloud_center_id IS NULL
-        AND (jsonb_array_length(psa.assignment_details) > 0 OR psa.clause_assignment <> '')
+        AND psa.clause_assignment ILIKE '%未选中%'
       ORDER BY psi.item_code_snapshot`);
     const changed = [];
     for (const row of result.rows) {
