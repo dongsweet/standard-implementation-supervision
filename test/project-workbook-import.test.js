@@ -39,7 +39,10 @@ test('generates blank answer sheets grouped by readable standard name', { skip: 
   assert.equal(summary.getCell('A3').value, '6.8.2 b)');
   assert.equal(summary.getCell('I3').value, '31168-2023-06042');
   assert.equal(summary.getColumn(9).hidden, true);
-  assert.deepEqual(summary.getRow(3).values.slice(2, 9), [ undefined, undefined, undefined, undefined, undefined, undefined, undefined ]);
+  assert.deepEqual(
+    [ 2, 3, 4, 5, 6, 7, 8 ].map(column => summary.getRow(3).getCell(column).value || ''),
+    [ '', '', '', '', '', '', '' ]
+  );
 
   const sheets = workbook.worksheets.map(sheet => ({
     name: sheet.name,
