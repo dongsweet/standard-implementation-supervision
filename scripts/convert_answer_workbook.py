@@ -21,8 +21,8 @@ STANDARD_CODE = 'GB/T 31168'
 STANDARD_NAME = '信息安全技术 云计算服务安全能力要求'
 STANDARD_VERSION = '2023'
 SUMMARY_HEADERS = [
-    '条款号', '是否重点项', '应答赋值', '制度符合性描述',
-    '实际证据', '适用性标记', '符合性标记', '备注', '标准化编号',
+    '标准化编号', '条款号', '是否重点项', '应答赋值',
+    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
 ]
 
 
@@ -198,7 +198,7 @@ instruction_rows = [
     ('适用性标记', '可填：未标记、适用、不适用。'),
     ('符合性标记', '可填：未标记、符合、部分符合、不符合。'),
     ('是否重点项', '可填：是、否。'),
-    ('标准化编号', '最后一个隐藏列由系统用于精确匹配。'),
+    ('标准化编号', '按当前项目预填，用于精确匹配标准项，请勿修改。'),
 ]
 for values in instruction_rows:
     instructions.append(values)
@@ -217,6 +217,7 @@ for record in summary_rows:
     clause_numbers = sorted({row['clauseNumber'] for row in detail_by_number.get(record['standardNumber'], []) if row['clauseNumber']})
     applicability, compliance = status_markers.get(record['standardNumber'], ('', ''))
     summary.append([
+        record['standardNumber'],
         '；'.join(clause_numbers),
         '',
         record['assignmentText'],
@@ -225,16 +226,14 @@ for record in summary_rows:
         applicability,
         compliance,
         '',
-        record['standardNumber'],
     ])
 for row in summary.iter_rows(min_row=3):
     for cell in row:
         cell.alignment = Alignment(vertical='top', wrap_text=True)
-set_widths(summary, [16, 12, 42, 58, 38, 13, 13, 32, 23])
+set_widths(summary, [23, 16, 12, 42, 58, 38, 13, 13, 32])
 summary.freeze_panes = 'A3'
 summary.auto_filter.ref = f'A2:I{summary.max_row}'
-summary.column_dimensions['I'].hidden = True
-for col, values in [('B', '是,否'), ('F', '未标记,适用,不适用'), ('G', '未标记,符合,部分符合,不符合')]:
+for col, values in [('C', '是,否'), ('G', '未标记,适用,不适用'), ('H', '未标记,符合,部分符合,不符合')]:
     validation = DataValidation(type='list', formula1=f'"{values}"', allow_blank=True)
     summary.add_data_validation(validation)
     validation.add(f'{col}3:{col}{summary.max_row}')
@@ -247,10 +246,10 @@ mapped_path.unlink(missing_ok=True)
 check = load_workbook(OUTPUT, data_only=False)
 status_rows = check[STANDARD_NAME]
 applicability_counts = collections.Counter(
-    status_rows.cell(row, 6).value for row in range(3, status_rows.max_row + 1)
+    status_rows.cell(row, 7).value for row in range(3, status_rows.max_row + 1)
 )
 compliance_counts = collections.Counter(
-    status_rows.cell(row, 7).value for row in range(3, status_rows.max_row + 1)
+    status_rows.cell(row, 8).value for row in range(3, status_rows.max_row + 1)
 )
 print(json.dumps({
     'output': str(OUTPUT.resolve()),

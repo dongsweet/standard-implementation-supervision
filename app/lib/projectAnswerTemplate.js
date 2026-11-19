@@ -3,6 +3,7 @@
 const ExcelJS = require('exceljs');
 
 const SUMMARY_HEADERS = [
+  '标准化编号',
   '条款号',
   '是否重点项',
   '应答赋值',
@@ -11,7 +12,6 @@ const SUMMARY_HEADERS = [
   '适用性标记',
   '符合性标记',
   '备注',
-  '标准化编号',
 ];
 
 const APPLICABILITY_LABELS = {
@@ -65,7 +65,7 @@ function addInstructionSheet(workbook) {
     [ '符合性标记', '可填：未标记、符合、部分符合、不符合。留空按“未标记”处理。' ],
     [ '是否重点项', '可填：是、否。留空按“否”处理。' ],
     [ '空白行', '未填写任何应答字段的条款不会导入。' ],
-    [ '标准化编号', '最后一个隐藏列由系统用于精确匹配，请勿删除或修改。' ],
+    [ '标准化编号', '按当前项目预填，用于精确匹配标准项，请勿删除或修改。' ],
   ];
   rows.forEach((values, index) => {
     const row = sheet.addRow(values);
@@ -129,6 +129,7 @@ function addStandardSheet(workbook, rows, sheetName) {
 
   for (const row of rows) {
     sheet.addRow([
+      text(row.standardNumber || row.standard_number_snapshot),
       text(row.clauseNumber || row.item_code_snapshot),
       '',
       '',
@@ -137,23 +138,21 @@ function addStandardSheet(workbook, rows, sheetName) {
       '',
       '',
       '',
-      text(row.standardNumber || row.standard_number_snapshot),
     ]);
   }
   const dataEnd = Math.max(3, sheet.rowCount);
   for (let rowNumber = 3; rowNumber <= dataEnd; rowNumber += 1) {
     sheet.getRow(rowNumber).alignment = { vertical: 'top', wrapText: true };
   }
-  setColumns(sheet, [ 16, 12, 42, 58, 38, 13, 13, 32, 23 ]);
+  setColumns(sheet, [ 23, 16, 12, 42, 58, 38, 13, 13, 32 ]);
   sheet.autoFilter = 'A2:I2';
-  sheet.getColumn(9).hidden = true;
-  sheet.dataValidations.add(`B3:B${dataEnd}`, {
+  sheet.dataValidations.add(`C3:C${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"是,否"' ],
   });
-  sheet.dataValidations.add(`F3:F${dataEnd}`, {
+  sheet.dataValidations.add(`G3:G${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,适用,不适用"' ],
   });
-  sheet.dataValidations.add(`G3:G${dataEnd}`, {
+  sheet.dataValidations.add(`H3:H${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,符合,部分符合,不符合"' ],
   });
   return sheet;

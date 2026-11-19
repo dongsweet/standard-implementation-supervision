@@ -33,20 +33,19 @@ test('generates blank answer sheets grouped by readable standard name', { skip: 
   ]);
   const summary = workbook.getWorksheet('信息安全技术 云计算服务安全能力要求');
   assert.deepEqual(summary.getRow(2).values.slice(1), [
-    '条款号', '是否重点项', '应答赋值', '制度符合性描述',
-    '实际证据', '适用性标记', '符合性标记', '备注', '标准化编号',
+    '标准化编号', '条款号', '是否重点项', '应答赋值',
+    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
   ]);
-  assert.equal(summary.getCell('A3').value, '6.8.2 b)');
-  assert.equal(summary.getCell('I3').value, '31168-2023-06042');
-  assert.equal(summary.getColumn(9).hidden, true);
+  assert.equal(summary.getCell('A3').value, '31168-2023-06042');
+  assert.equal(summary.getCell('B3').value, '6.8.2 b)');
   assert.deepEqual(
-    [ 2, 3, 4, 5, 6, 7, 8 ].map(column => summary.getRow(3).getCell(column).value || ''),
+    [ 3, 4, 5, 6, 7, 8, 9 ].map(column => summary.getRow(3).getCell(column).value || ''),
     [ '', '', '', '', '', '', '' ]
   );
 
   const otherSummary = workbook.getWorksheet('其他安全规范');
-  assert.equal(otherSummary.getCell('A3').value, '1.1');
-  assert.equal(otherSummary.getCell('I3').value, 'OTHER-2026-001');
+  assert.equal(otherSummary.getCell('A3').value, 'OTHER-2026-001');
+  assert.equal(otherSummary.getCell('B3').value, '1.1');
 });
 
 test('parses human-readable response text into structured selection and assignment details', () => {
