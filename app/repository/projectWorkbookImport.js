@@ -29,7 +29,6 @@ function normalizeAnswerRow(row, item) {
       ...row,
       assignmentText: '',
       assignmentDetails: [],
-      assignmentIgnoredReason: '标准项正文和条款说明未发现赋值/选择占位符，工作簿中的赋值内容未写入。',
     };
   }
   if (!Array.isArray(row.assignmentDetails) || !row.assignmentDetails.length) return row;
@@ -58,7 +57,6 @@ function normalizeAnswerRow(row, item) {
     ...row,
     assignmentText: normalized.clauseAssignment || row.assignmentText,
     assignmentDetails: details,
-    assignmentIgnoredReason: null,
   };
 }
 
@@ -238,7 +236,6 @@ class ProjectWorkbookImportRepository {
         importMode: job.payload.importMode || 'project',
         assignmentDetailCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).length, 0),
         assignmentReviewCount: matches.reduce((sum, row) => sum + (row.assignmentDetails || []).filter(detail => detail.reviewRequired).length, 0),
-        assignmentIgnoredCount: matches.filter(row => row.assignmentIgnoredReason).length,
         snapshotMissingCount: unmatched.filter(row => /项目快照缺少此项/.test(row.reason || '')).length,
       },
       previewRows: matches.slice(0, 8).map(row => ({ clauseNumber: row.clauseNumber || row.standardNumber, content: row.content || row.complianceDescription, assignmentText: row.assignmentText, assignmentDetails: row.assignmentDetails || [], sourceSheet: row.sourceSheet })),

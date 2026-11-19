@@ -251,7 +251,8 @@ test('does not import an assignment value when the matched standard item has no 
   const review = await repository.getReview('project-1', 'job-1');
   assert.equal(review.summary.matchedCount, 1);
   assert.equal(review.matches[0].assignmentText, '');
-  assert.equal(review.summary.assignmentIgnoredCount, 1);
+  assert.equal(review.matches[0].assignmentDetails.length, 0);
+  assert.equal(Object.hasOwn(review.summary, 'assignmentIgnoredCount'), false);
 });
 
 test('does not match an answer to a parent explanation absent from the project snapshot', async () => {
