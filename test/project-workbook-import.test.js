@@ -160,6 +160,28 @@ test('maps labeled depth, coverage, and choice values to their own placeholders'
   assert.equal(row.assignmentDetails[1].reviewRequired, false);
 });
 
+test('requires review when numbered assignment values have no explicit placeholder mapping', () => {
+  const result = parseAnswerWorkbookRows([
+    { name: '汇总', rows: [
+      [ '标准化编号', '应答赋值', '制度符合性描述', '实际证据' ],
+      [ '31168-2023-06062', '赋值1：专业厂商的漏扫设备或第三方渗透测试\n赋值2：云服务事业部安全接入口', '落实系统测试。', '测试报告' ],
+    ] },
+    { name: '赋值提取复核', rows: [
+      [ '标准化编号', '提取类型', '需赋值项或选择项', '原文占位符', '当前赋值', '需要复核', '复核原因' ],
+      [ '31168-2023-06062', '赋值', '测试范围', '[赋值：测试范围]', '赋值1：专业厂商的漏扫设备或第三方渗透测试\n赋值2：云服务事业部安全接入口', '是', '已提取占位符；当前赋值可能对应一个或多个占位符。' ],
+      [ '31168-2023-06062', '赋值', '接入范围', '[赋值：接入范围]', '赋值1：专业厂商的漏扫设备或第三方渗透测试\n赋值2：云服务事业部安全接入口', '是', '已提取占位符；当前赋值可能对应一个或多个占位符。' ],
+    ] },
+  ]);
+  const row = result.rows[0];
+  assert.deepEqual(row.assignmentDetails.map(detail => detail.value), [
+    '专业厂商的漏扫设备或第三方渗透测试',
+    '云服务事业部安全接入口',
+  ]);
+  assert.equal(row.assignmentDetails.every(detail => detail.reviewRequired), true);
+  assert.match(row.assignmentDetails[0].reviewReason, /序号与各占位符的对应关系/);
+  assert.equal(result.assignmentReviewCount, 2);
+});
+
 test('renders selected nested choice and omits inactive child values from the summary', () => {
   const result = parseAnswerWorkbookRows([
     { name: '汇总', rows: [

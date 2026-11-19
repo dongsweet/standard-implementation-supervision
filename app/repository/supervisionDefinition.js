@@ -22,17 +22,20 @@ class SupervisionDefinitionRepository {
 
   async listDefinitions() {
     const result = await this.pool.query(`
-      SELECT d.id, d.object_name, d.object_category, d.check_layer, d.check_method,
-             d.description, d.steps, d.frequency, d.access_mode, d.status,
+      SELECT d.id, d.object_name, d.scope, d.recognized_object, d.object_category, d.check_layer, d.check_method,
+             d.description, d.steps, d.frequency, d.access_mode, d.priority,
+             d.reference_result, d.reference_materials, d.status,
              d.merged_into_id, d.created_at, d.updated_at,
              COALESCE(json_agg(json_build_object(
-               'id', si.id, 'code', si.item_code, 'title', si.title,
+               'id', si.id, 'code', si.item_code, 'standardNumber', si.standard_number,
+               'title', si.title, 'chapterCode', sc.code, 'chapterName', sc.name,
                'standardCode', s.code, 'version', sv.version
              ) ORDER BY s.code, sv.version, si.item_code)
              FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
       FROM supervision_definitions d
       LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
       LEFT JOIN standard_items si ON si.id = dsi.standard_item_id
+      LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
       LEFT JOIN standard_versions sv ON sv.id = si.standard_version_id
       LEFT JOIN standards s ON s.id = sv.standard_id
       GROUP BY d.id
@@ -42,7 +45,7 @@ class SupervisionDefinitionRepository {
 
   async listStandardItems() {
     const result = await this.pool.query(`
-      SELECT si.id, si.item_code, si.title, s.code AS standard_code, sv.version
+      SELECT si.id, si.item_code, si.standard_number, si.title, s.code AS standard_code, sv.version
       FROM standard_items si
       JOIN standard_versions sv ON sv.id = si.standard_version_id
       JOIN standards s ON s.id = sv.standard_id
@@ -56,12 +59,12 @@ class SupervisionDefinitionRepository {
       await client.query('BEGIN');
       const result = await client.query(`
         INSERT INTO supervision_definitions
-          (object_name, object_category, check_layer, check_method, description, steps, frequency, access_mode, normalized_hash)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          (object_name, scope, recognized_object, object_category, check_layer, check_method, description, steps, frequency, access_mode, priority, reference_result, reference_materials, normalized_hash)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *`, [
-        fields.objectName, fields.objectCategory || null, fields.checkLayer || null,
-        fields.checkMethod, fields.description, fields.steps || null,
-        fields.frequency || null, fields.accessMode || null, fields.normalizedHash,
+        fields.objectName, fields.scope || null, fields.recognizedObject, fields.objectCategory || null, fields.checkLayer || null,
+        fields.checkMethod, fields.description, fields.steps || null, fields.frequency || null, fields.accessMode || null,
+        fields.priority || null, fields.referenceResult || null, fields.referenceMaterials || null, fields.normalizedHash,
       ]);
       for (const standardItemId of standardItemIds) {
         await client.query(`
@@ -85,14 +88,14 @@ class SupervisionDefinitionRepository {
       await client.query('BEGIN');
       const result = await client.query(`
         UPDATE supervision_definitions
-        SET object_name = $2, object_category = $3, check_layer = $4,
-            check_method = $5, description = $6, steps = $7, frequency = $8,
-            access_mode = $9, normalized_hash = $10, updated_at = now()
+        SET object_name = $2, scope = $3, recognized_object = $4, object_category = $5, check_layer = $6,
+            check_method = $7, description = $8, steps = $9, frequency = $10, access_mode = $11,
+            priority = $12, reference_result = $13, reference_materials = $14, normalized_hash = $15, updated_at = now()
         WHERE id = $1 AND status = 'active'
         RETURNING *`, [
-        id, fields.objectName, fields.objectCategory || null, fields.checkLayer || null,
-        fields.checkMethod, fields.description, fields.steps || null,
-        fields.frequency || null, fields.accessMode || null, fields.normalizedHash,
+        id, fields.objectName, fields.scope || null, fields.recognizedObject, fields.objectCategory || null, fields.checkLayer || null,
+        fields.checkMethod, fields.description, fields.steps || null, fields.frequency || null, fields.accessMode || null,
+        fields.priority || null, fields.referenceResult || null, fields.referenceMaterials || null, fields.normalizedHash,
       ]);
       if (!result.rowCount) {
         await client.query('ROLLBACK');
@@ -117,8 +120,9 @@ class SupervisionDefinitionRepository {
 
   async findById(id, client = this.pool) {
     const result = await client.query(`
-      SELECT id, object_name, object_category, check_layer, check_method,
-             description, steps, frequency, access_mode, normalized_hash, status
+      SELECT id, object_name, scope, recognized_object, object_category, check_layer, check_method,
+             description, steps, frequency, access_mode, priority, reference_result,
+             reference_materials, normalized_hash, status
       FROM supervision_definitions WHERE id = $1`, [ id ]);
     return result.rows[0] || null;
   }

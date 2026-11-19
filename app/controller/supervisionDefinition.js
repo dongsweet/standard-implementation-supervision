@@ -7,7 +7,7 @@ class SupervisionDefinitionController extends Controller {
   async index() {
     requireGlobalRead(this.ctx);
     await this.ctx.render('supervision-definitions/index', {
-      title: '监督定义',
+      title: '检查方案',
       ...await this.ctx.service.supervisionDefinition.list(),
       csrf: this.ctx.csrf,
     });

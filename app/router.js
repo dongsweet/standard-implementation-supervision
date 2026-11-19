@@ -13,6 +13,10 @@ module.exports = app => {
   router.post('/cloud-centers', controller.cloudCenter.create);
   router.post('/cloud-centers/:cloudCenterId', controller.cloudCenter.update);
   router.get('/supervision-definitions', controller.supervisionDefinition.index);
+  router.get('/supervision-definitions/import-template', controller.supervisionPlanImport.template);
+  router.post('/supervision-plan-imports', controller.supervisionPlanImport.create);
+  router.get('/supervision-plan-imports/:jobId', controller.supervisionPlanImport.review);
+  router.post('/supervision-plan-imports/:jobId/apply', controller.supervisionPlanImport.apply);
   router.post('/supervision-definitions', controller.supervisionDefinition.create);
   router.post('/supervision-definitions/:definitionId', controller.supervisionDefinition.update);
   router.get('/supervision-executions', controller.supervisionExecution.index);

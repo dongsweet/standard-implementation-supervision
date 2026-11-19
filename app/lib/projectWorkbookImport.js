@@ -263,6 +263,7 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
     let reviewRequired = row.needsReview === true && !genericReviewReason;
     let reviewReason = genericReviewReason ? '' : row.reviewReason || '';
     let mappingResolved = false;
+    let numberedMappingUncertain = false;
     if (row.isActive === false && row.hasMappedValue) {
       value = '';
       mappingResolved = true;
@@ -281,6 +282,11 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
     } else if (numbered.length >= details.length && numbered[index]) {
       value = numbered[index].value.replace(/^\s*\d+\s*[、.]\s*/, '').trim();
       mappingResolved = Boolean(value);
+      numberedMappingUncertain = true;
+      reviewRequired = true;
+      reviewReason = reviewReason || (numbered.length === details.length
+        ? '工作簿只用赋值序号标记了多个值，未明确说明序号与各占位符的对应关系；请人工确认。'
+        : '工作簿中的赋值序号数量与占位符数量不一致；请人工确认每项映射。');
     } else if (labeled.length) {
       const matchedValue = labelValueForDetail(row, labeled);
       if (matchedValue) {
@@ -307,7 +313,7 @@ function buildAnswerAssignmentDetails(detailRows, fallbackText, standardText = '
       reviewRequired = false;
       reviewReason = '';
     }
-    if (genericReviewReason && mappingResolved
+    if (genericReviewReason && mappingResolved && !numberedMappingUncertain
       && (!hasNestedChoice || row.hasMappedValue)
       && (row.parentSelectionId === null || row.isActive !== null || row.hasMappedValue)) {
       reviewRequired = false;

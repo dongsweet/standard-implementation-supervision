@@ -1,0 +1,53 @@
+<div class="alert alert-info">
+  导入范围仅包含检查方案字段和标准项关联。此页面不导入检查人、检查时间、执行结果、整改信息或执行证据。
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">方案行</div><div class="fs-3 fw-semibold"><%= summary.rowCount %></div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">系统编号</div><div class="fs-3 fw-semibold"><%= summary.standardNumberCount %></div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">已匹配关联</div><div class="fs-3 fw-semibold text-success"><%= summary.linkCount %></div></div></div></div>
+  <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">待解决编号</div><div class="fs-3 fw-semibold <%= summary.unmatchedCount || summary.ambiguousCount ? 'text-danger' : 'text-success' %>"><%= summary.unmatchedCount + summary.ambiguousCount %></div></div></div></div>
+</div>
+
+<% if (summary.unmatchedCount || summary.ambiguousCount) { %>
+  <div class="alert alert-danger">
+    <strong>标准项关联未通过，整个批次暂不能导入。</strong>
+    <% if (unmatchedNumbers.length) { %><div class="mt-2">系统中找不到：<%= unmatchedNumbers.join('、') %></div><% } %>
+    <% if (ambiguousNumbers.length) { %><div class="mt-2">系统中存在多个匹配项：<%= ambiguousNumbers.join('、') %></div><% } %>
+  </div>
+<% } else if (job.status === 'applied') { %>
+  <div class="alert alert-success">此批检查方案已导入。</div>
+<% } else { %>
+  <div class="alert alert-success">所有标准化编号均能唯一匹配系统标准项，可以确认导入。</div>
+<% } %>
+
+<% if (summary.ignoredXRowCount) { %>
+  <div class="alert alert-warning">已按规则忽略 <%= summary.ignoredXRowCount %> 条 X 编号检查行（<%= summary.ignoredXNumberCount %> 个 X 编号）。</div>
+<% } %>
+
+<div class="card mb-3">
+  <div class="card-header"><h2 class="card-title h6 mb-0">方案预览（前20条）</h2></div>
+  <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+    <thead><tr><th>检查对象/范围</th><th>分类/层面</th><th>检查方法</th><th>检查项描述</th><th>频率/方式</th><th>关联标准项</th></tr></thead>
+    <tbody>
+      <% rows.slice(0, 20).forEach(row => { %>
+        <tr>
+          <td><strong><%= row.objectName %></strong><div class="small text-secondary"><%= row.scope || '-' %></div></td>
+          <td><%= row.objectCategory || '-' %><div class="small text-secondary"><%= row.checkLayer || '-' %> · <%= row.priority || '重点项未指定' %></div></td>
+          <td><%= row.checkMethod %><% if (row.steps) { %><details class="small mt-1"><summary>查看检查步骤</summary><div class="mt-1 text-break"><%= row.steps %></div></details><% } %></td>
+          <td><div class="text-break"><%= row.description %></div><% if (row.referenceResult || row.referenceMaterials) { %><details class="small mt-1"><summary>参考信息</summary><% if (row.referenceResult) { %><div class="mt-1"><strong>判定：</strong><%= row.referenceResult %></div><% } %><% if (row.referenceMaterials) { %><div class="mt-1"><strong>材料：</strong><%= row.referenceMaterials %></div><% } %></details><% } %></td>
+          <td><%= row.frequency || '-' %><div class="small text-secondary"><%= row.accessMode || '-' %></div></td>
+          <td><% row.standardNumbers.forEach(number => { const item = row.standardItems.find(candidate => candidate.standard_number === number); %><span class="badge <%= item ? 'text-bg-light border' : 'text-bg-danger' %> me-1 mb-1"><%= number %><% if (item) { %> · <%= item.item_code %><% } else { %> · 未匹配<% } %></span><% }) %></td>
+        </tr>
+      <% }) %>
+      <% if (!rows.length) { %><tr><td colspan="6" class="text-center text-secondary py-4">没有可预览的检查方案。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center">
+  <a class="btn btn-outline-secondary" href="/supervision-definitions">返回检查方案</a>
+  <% if (job.status === 'ready' && !summary.unmatchedCount && !summary.ambiguousCount) { %>
+    <form method="post" action="/supervision-plan-imports/<%= job.id %>/apply" data-confirm="确认将预览中的检查方案及标准项关联写入系统吗？本次不会创建检查记录或执行结果。" data-confirm-title="确认导入检查方案"><input type="hidden" name="_csrf" value="<%= csrf %>"><button type="submit" class="btn btn-primary">确认导入 <%= summary.rowCount %> 条方案</button></form>
+  <% } else if (job.status === 'applied') { %><span class="text-success">已完成导入</span><% } else { %><button class="btn btn-secondary" type="button" disabled>解决标准项匹配后再导入</button><% } %>
+</div>
