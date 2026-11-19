@@ -40,11 +40,15 @@ const assignmentDisplayValue = detail => {
   .answer-items-table-wrap { overflow-x: auto; }
   .answer-items-table { min-width: 96rem; table-layout: fixed; }
   .answer-items-table th, .answer-items-table td { padding: .7rem .8rem; vertical-align: top; }
-  .answer-items-table .answer-col-number { width: 10.5rem; }
-  .answer-items-table .answer-col-code { width: 9rem; }
-  .answer-items-table .answer-col-title { width: 21rem; }
-  .answer-items-table .answer-col-status { width: 7rem; }
-  .answer-items-table .answer-col-action { width: 5.5rem; }
+  .answer-items-table .answer-col-number { width: 9.5%; }
+  .answer-items-table .answer-col-code { width: 5%; }
+  .answer-items-table .answer-col-title { width: 12%; }
+  .answer-items-table .answer-col-content { width: 17%; }
+  .answer-items-table .answer-col-assignment { width: 8%; }
+  .answer-items-table .answer-col-status { width: 5.5%; }
+  .answer-items-table .answer-col-evidence { width: 8%; }
+  .answer-items-table .answer-col-compliance-description { width: 24%; }
+  .answer-items-table .answer-col-action { width: 5.5%; }
   .answer-items-table thead th { white-space: nowrap; font-size: .9rem; }
   .answer-item-number, .answer-item-code { white-space: nowrap; }
   .answer-item-copy { line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -103,7 +107,7 @@ const assignmentDisplayValue = detail => {
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center"><h3 class="card-title"><%= chapter.code %> · <%= chapter.name %> <span class="badge text-bg-light ms-2"><%= chapter.item_count %> 项</span></h3></div>
     <div class="table-responsive answer-items-table-wrap"><table class="table table-sm table-striped align-middle mb-0 answer-items-table">
-      <colgroup><col class="answer-col-number"><col class="answer-col-code"><col class="answer-col-title"><col><col><col class="answer-col-status"><col class="answer-col-status"><col><col><col class="answer-col-action"></colgroup>
+      <colgroup><col class="answer-col-number"><col class="answer-col-code"><col class="answer-col-title"><col class="answer-col-content"><col class="answer-col-assignment"><col class="answer-col-status"><col class="answer-col-status"><col class="answer-col-evidence"><col class="answer-col-compliance-description"><col class="answer-col-action"></colgroup>
       <thead><tr><th>标准化编号</th><th>原文编号</th><th>标准项标题</th><th>条款说明与标准内容</th><th>应答赋值</th><th>适用性</th><th>符合性</th><th>实际证据</th><th>制度符合性描述</th><th>操作</th></tr></thead>
       <tbody><% const chapterItems = items.filter(item => item.chapter_code_snapshot === chapter.code); const chapterItemsByCode = new Map(chapterItems.map(item => [String(item.item_code_snapshot || '').normalize('NFKC').trim().toLowerCase(), item])); chapterItems.forEach(item => { const headingPath = Array.isArray(item.heading_path_snapshot) ? item.heading_path_snapshot : []; const itemCode = String(item.item_code_snapshot || ''); const normalizedItemCode = itemCode.normalize('NFKC').trim().toLowerCase(); const parentCode = itemCode.replace(/\s+[a-z]\s*[)）)_]\s*$/i, '').normalize('NFKC').trim().toLowerCase(); const parentItem = parentCode !== normalizedItemCode ? chapterItemsByCode.get(parentCode) : null; const inheritedExplanation = parentItem && parentItem.explanation_snapshot && String(parentItem.explanation_snapshot).trim() === String(item.explanation_snapshot || '').trim(); const explanationText = inheritedExplanation ? '' : String(item.explanation_snapshot || '').trim(); const contentText = String(item.content_snapshot || '').trim(); const contentRepeatsExplanation = explanationText && contentText && explanationText === contentText; const lastHeading = headingPath[headingPath.length - 1]; const showTitle = item.title && (!lastHeading || String(lastHeading.title || '').trim() !== String(item.title).trim()); %>
         <tr class="answer-item-row" data-heading-path="<%= JSON.stringify(headingPath) %>">
