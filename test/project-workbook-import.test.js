@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parseProjectRows, parseAnswerWorkbookRows, parseStatus, splitEvidence } = require('../app/lib/projectWorkbookImport');
 const { ProjectWorkbookImportRepository } = require('../app/repository/projectWorkbookImport');
+const { parseSubmittedAssignmentText } = require('../app/lib/answerAssignment');
 let ExcelJS;
 let buildProjectAnswerWorkbook;
 try {
@@ -13,43 +14,32 @@ try {
   if (error.code !== 'MODULE_NOT_FOUND') throw error;
 }
 
-test('generates a downloadable answer workbook that parses back into all current fields', { skip: !ExcelJS }, async () => {
-  const buffer = await buildProjectAnswerWorkbook({ rows: [ {
-    standardNumber: '31168-2023-06042',
-    clauseNumber: '6.8.2 b)',
-    isKey: true,
-    assignmentText: '选择：云服务商定义的频率\n云服务商定义的频率：每年一次',
-    assignmentDetails: [
-      {
-        type: 'selection', label: '选择',
-        placeholder: '[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]',
-        placeholderId: '31168-2023-06042#1', selectedValues: [ '[赋值：云服务商定义的频率]' ], selected: true,
-      },
-      {
-        type: 'assignment', label: '云服务商定义的频率',
-        placeholder: '[赋值：云服务商定义的频率]', placeholderId: '31168-2023-06042#1:assignment:1',
-        parentSelectionId: '31168-2023-06042#1', value: '每年一次', selected: true,
-        reviewRequired: true, reviewReason: '请确认频率对应关系。',
-      },
-    ],
-    complianceDescription: '每年检查质量度量标准落实情况。',
-    expectedEvidence: '检查记录',
-    actualEvidence: '年度检查记录',
-    applicability: 'applicable',
-    answerStatus: 'partially_satisfied',
-    answerNotes: '待补充整改闭环材料。',
-  } ] });
+test('generates blank answer sheets grouped by readable standard name', { skip: !ExcelJS }, async () => {
+  const buffer = await buildProjectAnswerWorkbook({ rows: [
+    {
+      standardNumber: '31168-2023-06042', clauseNumber: '6.8.2 b)',
+      standard_code: 'GB/T 31168', standard_name: '信息安全技术 云计算服务安全能力要求', standard_version: '2023',
+      assignmentText: '不应导出的现有应答', complianceDescription: '不应导出的现有描述', actualEvidence: '不应导出的现有证据',
+    },
+    {
+      standardNumber: 'OTHER-2026-001', clauseNumber: '1.1',
+      standard_code: 'OTHER', standard_name: '其他安全规范', standard_version: '2026',
+    },
+  ] });
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
-  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), [ '填写说明', '应答汇总', '赋值明细' ]);
-  const summary = workbook.getWorksheet('应答汇总');
-  assert.deepEqual(summary.getRow(1).values.slice(1), [
-    '标准化编号', '条款号', '是否重点项', '应答赋值',
-    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
+  assert.deepEqual(workbook.worksheets.map(sheet => sheet.name), [
+    '填写说明', '信息安全技术 云计算服务安全能力要求', '其他安全规范',
   ]);
-  assert.equal(summary.getCell('A2').value, '31168-2023-06042');
-  assert.equal(summary.getCell('C2').value, '是');
-  assert.equal(summary.getCell('H2').value, '部分符合');
+  const summary = workbook.getWorksheet('信息安全技术 云计算服务安全能力要求');
+  assert.deepEqual(summary.getRow(2).values.slice(1), [
+    '条款号', '是否重点项', '应答赋值', '制度符合性描述',
+    '实际证据', '适用性标记', '符合性标记', '备注', '标准化编号',
+  ]);
+  assert.equal(summary.getCell('A3').value, '6.8.2 b)');
+  assert.equal(summary.getCell('I3').value, '31168-2023-06042');
+  assert.equal(summary.getColumn(9).hidden, true);
+  assert.deepEqual(summary.getRow(3).values.slice(2, 9), [ undefined, undefined, undefined, undefined, undefined, undefined, undefined ]);
 
   const sheets = workbook.worksheets.map(sheet => ({
     name: sheet.name,
@@ -57,16 +47,38 @@ test('generates a downloadable answer workbook that parses back into all current
       sheet.getRow(rowIndex + 1).values.slice(1).map(value => value == null ? null : String(value))),
   }));
   const parsed = parseAnswerWorkbookRows(sheets);
-  assert.equal(parsed.rows.length, 1);
-  assert.equal(parsed.rows[0].complianceDescription, '每年检查质量度量标准落实情况。');
-  assert.equal(parsed.rows[0].expectedEvidence, '');
-  assert.equal(parsed.rows[0].actualEvidence, '年度检查记录');
-  assert.equal(parsed.rows[0].applicability, 'applicable');
-  assert.equal(parsed.rows[0].answerStatus, 'partially_satisfied');
-  assert.equal(parsed.rows[0].answerNotes, '待补充整改闭环材料。');
-  assert.equal(parsed.rows[0].isKey, true);
-  assert.equal(parsed.assignmentReviewCount, 1);
-  assert.equal(parsed.rows[0].assignmentDetails[1].reviewReason, '请确认频率对应关系。');
+  assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.rows[0].assignmentText, '');
+  assert.equal(parsed.rows[0].complianceDescription, '');
+  assert.equal(parsed.rows[0].actualEvidence, '');
+  assert.equal(parsed.rows[1].standardNumber, 'OTHER-2026-001');
+});
+
+test('parses human-readable response text into structured selection and assignment details', () => {
+  const source = '要求以[选择：[赋值：云服务商定义的频率]；[赋值：云服务商定义的项目审查里程碑]；交付时]为节点，并检查落实情况。';
+  const details = parseSubmittedAssignmentText(
+    source,
+    '选择：云服务商定义的频率\n云服务商定义的频率：每年一次'
+  );
+  assert.equal(details.length, 2);
+  assert.equal(details[0].type, 'selection');
+  assert.deepEqual(details[0].selectedValues, [ '[赋值：云服务商定义的频率]' ]);
+  assert.equal(details[1].type, 'assignment');
+  assert.equal(details[1].label, '云服务商定义的频率');
+  assert.equal(details[1].value, '每年一次');
+  assert.equal(details[1].reviewRequired, false);
+});
+
+test('parses legacy human-readable selection text containing a nested placeholder', () => {
+  const source = '达到[选择：[赋值：云服务商定义的时间段]；立即执行]后继续。';
+  const details = parseSubmittedAssignmentText(
+    source,
+    '选择项：达到[赋值：云服务商定义的时间段]\n云服务商定义的时间段：30分钟'
+  );
+  assert.equal(details.length, 2);
+  assert.equal(details[0].type, 'selection');
+  assert.equal(details[1].type, 'assignment');
+  assert.equal(details[1].value, '30分钟');
 });
 
 test('parses the wide project workbook shape into answers, cloud groups and supervision data', () => {

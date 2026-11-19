@@ -95,6 +95,41 @@ test('normalizes selected branches and never persists an unselected marker', () 
   assert.equal(result.details.some(detail => detail.value === '未选中'), false);
 });
 
+test('supports assignments nested inside a prefixed selection option', () => {
+  const form = buildAssignmentForm(
+    '若登录失败达到[选择：达到[赋值：云服务商定义的时间段]；由管理员解锁]，则锁定账号。',
+    [ {
+      type: 'selection', placeholderId: 'selection:1',
+      selectedValues: [ '达到[赋值：云服务商定义的时间段]' ],
+    }, {
+      type: 'assignment', parentSelectionId: 'selection:1', selected: true,
+      placeholder: '[赋值：云服务商定义的时间段]', value: '30分钟',
+    } ]
+  );
+  const selection = form.controls.find(control => control.kind === 'selection');
+  const nested = selection.options.find(option => option.assignmentPlaceholder);
+  assert.equal(nested.label, '达到云服务商定义的时间段');
+  assert.equal(nested.assignmentLabel, '云服务商定义的时间段');
+  assert.equal(nested.assignmentPlaceholder, '[赋值：云服务商定义的时间段]');
+  assert.equal(nested.selected, true);
+  assert.equal(nested.assignmentValue, '30分钟');
+  const normalized = normalizeDetails([
+    {
+      type: 'selection', placeholderId: 'selection:1', selected: true,
+      placeholder: '[选择：达到[赋值：云服务商定义的时间段]；由管理员解锁]',
+      selectedValues: [ '达到[赋值：云服务商定义的时间段]' ],
+    },
+    {
+      type: 'assignment', parentSelectionId: 'selection:1', selected: true,
+      placeholder: '[赋值：云服务商定义的时间段]', value: '30分钟',
+    },
+  ], '若登录失败达到[选择：达到[赋值：云服务商定义的时间段]；由管理员解锁]，则锁定账号。');
+  assert.equal(
+    normalized.clauseAssignment,
+    '选择：达到云服务商定义的时间段\n云服务商定义的时间段：30分钟'
+  );
+});
+
 test('supports selecting multiple options and their independent assignment values', () => {
   const result = normalizeDetails([ {
     type: 'selection',

@@ -683,21 +683,14 @@ class ProjectRepository {
   async listAnswerTemplateRows(projectId) {
     const result = await this.pool.query(`
       SELECT psi.standard_number_snapshot, psi.item_code_snapshot,
-             COALESCE(psa.is_key, false) AS is_key,
-             COALESCE(psa.clause_assignment, '') AS clause_assignment,
-             COALESCE(psa.assignment_details, '[]'::jsonb) AS assignment_details,
-             COALESCE(psa.compliance_description, '') AS compliance_description,
-             COALESCE(psa.actual_evidence, '') AS actual_evidence,
-             COALESCE(psa.applicability, 'unspecified') AS applicability,
-             COALESCE(psa.status, 'unassessed') AS answer_status,
-             COALESCE(psa.answer_notes, '') AS answer_notes
+             psi.chapter_code_snapshot, si.chapter_id,
+             s.code AS standard_code, s.name AS standard_name, sv.version AS standard_version
       FROM project_standard_items psi
-      LEFT JOIN project_standard_answers psa
-        ON psa.project_id = psi.project_id
-       AND psa.standard_item_id = psi.standard_item_id
-       AND psa.cloud_center_id IS NULL
+      JOIN standard_items si ON si.id = psi.standard_item_id
+      JOIN standard_versions sv ON sv.id = si.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
       WHERE psi.project_id = $1
-      ORDER BY psi.chapter_code_snapshot, psi.standard_number_snapshot`,
+      ORDER BY s.name, s.code, sv.version, psi.chapter_code_snapshot, psi.standard_number_snapshot`,
     [ projectId ]);
     return result.rows;
   }

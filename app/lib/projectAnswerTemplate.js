@@ -3,7 +3,6 @@
 const ExcelJS = require('exceljs');
 
 const SUMMARY_HEADERS = [
-  '标准化编号',
   '条款号',
   '是否重点项',
   '应答赋值',
@@ -12,21 +11,7 @@ const SUMMARY_HEADERS = [
   '适用性标记',
   '符合性标记',
   '备注',
-];
-
-const DETAIL_HEADERS = [
   '标准化编号',
-  '条款号',
-  '提取类型',
-  '需赋值项或选择项',
-  '原文占位符',
-  '占位符ID',
-  '所属选择项ID',
-  '是否选中/生效',
-  '对应占位符的当前值',
-  '原始当前赋值（导入）',
-  '需要复核',
-  '复核原因',
 ];
 
 const APPLICABILITY_LABELS = {
@@ -70,144 +55,137 @@ function addInstructionSheet(workbook) {
   sheet.getCell('A1').alignment = { vertical: 'middle' };
   sheet.getRow(1).height = 30;
   const rows = [
-    [ '工作表', '用途' ],
-    [ '应答汇总', '每条标准项的最终应答。标准化编号已按当前项目预填；条款号只用于人工核对。' ],
-    [ '赋值明细', '仅当标准原文包含[赋值：...]或[选择：...]时填写。没有占位符的条款不要填写。' ],
-    [ '标准化编号', '必须使用“应答汇总”中已预填的编号。不要修改编号。' ],
+    [ '工作表', '说明' ],
+    [ '标准工作表', '每个标准单独一个工作表，工作表名称就是可读的标准名称。' ],
+    [ '条款号', '已按当前项目标准快照预填，用于定位条款，请勿修改。' ],
+    [ '空白应答', '模板不导出项目中的现有应答；所有应答相关列均为空白。' ],
+    [ '应答赋值', '直接填写人可阅读的最终应答，不需要填写占位符 ID、父子关系或内部映射。' ],
+    [ '赋值示例', '单选题可填写“选择：选项名称”；赋值题可填写“提示名称：赋值内容”，多项时每行一项。' ],
     [ '适用性标记', '可填：未标记、适用、不适用。留空按“未标记”处理。' ],
     [ '符合性标记', '可填：未标记、符合、部分符合、不符合。留空按“未标记”处理。' ],
-    [ '是否重点项', '可填：是、否。留空时保留系统现有值。' ],
-    [ '应答赋值', '结构化占位符的最终摘要；系统会根据“赋值明细”重新生成并校验。' ],
-    [ '赋值明细', '一行对应一个选择项或赋值项；“是否选中/生效”填“是”或“否”。' ],
-    [ '多选', '同一选择项的多个选中值可填在“对应占位符的当前值”中，用中文分号“；”分隔。' ],
-    [ '空白行', '未填写任何应答字段的标准项不会导入。' ],
-    [ '占位符规则', '只提交已选分支及其赋值；未选分支请将“是否选中/生效”填“否”，不要填写当前值。' ],
+    [ '是否重点项', '可填：是、否。留空按“否”处理。' ],
+    [ '空白行', '未填写任何应答字段的条款不会导入。' ],
+    [ '标准化编号', '最后一个隐藏列由系统用于精确匹配，请勿删除或修改。' ],
   ];
   rows.forEach((values, index) => {
     const row = sheet.addRow(values);
     if (index === 0) styleHeader(row);
     else row.alignment = { vertical: 'top', wrapText: true };
   });
-  setColumns(sheet, [ 22, 92 ]);
+  setColumns(sheet, [ 22, 100 ]);
   sheet.autoFilter = 'A1:B1';
 }
 
-function addSummarySheet(workbook, rows) {
-  const sheet = workbook.addWorksheet('应答汇总', { views: [ { state: 'frozen', ySplit: 1 } ] });
+function standardKey(row) {
+  return [
+    text(row.standard_code),
+    text(row.standard_name),
+    text(row.standard_version),
+  ].join('|');
+}
+
+function safeSheetBase(rows) {
+  const sample = rows[0] || {};
+  const readableName = text(sample.standard_name)
+    || text(sample.standard_code)
+    || '标准应答';
+  return readableName.replace(/[\\/:*?\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31)
+    || '标准应答';
+}
+
+function uniqueSheetName(base, usedNames, version = '') {
+  if (!usedNames.has(base)) {
+    usedNames.add(base);
+    return base;
+  }
+  const suffix = version ? `（${text(version)}）` : `（${usedNames.size + 1}）`;
+  const shortened = base.slice(0, Math.max(1, 31 - suffix.length));
+  let candidate = `${shortened}${suffix}`.slice(0, 31);
+  let index = 2;
+  while (usedNames.has(candidate)) {
+    const retrySuffix = `${index}`;
+    candidate = `${base.slice(0, Math.max(1, 31 - retrySuffix.length))}${retrySuffix}`;
+    index += 1;
+  }
+  usedNames.add(candidate);
+  return candidate;
+}
+
+function addStandardSheet(workbook, rows, sheetName) {
+  const sheet = workbook.addWorksheet(sheetName, { views: [ { state: 'frozen', ySplit: 2 } ] });
+  const sample = rows[0] || {};
+  const standardTitle = [
+    text(sample.standard_name) || text(sample.standard_code) || '标准应答',
+    text(sample.standard_code),
+    text(sample.standard_version),
+  ].filter(Boolean).join(' · ');
+  sheet.addRow([ standardTitle ]);
+  sheet.mergeCells('A1:I1');
+  sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF1F4D36' } };
+  sheet.getCell('A1').alignment = { vertical: 'middle' };
+  sheet.getRow(1).height = 28;
   sheet.addRow(SUMMARY_HEADERS);
-  styleHeader(sheet.getRow(1));
+  styleHeader(sheet.getRow(2));
+
   for (const row of rows) {
     sheet.addRow([
-      text(row.standardNumber || row.standard_number_snapshot || row.standard_number),
-      text(row.clauseNumber || row.itemCode || row.item_code_snapshot),
-      row.isKey === true ? '是' : row.isKey === false ? '否' : '',
-      text(row.assignmentText || row.clause_assignment),
-      text(row.complianceDescription || row.compliance_description),
-      text(row.actualEvidence || row.actual_evidence),
-      row.applicability === 'applicable' || row.applicability === 'not_applicable'
-        ? APPLICABILITY_LABELS[row.applicability]
-        : '',
-      row.answerStatus && row.answerStatus !== 'unassessed'
-        ? STATUS_LABELS[row.answerStatus]
-        : '',
-      text(row.answerNotes || row.answer_notes),
+      text(row.clauseNumber || row.item_code_snapshot),
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      text(row.standardNumber || row.standard_number_snapshot),
     ]);
   }
-  const dataEnd = Math.max(2, sheet.rowCount);
-  for (let rowNumber = 2; rowNumber <= dataEnd; rowNumber += 1) {
+  const dataEnd = Math.max(3, sheet.rowCount);
+  for (let rowNumber = 3; rowNumber <= dataEnd; rowNumber += 1) {
     sheet.getRow(rowNumber).alignment = { vertical: 'top', wrapText: true };
   }
-  setColumns(sheet, [ 23, 14, 12, 38, 52, 38, 13, 13, 32 ]);
-  sheet.autoFilter = 'A1:I1';
-  sheet.dataValidations.add(`C2:C${dataEnd}`, {
+  setColumns(sheet, [ 16, 12, 42, 58, 38, 13, 13, 32, 23 ]);
+  sheet.autoFilter = 'A2:I2';
+  sheet.getColumn(9).hidden = true;
+  sheet.dataValidations.add(`B3:B${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"是,否"' ],
   });
-  sheet.dataValidations.add(`G2:G${dataEnd}`, {
+  sheet.dataValidations.add(`F3:F${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,适用,不适用"' ],
   });
-  sheet.dataValidations.add(`H2:H${dataEnd}`, {
+  sheet.dataValidations.add(`G3:G${dataEnd}`, {
     type: 'list', allowBlank: true, formulae: [ '"未标记,符合,部分符合,不符合"' ],
   });
   return sheet;
 }
 
-function detailRowsForAnswer(answer) {
-  return (answer.assignmentDetails || answer.assignment_details || []).map(detail => ({
-    standardNumber: answer.standardNumber || answer.standard_number_snapshot || answer.standard_number,
-    clauseNumber: answer.clauseNumber || answer.itemCode || answer.item_code_snapshot,
-    extractionType: detail.type === 'selection' ? '选择' : '赋值',
-    label: detail.label,
-    placeholder: detail.placeholder,
-    placeholderId: detail.placeholderId,
-    parentSelectionId: detail.parentSelectionId || '',
-    active: detail.selected === false ? '否' : '是',
-    currentValue: detail.type === 'selection'
-      ? (detail.selectedValues || []).join('；') || detail.value
-      : detail.value,
-    rawCurrentValue: detail.rawCurrentAssignment || '',
-    review: detail.reviewRequired ? '是' : '否',
-    reviewReason: detail.reviewReason || '',
-  }));
-}
-
-function addDetailSheet(workbook, answerRows) {
-  const sheet = workbook.addWorksheet('赋值明细', { views: [ { state: 'frozen', ySplit: 1 } ] });
-  sheet.addRow(DETAIL_HEADERS);
-  styleHeader(sheet.getRow(1));
-  for (const answer of answerRows) {
-    for (const row of detailRowsForAnswer(answer)) {
-      sheet.addRow([
-        text(row.standardNumber),
-        text(row.clauseNumber),
-        text(row.extractionType),
-        text(row.label),
-        text(row.placeholder),
-        text(row.placeholderId),
-        text(row.parentSelectionId),
-        text(row.active),
-        text(row.currentValue),
-        text(row.rawCurrentValue),
-        text(row.review),
-        text(row.reviewReason),
-      ]);
-    }
-  }
-  const dataEnd = Math.max(2, sheet.rowCount);
-  for (let rowNumber = 2; rowNumber <= dataEnd; rowNumber += 1) {
-    sheet.getRow(rowNumber).alignment = { vertical: 'top', wrapText: true };
-  }
-  setColumns(sheet, [ 23, 14, 12, 34, 52, 34, 34, 15, 40, 42, 12, 42 ]);
-  sheet.autoFilter = 'A1:L1';
-  sheet.dataValidations.add(`C2:C${dataEnd}`, {
-    type: 'list', allowBlank: true, formulae: [ '"赋值,选择"' ],
-  });
-  sheet.dataValidations.add(`H2:H${dataEnd}`, {
-    type: 'list', allowBlank: true, formulae: [ '"是,否"' ],
-  });
-  sheet.dataValidations.add(`K2:K${dataEnd}`, {
-    type: 'list', allowBlank: true, formulae: [ '"是,否"' ],
-  });
-  return sheet;
-}
-
-async function buildProjectAnswerWorkbook({ items = [], rows = [] } = {}) {
+async function buildProjectAnswerWorkbook({ rows = [] } = {}) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = '安全规范落实与持续监管系统';
   workbook.created = new Date();
   addInstructionSheet(workbook);
-  const answerRows = rows.length
-    ? rows
-    : items.map(item => ({
-      standardNumber: item.standard_number_snapshot,
-      clauseNumber: item.item_code_snapshot,
-    }));
-  addSummarySheet(workbook, answerRows);
-  addDetailSheet(workbook, rows);
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = standardKey(row);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(row);
+  }
+  const usedNames = new Set([ '填写说明' ]);
+  for (const standardRows of grouped.values()) {
+    const base = safeSheetBase(standardRows);
+    const sheetName = uniqueSheetName(base, usedNames, standardRows[0]?.standard_version);
+    addStandardSheet(workbook, standardRows, sheetName);
+  }
+  if (!grouped.size) {
+    const sheet = workbook.addWorksheet('标准应答');
+    sheet.addRow([ '没有可生成模板的标准项' ]);
+  }
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
 module.exports = {
-  DETAIL_HEADERS,
+  APPLICABILITY_LABELS,
+  STATUS_LABELS,
   SUMMARY_HEADERS,
   buildProjectAnswerWorkbook,
 };

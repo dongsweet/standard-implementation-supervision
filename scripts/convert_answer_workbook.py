@@ -3,7 +3,6 @@ import collections
 import json
 import re
 import subprocess
-import sys
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -18,14 +17,12 @@ MAPPING_SOURCE = REFERENCE / '31168-2023标准编号与多云同构项目编号�
 OUTPUT = REFERENCE / '项目应答导入数据-261115.xlsx'
 NODE = Path(r'C:\Users\dq\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe')
 
+STANDARD_CODE = 'GB/T 31168'
+STANDARD_NAME = '信息安全技术 云计算服务安全能力要求'
+STANDARD_VERSION = '2023'
 SUMMARY_HEADERS = [
-    '标准化编号', '条款号', '是否重点项', '应答赋值',
-    '制度符合性描述', '实际证据', '适用性标记', '符合性标记', '备注',
-]
-DETAIL_HEADERS = [
-    '标准化编号', '条款号', '提取类型', '需赋值项或选择项', '原文占位符',
-    '占位符ID', '所属选择项ID', '是否选中/生效', '对应占位符的当前值',
-    '原始当前赋值（导入）', '需要复核', '复核原因',
+    '条款号', '是否重点项', '应答赋值', '制度符合性描述',
+    '实际证据', '适用性标记', '符合性标记', '备注', '标准化编号',
 ]
 
 
@@ -167,17 +164,14 @@ for row in detail_source.iter_rows(min_row=2, values_only=True):
 detail_input = {}
 content_input = {}
 for record in detail_rows:
-    key = record['standardNumber']
-    detail_input.setdefault(key, []).append(record)
+    number = record['standardNumber']
+    detail_input.setdefault(number, []).append(record)
     if record['placeholder']:
-        content_input.setdefault(key, []).append(record['placeholder'])
+        content_input.setdefault(number, []).append(record['placeholder'])
 
 payload_path = OUTPUT.with_suffix('.mapping-input.json')
 mapped_path = OUTPUT.with_suffix('.mapping-output.json')
 script_path = ROOT / 'scripts' / 'map_answer_assignments.js'
-for records in detail_input.values():
-    for record in records:
-        record['explicitPlaceholderId'] = True
 payload_path.write_text(json.dumps({
     'details': detail_input,
     'summaries': summary_by_number,
@@ -185,6 +179,10 @@ payload_path.write_text(json.dumps({
 }, ensure_ascii=False), encoding='utf-8')
 subprocess.run([str(NODE), str(script_path), str(payload_path), str(mapped_path)], cwd=ROOT, check=True)
 mapped = json.loads(mapped_path.read_text(encoding='utf-8'))
+for record in summary_rows:
+    normalized = mapped.get(record['standardNumber'], {})
+    if normalized.get('assignmentText'):
+        record['assignmentText'] = normalized['assignmentText']
 
 output = Workbook()
 instructions = output.active
@@ -193,27 +191,32 @@ instructions.append(['项目应答导入模板填写说明'])
 instructions.merge_cells('A1:B1')
 instructions['A1'].font = Font(bold=True, size=15, color='1F4D36')
 instruction_rows = [
-    ('工作表', '用途'),
-    ('应答汇总', '每条标准项的最终应答。'),
-    ('赋值明细', '仅标准原文包含[赋值：...]或[选择：...]时填写。'),
+    ('工作表', '每个标准单独一个工作表，名称使用可读的标准名称。'),
+    ('条款号', '标准条款定位列，由系统预填。'),
+    ('应答赋值', '填写人可阅读的最终应答，不需要填写占位符 ID 或内部映射。'),
+    ('赋值示例', '选择：选项名称；赋值项按“提示名称：赋值内容”填写，多项时每行一项。'),
     ('适用性标记', '可填：未标记、适用、不适用。'),
     ('符合性标记', '可填：未标记、符合、部分符合、不符合。'),
     ('是否重点项', '可填：是、否。'),
-    ('赋值规则', '只提交已选分支；未选分支“是否选中/生效”填“否”，不填当前值。'),
+    ('标准化编号', '最后一个隐藏列由系统用于精确匹配。'),
 ]
 for values in instruction_rows:
     instructions.append(values)
 style_header(instructions[2])
 set_widths(instructions, [24, 92])
 
-summary = output.create_sheet('应答汇总')
+summary = output.create_sheet(STANDARD_NAME)
+summary.append([f'{STANDARD_NAME} · {STANDARD_CODE} · {STANDARD_VERSION}'])
+summary.merge_cells('A1:I1')
+summary['A1'].font = Font(bold=True, size=14, color='1F4D36')
+summary['A1'].alignment = Alignment(vertical='center')
+summary.row_dimensions[1].height = 28
 summary.append(SUMMARY_HEADERS)
-style_header(summary[1])
+style_header(summary[2])
 for record in summary_rows:
     clause_numbers = sorted({row['clauseNumber'] for row in detail_by_number.get(record['standardNumber'], []) if row['clauseNumber']})
     applicability, compliance = status_markers.get(record['standardNumber'], ('', ''))
     summary.append([
-        record['standardNumber'],
         '；'.join(clause_numbers),
         '',
         record['assignmentText'],
@@ -222,68 +225,37 @@ for record in summary_rows:
         applicability,
         compliance,
         '',
+        record['standardNumber'],
     ])
-for row in summary.iter_rows(min_row=2):
+for row in summary.iter_rows(min_row=3):
     for cell in row:
         cell.alignment = Alignment(vertical='top', wrap_text=True)
-set_widths(summary, [23, 22, 12, 38, 52, 38, 13, 13, 32])
-summary.freeze_panes = 'A2'
-summary.auto_filter.ref = f'A1:I{summary.max_row}'
-for col, values in [('C', '是,否'), ('G', '未标记,适用,不适用'), ('H', '未标记,符合,部分符合,不符合')]:
+set_widths(summary, [16, 12, 42, 58, 38, 13, 13, 32, 23])
+summary.freeze_panes = 'A3'
+summary.auto_filter.ref = f'A2:I{summary.max_row}'
+summary.column_dimensions['I'].hidden = True
+for col, values in [('B', '是,否'), ('F', '未标记,适用,不适用'), ('G', '未标记,符合,部分符合,不符合')]:
     validation = DataValidation(type='list', formula1=f'"{values}"', allow_blank=True)
     summary.add_data_validation(validation)
-    validation.add(f'{col}2:{col}{summary.max_row}')
-
-details_sheet = output.create_sheet('赋值明细')
-details_sheet.append(DETAIL_HEADERS)
-style_header(details_sheet[1])
-for number, details in mapped.items():
-    clause_numbers = sorted({row['clauseNumber'] for row in detail_by_number.get(number, []) if row['clauseNumber']})
-    for detail in details:
-        details_sheet.append([
-            number,
-            '；'.join(clause_numbers),
-            '选择' if detail.get('type') == 'selection' else '赋值',
-            detail.get('label') or '',
-            detail.get('placeholder') or '',
-            detail.get('placeholderId') or '',
-            detail.get('parentSelectionId') or '',
-            '否' if detail.get('selected') is False else '是',
-            '；'.join(detail.get('selectedValues') or []) if detail.get('type') == 'selection'
-            else (detail.get('value') or ''),
-            detail_by_number[number][0]['rawCurrentAssignment'] if detail_by_number.get(number) else '',
-            '是' if detail.get('reviewRequired') else '否',
-            detail.get('reviewReason') or '',
-        ])
-for row in details_sheet.iter_rows(min_row=2):
-    for cell in row:
-        cell.alignment = Alignment(vertical='top', wrap_text=True)
-set_widths(details_sheet, [23, 22, 12, 34, 52, 34, 34, 15, 40, 42, 12, 42])
-details_sheet.freeze_panes = 'A2'
-details_sheet.auto_filter.ref = f'A1:L{details_sheet.max_row}'
-for col, values in [('C', '赋值,选择'), ('H', '是,否'), ('K', '是,否')]:
-    validation = DataValidation(type='list', formula1=f'"{values}"', allow_blank=True)
-    details_sheet.add_data_validation(validation)
-    validation.add(f'{col}2:{col}{details_sheet.max_row}')
+    validation.add(f'{col}3:{col}{summary.max_row}')
 
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 output.save(OUTPUT)
-for path in [payload_path, mapped_path, OUTPUT.with_suffix('.mapping.js')]:
-    path.unlink(missing_ok=True)
+payload_path.unlink(missing_ok=True)
+mapped_path.unlink(missing_ok=True)
 
 check = load_workbook(OUTPUT, data_only=False)
-status_rows = check['应答汇总']
+status_rows = check[STANDARD_NAME]
 applicability_counts = collections.Counter(
-    status_rows.cell(row, 7).value for row in range(2, status_rows.max_row + 1)
+    status_rows.cell(row, 6).value for row in range(3, status_rows.max_row + 1)
 )
 compliance_counts = collections.Counter(
-    status_rows.cell(row, 8).value for row in range(2, status_rows.max_row + 1)
+    status_rows.cell(row, 7).value for row in range(3, status_rows.max_row + 1)
 )
 print(json.dumps({
     'output': str(OUTPUT.resolve()),
     'sheets': check.sheetnames,
-    'summaryRows': check['应答汇总'].max_row - 1,
-    'detailRows': check['赋值明细'].max_row - 1,
+    'summaryRows': status_rows.max_row - 2,
     'sourceSummaryRows': len(summary_rows),
     'sourceDetailRows': len(detail_rows),
     'statusMarkers': len(status_markers),

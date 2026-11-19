@@ -1,7 +1,7 @@
 'use strict';
 
 const { normalizeKey, splitEvidence } = require('../lib/projectWorkbookImport');
-const { normalizeDetails } = require('../lib/answerAssignment');
+const { normalizeDetails, parseSubmittedAssignmentText } = require('../lib/answerAssignment');
 const { normalizeDefinition } = require('../lib/dedupe');
 
 function normalizedContent(value) {
@@ -31,7 +31,18 @@ function normalizeAnswerRow(row, item) {
       assignmentDetails: [],
     };
   }
-  if (!Array.isArray(row.assignmentDetails) || !row.assignmentDetails.length) return row;
+  if (!Array.isArray(row.assignmentDetails) || !row.assignmentDetails.length) {
+    const parsed = parseSubmittedAssignmentText(
+      standardContentForComparison(item),
+      row.assignmentText
+    );
+    if (!parsed.length) return row;
+    return {
+      ...row,
+      assignmentDetails: parsed,
+      assignmentText: normalizeDetails(parsed, standardContentForComparison(item)).clauseAssignment,
+    };
+  }
   const originalReviews = row.assignmentDetails.map(detail => ({
     reviewRequired: detail.reviewRequired,
     reviewReason: detail.reviewReason,

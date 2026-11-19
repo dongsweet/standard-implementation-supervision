@@ -352,11 +352,12 @@ function formatAnswerAssignments(details, fallbackText = '') {
 
 function parseAnswerWorkbookRows(sheets) {
   const detailSheet = sheets.find(sheet => findHeaderRow(sheet.rows || [], [ '标准化编号', '原文占位符' ]));
-  const summarySheet = sheets.find(sheet => sheet !== detailSheet && findHeaderRow(sheet.rows || [], [ '标准化编号' ])
+  const summarySheets = sheets.filter(sheet => sheet !== detailSheet
+    && findHeaderRow(sheet.rows || [], [ '标准化编号' ])
     && (findHeaderRow(sheet.rows || [], [ '标准化编号', '制度符合性描述' ])
       || findHeaderRow(sheet.rows || [], [ '标准化编号', '实际证据' ])));
-  const onlyDetailSheet = !summarySheet && detailSheet ? detailSheet : null;
-  if (!summarySheet && !detailSheet) return null;
+  const onlyDetailSheet = !summarySheets.length && detailSheet ? detailSheet : null;
+  if (!summarySheets.length && !detailSheet) return null;
 
   const byNumber = new Map();
   const getRow = (standardNumber, sourceSheet, sourceRow) => {
@@ -395,7 +396,7 @@ function parseAnswerWorkbookRows(sheets) {
     return byNumber.get(key);
   };
 
-  if (summarySheet) {
+  for (const summarySheet of summarySheets) {
     const found = findHeaderRow(summarySheet.rows || [], [ '标准化编号' ]);
     const headers = found.headers;
     const map = {
@@ -415,17 +416,18 @@ function parseAnswerWorkbookRows(sheets) {
       const source = summarySheet.rows[rowIndex] || [];
       const rawNumber = cellText(source[map.standardNumber]).trim();
       if (!rawNumber) continue;
-      const projectSequence = answerField(source[map.projectSequence], { hasProjectSequence: Boolean(cellText(source[map.projectSequence]).trim()) });
+      const hasProjectSequence = Boolean(cellText(source[map.projectSequence]).trim());
+      const projectSequence = answerField(source[map.projectSequence], { hasProjectSequence });
       const row = getRow(rawNumber, summarySheet.name, rowIndex + 1);
-      row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence: Boolean(projectSequence) });
+      row.clauseNumber = row.clauseNumber || answerField(source[map.clauseNumber], { hasProjectSequence });
       row.projectSequence = row.projectSequence || projectSequence;
-      row.assignmentText = row.assignmentText || answerField(source[map.assignment], { hasProjectSequence: Boolean(projectSequence) });
-      row.complianceDescription = row.complianceDescription || answerField(source[map.complianceDescription], { hasProjectSequence: Boolean(projectSequence) });
-      row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence: Boolean(projectSequence) });
-      row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence: Boolean(projectSequence) });
+      row.assignmentText = row.assignmentText || answerField(source[map.assignment], { hasProjectSequence });
+      row.complianceDescription = row.complianceDescription || answerField(source[map.complianceDescription], { hasProjectSequence });
+      row.expectedEvidence = row.expectedEvidence || answerField(source[map.expectedEvidence], { hasProjectSequence });
+      row.actualEvidence = row.actualEvidence || answerField(source[map.actualEvidence], { hasProjectSequence });
       row.applicability = parseApplicability(source[map.applicability]);
       row.answerStatus = parseAnswerStatus(source[map.answerStatus]);
-      row.answerNotes = answerField(source[map.answerNotes], { hasProjectSequence: Boolean(projectSequence) });
+      row.answerNotes = answerField(source[map.answerNotes], { hasProjectSequence });
       row.isKey = parseBooleanFlag(source[map.isKey]);
     }
   }
@@ -536,8 +538,8 @@ function parseAnswerWorkbookRows(sheets) {
   const assignmentReviewCount = rows.reduce((sum, row) => sum + row.assignmentDetails.filter(item => item.reviewRequired).length, 0);
   return {
     rows,
-    importedSheetCount: [ summarySheet, onlyDetailSheet || (detailSheet && summarySheet !== detailSheet ? detailSheet : null) ].filter(Boolean).length,
-    skippedSheetCount: sheets.length - [ summarySheet, onlyDetailSheet || (detailSheet && summarySheet !== detailSheet ? detailSheet : null) ].filter(Boolean).length,
+    importedSheetCount: summarySheets.length + (detailSheet ? 1 : 0),
+    skippedSheetCount: sheets.length - summarySheets.length - (detailSheet ? 1 : 0),
     cloudCenterNames: [],
     importMode: 'answer',
     assignmentDetailCount,

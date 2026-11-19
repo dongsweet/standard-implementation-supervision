@@ -94,11 +94,12 @@ function splitOptions(value) {
 function optionControl(value, selectionKey, optionIndex) {
   const raw = text(value);
   const nested = placeholderTokens(raw);
-  const assignment = nested.find(token => token.type === 'assignment' && token.raw === raw);
+  const assignment = nested.find(token => token.type === 'assignment');
+  const assignmentName = assignment ? assignmentLabel(assignment.raw) : '';
   return {
     value: raw,
-    label: assignment ? assignmentLabel(assignment.raw) : raw,
-    assignmentLabel: assignment ? assignmentLabel(assignment.raw) : '',
+    label: assignment ? raw.replace(assignment.raw, assignmentName) : raw,
+    assignmentLabel: assignmentName,
     assignmentPlaceholder: assignment ? assignment.raw : '',
     childKey: assignment ? `${selectionKey}:assignment:${optionIndex + 1}` : '',
   };
@@ -327,6 +328,114 @@ function normalizeDetails(rawDetails, sourceText, options = {}) {
   return { details: normalized, ...formatSubmittedDetails(normalized) };
 }
 
+function submissionSegments(value) {
+  const segments = [];
+  let current = null;
+  for (const line of text(value).split('\n')) {
+    const match = line.match(/^\s*([^：:\n]{1,100})\s*[：:]\s*(.*)$/);
+    if (match) {
+      current = { label: match[1].trim(), value: match[2].trim() };
+      segments.push(current);
+    } else if (current && line.trim()) {
+      current.value = [ current.value, line.trim() ].filter(Boolean).join('\n');
+    }
+  }
+  return segments;
+}
+
+function optionSelectedByText(option, value) {
+  const candidates = splitOptions(value);
+  if (!candidates.length) candidates.push(value);
+  return candidates.some(candidate => {
+    if (valueMatchesOption(candidate, option)) return true;
+    return placeholderTokens(candidate).some(token => valueMatchesOption(token.raw, option));
+  });
+}
+
+function parseSubmittedAssignmentText(sourceText, submittedText) {
+  const source = text(sourceText);
+  const submission = text(submittedText);
+  const form = buildAssignmentForm(source);
+  if (!form.hasStructuredControls || !submission) return [];
+  const segments = submissionSegments(submission);
+  const details = [];
+  const selectableSegments = segments.filter(segment => /选择/.test(segment.label));
+
+  for (const control of form.controls) {
+    if (control.kind === 'assignment') {
+      const segment = segments.find(candidate => matchKey(candidate.label) === matchKey(control.label));
+      const fallback = form.controls.length === 1 && !segment ? submission : '';
+      const value = text(segment?.value || fallback);
+      if (!value) continue;
+      details.push({
+        type: 'assignment',
+        label: control.label,
+        placeholder: control.placeholder,
+        value,
+        selected: true,
+        selectedValues: [],
+        placeholderId: control.key,
+        parentSelectionId: null,
+        reviewRequired: false,
+        reviewReason: null,
+      });
+      continue;
+    }
+
+    const segment = selectableSegments.find(candidate =>
+      control.options.some(option => optionSelectedByText(option, candidate.value))
+    );
+    if (!segment) continue;
+    const selectedOptions = control.options.filter(option => optionSelectedByText(option, segment.value));
+    if (!selectedOptions.length) continue;
+    details.push({
+      type: 'selection',
+      label: '选择',
+      placeholder: control.placeholder,
+      value: selectedOptions[0].value,
+      selectedValues: selectedOptions.map(option => option.value),
+      selected: true,
+      placeholderId: control.key,
+      parentSelectionId: null,
+      reviewRequired: false,
+      reviewReason: null,
+    });
+    for (const option of selectedOptions) {
+      if (!option.assignmentPlaceholder) continue;
+      const childSegment = segments.find(candidate =>
+        matchKey(candidate.label) === matchKey(option.assignmentLabel)
+      );
+      const assignmentValue = text(childSegment?.value);
+      details.push({
+        type: 'assignment',
+        label: option.assignmentLabel,
+        placeholder: option.assignmentPlaceholder,
+        value: assignmentValue || null,
+        selected: true,
+        selectedValues: [],
+        placeholderId: option.assignmentPlaceholderId,
+        parentSelectionId: control.key,
+        reviewRequired: !assignmentValue,
+        reviewReason: assignmentValue ? null : `已选择“${option.label}”，请填写对应赋值。`,
+      });
+    }
+  }
+  return normalizeDetails(details, source).details;
+}
+
+function selectionDisplayValue(value) {
+  const raw = text(value);
+  if (!raw) return '';
+  const tokens = placeholderTokens(raw);
+  if (tokens.length) {
+    return tokens.reduce(
+      (display, token) => display.replace(token.raw, assignmentLabel(token.raw)),
+      raw
+    );
+  }
+  return assignmentLabel(raw) || raw;
+}
+
 function formatSubmittedDetails(details) {
   const labels = new Map();
   const lines = [];
@@ -336,7 +445,7 @@ function formatSubmittedDetails(details) {
         ? detail.selectedValues
         : detail.value ? [ detail.value ] : [];
       if (!values.length) continue;
-      const displayValues = values.map(value => assignmentLabel(value) || value);
+      const displayValues = values.map(selectionDisplayValue);
       labels.set(detail.placeholderId, values);
       lines.push(`选择：${displayValues.join('；')}`);
       continue;
@@ -353,6 +462,7 @@ module.exports = {
   buildAssignmentForm,
   formatSubmittedDetails,
   normalizeDetails,
+  parseSubmittedAssignmentText,
   placeholderTokens,
   splitOptions,
 };

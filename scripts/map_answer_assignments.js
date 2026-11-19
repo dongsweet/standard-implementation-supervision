@@ -2,11 +2,12 @@
 
 const fs = require('node:fs');
 const { buildAnswerAssignmentDetails } = require('../app/lib/projectWorkbookImport');
+const { formatSubmittedDetails } = require('../app/lib/answerAssignment');
 
 const input = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const output = {};
 for (const [ number, rows ] of Object.entries(input.details)) {
-  output[number] = buildAnswerAssignmentDetails(
+  const details = buildAnswerAssignmentDetails(
     rows.map(row => ({
       type: row.extractionType,
       placeholder: row.placeholder,
@@ -28,5 +29,9 @@ for (const [ number, rows ] of Object.entries(input.details)) {
     input.summaries[number]?.assignmentText || '',
     input.contents[number] || ''
   );
+  output[number] = {
+    details,
+    assignmentText: formatSubmittedDetails(details).clauseAssignment,
+  };
 }
 fs.writeFileSync(process.argv[3], JSON.stringify(output));
