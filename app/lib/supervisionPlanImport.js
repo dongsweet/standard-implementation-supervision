@@ -2,6 +2,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const JSZip = require('jszip');
 const { joinSupervisionMethods } = require('./supervisionMethods');
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
@@ -46,6 +47,47 @@ function importError(message) {
   const error = new Error(message);
   error.status = 400;
   return error;
+}
+
+async function readExcelWorkbook(filePath, ExcelJS) {
+  let workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.readFile(filePath, { ignoreNodes: [ 'dataValidations' ] });
+    return workbook;
+  } catch (error) {
+    // Some Excel-compatible exporters prefix every main OOXML element with
+    // `x:`. ExcelJS expects the same namespace without that prefix.
+    try {
+      const bytes = await fs.readFile(filePath);
+      const archive = await JSZip.loadAsync(bytes);
+      let normalized = false;
+      for (const name of Object.keys(archive.files).filter(item => item.endsWith('.xml'))) {
+        const entry = archive.file(name);
+        if (!entry) continue;
+        const xml = await entry.async('string');
+        if (!/<\/?x:[A-Za-z_]/.test(xml)) continue;
+        const hasDefaultNamespace = /\sxmlns\s*=/.test(xml);
+        let updated = xml.replace(/(<\/?)(x:)/g, '$1');
+        updated = hasDefaultNamespace
+          ? updated.replace(/\sxmlns:x=(['"][^'"]+['"])/g, '')
+          : updated.replace(/xmlns:x=/g, 'xmlns=');
+        archive.file(name, updated);
+        normalized = true;
+      }
+      if (!normalized) throw error;
+      workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(
+        await archive.generateAsync({ type: 'nodebuffer' }),
+        { ignoreNodes: [ 'dataValidations' ] }
+      );
+      return workbook;
+    } catch (fallbackError) {
+      const wrapped = importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
+      wrapped.cause = error;
+      wrapped.fallbackCause = fallbackError;
+      throw wrapped;
+    }
+  }
 }
 
 function splitStandardNumbers(value) {
@@ -187,14 +229,7 @@ async function parseSupervisionPlanFile(filePath, fileName = '') {
   } catch {
     throw importError('服务器Excel组件不可用，暂时无法读取工作簿');
   }
-  const workbook = new ExcelJS.Workbook();
-  try {
-    await workbook.xlsx.readFile(filePath, { ignoreNodes: [ 'dataValidations' ] });
-  } catch (error) {
-    const wrapped = importError('Excel文件无法读取，请确认文件为有效的.xlsx工作簿');
-    wrapped.cause = error;
-    throw wrapped;
-  }
+  const workbook = await readExcelWorkbook(filePath, ExcelJS);
   const sheets = workbook.worksheets.map(worksheet => {
     if (worksheet.rowCount > MAX_ROWS + 20 || worksheet.columnCount > 128) {
       throw importError(`工作表“${worksheet.name}”行数或列数超出导入限制`);

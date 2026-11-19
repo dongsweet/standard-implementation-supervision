@@ -2,9 +2,22 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 const { parseSupervisionPlanRows, splitStandardNumbers } = require('../app/lib/supervisionPlanImport');
 const { joinSupervisionMethods, splitSupervisionMethods } = require('../app/lib/supervisionMethods');
 const { SupervisionPlanImportRepository } = require('../app/repository/supervisionPlanImport');
+
+let ExcelJS;
+let JSZip;
+try {
+  ExcelJS = require('exceljs');
+  JSZip = require('jszip');
+} catch {
+  ExcelJS = null;
+  JSZip = null;
+}
 
 test('normalizes multiple supervision methods without losing their individual values', () => {
   assert.deepEqual(splitSupervisionMethods('证据材料核查，上机查看/访谈'), [ '证据材料核查', '上机查看', '访谈' ]);
@@ -61,6 +74,34 @@ test('rejects legacy IDs and incomplete plan rows', () => {
     [ '标准化编号', '检查对象', '检查方法', '检查项描述' ],
     [ '31168-2023-06008', '云平台', '', '检查内容' ],
   ] } ]), /缺少检查方法/);
+});
+
+test('parses supervision workbooks whose OOXML main parts use an x namespace prefix', { skip: !ExcelJS || !JSZip }, async () => {
+  const { parseSupervisionPlanFile } = require('../app/lib/supervisionPlanImport');
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'supervision-plan-prefixed-xlsx-'));
+  const filePath = path.join(directory, 'source.xlsx');
+  try {
+    const sourceWorkbook = new ExcelJS.Workbook();
+    const sheet = sourceWorkbook.addWorksheet('检查方案');
+    sheet.addRow([ '标准化编号', '检查对象', '检查方法', '检查项描述' ]);
+    sheet.addRow([ '31168-2023-06008', '云平台', '证据材料核查', '检查内容' ]);
+    const archive = await JSZip.loadAsync(await sourceWorkbook.xlsx.writeBuffer());
+    for (const name of Object.keys(archive.files).filter(item =>
+      item === 'xl/workbook.xml' || item === 'xl/sharedStrings.xml' || item.startsWith('xl/worksheets/'))) {
+      const entry = archive.file(name);
+      if (!entry) continue;
+      const xml = await entry.async('string');
+      const prefixed = xml.replace(/(<\/?)([A-Za-z_][A-Za-z0-9_.-]*)(?=[\s/>])/g, '$1x:$2')
+        .replace(/xmlns="([^"]+)"/, 'xmlns:x="$1"');
+      archive.file(name, prefixed);
+    }
+    await fs.writeFile(filePath, await archive.generateAsync({ type: 'nodebuffer' }));
+    const result = await parseSupervisionPlanFile(filePath, 'source.xlsx');
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].standardNumbers[0], '31168-2023-06008');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('imports plan definitions and multiple item links without creating executions', async () => {
