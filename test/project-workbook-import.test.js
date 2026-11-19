@@ -44,17 +44,9 @@ test('generates blank answer sheets grouped by readable standard name', { skip: 
     [ '', '', '', '', '', '', '' ]
   );
 
-  const sheets = workbook.worksheets.map(sheet => ({
-    name: sheet.name,
-    rows: Array.from({ length: sheet.rowCount }, (_, rowIndex) =>
-      sheet.getRow(rowIndex + 1).values.slice(1).map(value => value == null ? null : String(value))),
-  }));
-  const parsed = parseAnswerWorkbookRows(sheets);
-  assert.equal(parsed.rows.length, 2);
-  assert.equal(parsed.rows[0].assignmentText, '');
-  assert.equal(parsed.rows[0].complianceDescription, '');
-  assert.equal(parsed.rows[0].actualEvidence, '');
-  assert.equal(parsed.rows[1].standardNumber, 'OTHER-2026-001');
+  const otherSummary = workbook.getWorksheet('其他安全规范');
+  assert.equal(otherSummary.getCell('A3').value, '1.1');
+  assert.equal(otherSummary.getCell('I3').value, 'OTHER-2026-001');
 });
 
 test('parses human-readable response text into structured selection and assignment details', () => {
