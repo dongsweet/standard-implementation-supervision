@@ -1,30 +1,65 @@
+<%
+  const searchValue = typeof search === 'undefined' ? '' : search;
+  const statusValue = typeof status === 'undefined' ? '' : status;
+  const priorityValue = typeof priority === 'undefined' ? '' : priority;
+  const checkMethodValue = typeof checkMethod === 'undefined' ? '' : checkMethod;
+  const scopeValue = typeof scope === 'undefined' ? '' : scope;
+  const scopesValue = typeof scopes === 'undefined' ? [] : scopes;
+  const totalValue = typeof total === 'undefined' ? definitions.length : total;
+  const pageValue = typeof page === 'undefined' ? 1 : page;
+  const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
+  const buildPageUrl = targetPage => {
+    const params = [];
+    if (searchValue) params.push('search=' + encodeURIComponent(searchValue));
+    if (statusValue) params.push('status=' + encodeURIComponent(statusValue));
+    if (priorityValue) params.push('priority=' + encodeURIComponent(priorityValue));
+    if (checkMethodValue) params.push('checkMethod=' + encodeURIComponent(checkMethodValue));
+    if (scopeValue) params.push('scope=' + encodeURIComponent(scopeValue));
+    params.push('page=' + targetPage);
+    return '?' + params.join('&');
+  };
+%>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <p class="text-secondary mb-0">检查方案描述检查对象、方法、步骤和频率，并关联一个或多个系统标准项；执行结果另行记录。</p>
+  <p class="text-secondary mb-0">检查方案是系统级可复用定义；选择具体项目后，在“检查记录”中按该项目纳入的标准项执行并记录结果。</p>
   <% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><div class="ms-auto d-flex gap-2"><a class="btn btn-outline-secondary" href="/supervision-definitions/import-template">下载导入模板</a><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#planImportModal">导入检查方案</button><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createDefinitionModal">新增检查方案</button></div><% } %>
 </div>
 
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/supervision-definitions" class="row g-2 align-items-end">
+      <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="definitionSearch">查找</label><input class="form-control" id="definitionSearch" name="search" value="<%= searchValue %>" placeholder="方案编号、检查对象、描述或标准编号"></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionPriority">重点项</label><select class="form-select" id="definitionPriority" name="priority"><option value="">全部</option><option value="重点项" <%= priorityValue === '重点项' ? 'selected' : '' %>>重点项</option><option value="非重点项" <%= priorityValue === '非重点项' ? 'selected' : '' %>>非重点项</option><option value="未指定" <%= priorityValue === '未指定' ? 'selected' : '' %>>未指定</option></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionMethod">检查方法</label><select class="form-select" id="definitionMethod" name="checkMethod"><option value="">全部方法</option><% checkMethodOptions.forEach(method => { %><option value="<%= method %>" <%= checkMethodValue === method ? 'selected' : '' %>><%= method %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionScope">检查范围</label><select class="form-select" id="definitionScope" name="scope"><option value="">全部范围</option><% scopesValue.forEach(scopeOption => { %><option value="<%= scopeOption %>" <%= scopeValue === scopeOption ? 'selected' : '' %>><%= scopeOption %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionStatus">状态</label><select class="form-select" id="definitionStatus" name="status"><option value="">全部状态</option><option value="active" <%= statusValue === 'active' ? 'selected' : '' %>>有效</option><option value="merged" <%= statusValue === 'merged' ? 'selected' : '' %>>已归并</option></select></div>
+      <div class="col-12 d-flex justify-content-end gap-2"><button class="btn btn-outline-primary" type="submit">查找</button><a class="btn btn-outline-secondary" href="/supervision-definitions">重置</a></div>
+    </form>
+  </div>
+</div>
+
 <div class="card">
-  <div class="card-header d-flex align-items-center"><h3 class="card-title">检查方案列表</h3><span class="badge text-bg-secondary ms-auto"><%= definitions.length %> 条</span></div>
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">检查方案列表</h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 条</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th>检查对象</th><th>范围/分类/层面</th><th>检查方法</th><th>检查项描述/参考信息</th><th>频率/方式</th><th>关联标准项</th><th>方案属性</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+    <thead><tr><th>检查方案</th><th>检查方法</th><th>检查描述</th><th>频率/方式</th><th>关联标准项</th><th>方案属性</th><th class="text-end">操作</th></tr></thead>
     <tbody>
       <% definitions.forEach(definition => { %>
         <tr>
-          <td><strong><%= definition.object_name %></strong></td>
-          <td><%= definition.scope || '-' %><div class="small text-secondary"><%= definition.object_category || '-' %> / <%= definition.check_layer || '-' %></div></td>
-          <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %><% if (definition.steps) { %><div class="small text-secondary text-truncate" style="max-width:220px" title="<%= definition.steps %>">步骤：<%= definition.steps %></div><% } %></td>
-          <td><div class="text-truncate" style="max-width:280px" title="<%= definition.description %>"><%= definition.description %></div><% if (definition.reference_result || definition.reference_materials) { %><details class="small mt-1"><summary>参考判定/材料</summary><% if (definition.reference_result) { %><div class="mt-1"><strong>判定：</strong><%= definition.reference_result %></div><% } %><% if (definition.reference_materials) { %><div class="mt-1"><strong>材料：</strong><%= definition.reference_materials %></div><% } %></details><% } %></td>
+          <td><span class="badge text-bg-primary me-1"><%= String(definition.plan_number || '').padStart(3, '0') %></span><strong><%= definition.object_name %></strong><div class="small text-secondary mt-1"><%= definition.scope || '未指定范围' %></div></td>
+          <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
+          <td><div class="text-truncate" style="max-width:300px" title="<%= definition.description %>"><%= definition.description %></div></td>
           <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
-          <td><% (definition.standard_items || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item.standardCode %> / <%= item.version %> · <%= item.standardNumber || item.code %></span><% }) %><% if (!(definition.standard_items || []).length) { %><span class="text-secondary">未关联</span><% } %></td>
-          <td><%= definition.priority || '-' %><div class="small text-secondary"><%= definition.recognized_object === true ? '公认对象' : definition.recognized_object === false ? '非公认对象' : '未指定' %></div></td>
-          <td><span class="badge <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
-          <td class="text-end text-nowrap"><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition) %>">编辑</button><% } %></td>
+          <td><span class="badge text-bg-light border"><%= (definition.standard_items || []).length %> 项</span><div class="small text-secondary text-truncate" style="max-width:170px"><%= (definition.standard_items || []).map(item => item.standardNumber || item.code).join('、') || '未关联' %></div></td>
+          <td><span class="badge <%= definition.priority === '重点项' ? 'text-bg-warning' : 'text-bg-light border' %>"><%= definition.priority || '未指定重点级别' %></span><div class="small text-secondary mt-1"><%= definition.recognized_object === true ? '公认对象' : definition.recognized_object === false ? '非公认对象' : '公认对象未指定' %></div><span class="badge mt-1 <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
+          <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#definitionDetailModal" data-definition="<%= JSON.stringify(definition) %>">详情</button><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %> <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition) %>">编辑</button><% } %></td>
         </tr>
       <% }) %>
-      <% if (!definitions.length) { %><tr><td colspan="9" class="text-center text-secondary py-5">暂无检查方案，请先导入或新增。</td></tr><% } %>
+      <% if (!definitions.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">没有找到匹配的检查方案。</td></tr><% } %>
     </tbody>
   </table></div>
+  <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto" aria-label="检查方案分页"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildPageUrl(pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildPageUrl(number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildPageUrl(pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %>
 </div>
+
+<div class="modal fade" id="definitionDetailModal" tabindex="-1" aria-labelledby="definitionDetailModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="definitionDetailModalLabel">检查方案详情</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body" id="definitionDetailBody"></div><div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
 
 <div class="modal fade" id="planImportModal" tabindex="-1" aria-labelledby="planImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/supervision-plan-imports" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrf %>">
@@ -82,6 +117,34 @@
   </form>
 </div></div></div>
 <script>
+  document.getElementById('definitionDetailModal').addEventListener('show.bs.modal', event => {
+    const definition = JSON.parse(event.relatedTarget.dataset.definition);
+    const body = document.getElementById('definitionDetailBody');
+    const rows = [
+      ['方案编号', String(definition.plan_number || '').padStart(3, '0')],
+      ['检查对象', definition.object_name],
+      ['范围 / 分类 / 层面', [definition.scope, definition.object_category, definition.check_layer].filter(Boolean).join(' / ') || '未指定'],
+      ['检查方法', definition.check_method],
+      ['检查频率 / 执行方式', [definition.frequency, definition.access_mode].filter(Boolean).join(' / ') || '未指定'],
+      ['检查描述', definition.description],
+      ['检查步骤', definition.steps || '未填写'],
+      ['参考判定', definition.reference_result || '未填写'],
+      ['参考材料', definition.reference_materials || '未填写'],
+      ['关联标准项', (definition.standard_items || []).map(item => [item.standardCode, item.version, item.standardNumber || item.code].filter(Boolean).join(' · ')).join('；') || '未关联'],
+    ];
+    body.replaceChildren(...rows.map(([label, value]) => {
+      const row = document.createElement('div');
+      row.className = 'row g-2 border-bottom py-2';
+      const labelElement = document.createElement('div');
+      labelElement.className = 'col-sm-3 text-secondary';
+      labelElement.textContent = label;
+      const valueElement = document.createElement('div');
+      valueElement.className = 'col-sm-9 text-break';
+      valueElement.textContent = value || '未填写';
+      row.append(labelElement, valueElement);
+      return row;
+    }));
+  });
   document.getElementById('editDefinitionModal').addEventListener('show.bs.modal', event => {
     const definition = JSON.parse(event.relatedTarget.dataset.definition);
     const form = document.getElementById('editDefinitionForm');

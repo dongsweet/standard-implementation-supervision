@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 let ejs;
@@ -12,6 +13,22 @@ try {
 }
 
 const viewRoot = path.join(__dirname, '../app/view');
+
+test('keeps the plan list project-neutral, compact, and filterable', () => {
+  const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
+  const executionView = fs.readFileSync(path.join(viewRoot, 'supervision-executions/index.ejs'), 'utf8');
+  assert.match(planView, /检查方案是系统级可复用定义/);
+  assert.match(planView, /name="search"/);
+  assert.match(planView, /name="priority"/);
+  assert.match(planView, /name="checkMethod"/);
+  assert.match(planView, /name="scope"/);
+  assert.match(planView, /name="status"/);
+  assert.match(planView, /buildPageUrl\(pageValue - 1\)/);
+  assert.match(planView, /definitionDetailModal/);
+  assert.match(planView, /padStart\(3, '0'\)/);
+  assert.match(executionView, /当前项目：/);
+  assert.match(executionView, /方案编号/);
+});
 
 function decodeHtmlAttribute(value) {
   const named = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };

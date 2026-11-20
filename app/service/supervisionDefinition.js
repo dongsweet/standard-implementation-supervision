@@ -13,16 +13,44 @@ class SupervisionDefinitionService extends Service {
     return new Repository(this.ctx.app.db);
   }
 
-  async list() {
-    const [ definitions, standardItems ] = await Promise.all([
-      this.repository.listDefinitions(),
+  async list(query = {}) {
+    const search = String(query.search || '').trim().slice(0, 100);
+    const status = String(query.status || '').trim();
+    const priority = String(query.priority || '').trim();
+    const checkMethod = String(query.checkMethod || '').trim().slice(0, 100);
+    const scope = String(query.scope || '').trim().slice(0, 200);
+    const allowedStatuses = new Set([ '', 'active', 'merged' ]);
+    const allowedPriorities = new Set([ '', '重点项', '非重点项', '未指定' ]);
+    if (!allowedStatuses.has(status)) this.ctx.throw(400, '无效的方案状态');
+    if (!allowedPriorities.has(priority)) this.ctx.throw(400, '无效的重点项筛选');
+    const pageSize = 20;
+    const requestedPage = Number.parseInt(query.page, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const [ definitionResult, standardItems, methodRows, scopes ] = await Promise.all([
+      this.repository.listDefinitions({ search, status, priority, checkMethod, scope, page, pageSize }),
       this.repository.listStandardItems(),
+      this.repository.listDefinitionMethods(),
+      this.repository.listDefinitionScopes(),
     ]);
     const checkMethodOptions = new Set(DEFAULT_SUPERVISION_METHODS);
-    for (const definition of definitions) {
-      splitSupervisionMethods(definition.check_method).forEach(method => checkMethodOptions.add(method));
+    for (const methodValue of methodRows) {
+      splitSupervisionMethods(methodValue).forEach(method => checkMethodOptions.add(method));
     }
-    return { definitions, standardItems, checkMethodOptions: [ ...checkMethodOptions ] };
+    return {
+      definitions: definitionResult.rows,
+      standardItems,
+      checkMethodOptions: [ ...checkMethodOptions ].sort((left, right) => left.localeCompare(right, 'zh-CN')),
+      scopes,
+      total: definitionResult.total,
+      page: definitionResult.page,
+      pageSize,
+      pageCount: definitionResult.pageCount,
+      search,
+      status,
+      priority,
+      checkMethod,
+      scope,
+    };
   }
 
   normalize(payload) {

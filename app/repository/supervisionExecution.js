@@ -7,7 +7,7 @@ class SupervisionExecutionRepository {
 
   async listOptions(projectId) {
     const definitions = await this.pool.query(`
-      SELECT d.id, d.object_name, d.check_method, d.frequency,
+      SELECT d.id, d.plan_number, d.object_name, d.check_method, d.frequency,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'code', si.item_code, 'title', si.title
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
@@ -31,7 +31,7 @@ class SupervisionExecutionRepository {
   async list(projectId) {
     const result = await this.pool.query(`
       SELECT e.id, e.checked_at, e.overall_result, e.notes,
-             d.object_name, d.check_method,
+             d.plan_number, d.object_name, d.check_method,
              cc.name AS cloud_center_name,
              u.display_name AS checked_by_name,
              count(sir.id)::integer AS item_result_count,

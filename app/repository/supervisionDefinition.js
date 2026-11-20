@@ -40,9 +40,67 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
-  async listDefinitions() {
+  async listDefinitions({ search = '', status = '', priority = '', checkMethod = '', scope = '', page = 1, pageSize = 20 } = {}) {
+    const conditions = [];
+    const values = [];
+    if (search) {
+      values.push(`%${search}%`);
+      const searchParameter = `$${values.length}`;
+      conditions.push(`(
+        (CASE WHEN d.plan_number < 1000 THEN lpad(d.plan_number::text, 3, '0') ELSE d.plan_number::text END) ILIKE ${searchParameter}
+        OR d.object_name ILIKE ${searchParameter}
+        OR COALESCE(d.scope, '') ILIKE ${searchParameter}
+        OR COALESCE(d.object_category, '') ILIKE ${searchParameter}
+        OR COALESCE(d.check_layer, '') ILIKE ${searchParameter}
+        OR d.check_method ILIKE ${searchParameter}
+        OR d.description ILIKE ${searchParameter}
+        OR COALESCE(d.steps, '') ILIKE ${searchParameter}
+        OR EXISTS (
+          SELECT 1
+          FROM supervision_definition_standard_items filter_dsi
+          JOIN standard_items filter_si ON filter_si.id = filter_dsi.standard_item_id
+          JOIN standard_versions filter_sv ON filter_sv.id = filter_si.standard_version_id
+          JOIN standards filter_s ON filter_s.id = filter_sv.standard_id
+          WHERE filter_dsi.definition_id = d.id
+            AND (filter_si.standard_number ILIKE ${searchParameter}
+              OR filter_si.item_code ILIKE ${searchParameter}
+              OR filter_s.code ILIKE ${searchParameter}
+              OR filter_sv.version ILIKE ${searchParameter})
+        )
+      )`);
+    }
+    if (status) {
+      values.push(status);
+      conditions.push(`d.status = $${values.length}`);
+    }
+    if (priority === '未指定') {
+      conditions.push('d.priority IS NULL');
+    } else if (priority) {
+      values.push(priority);
+      conditions.push(`d.priority = $${values.length}`);
+    }
+    if (checkMethod) {
+      values.push(`%${checkMethod}%`);
+      conditions.push(`d.check_method ILIKE $${values.length}`);
+    }
+    if (scope) {
+      values.push(scope);
+      conditions.push(`d.scope = $${values.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const countResult = await this.pool.query(`
+      SELECT count(*)::integer AS total
+      FROM supervision_definitions d
+      ${where}`, values);
+    const total = countResult.rows[0].total;
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(Math.max(1, Number.isSafeInteger(page) ? page : 1), pageCount);
+    const offset = (currentPage - 1) * pageSize;
+    const listValues = [ ...values, pageSize, offset ];
+    const limitParameter = values.length + 1;
+    const offsetParameter = values.length + 2;
     const result = await this.pool.query(`
-      SELECT d.id, d.object_name, d.scope, d.recognized_object, d.object_category, d.check_layer, d.check_method,
+      SELECT d.id, d.plan_number, d.object_name, d.scope, d.recognized_object, d.object_category, d.check_layer, d.check_method,
              d.description, d.steps, d.frequency, d.access_mode, d.priority,
              d.reference_result, d.reference_materials, d.status,
              d.merged_into_id, d.created_at, d.updated_at,
@@ -58,9 +116,26 @@ class SupervisionDefinitionRepository {
       LEFT JOIN standard_chapters sc ON sc.id = si.chapter_id
       LEFT JOIN standard_versions sv ON sv.id = si.standard_version_id
       LEFT JOIN standards s ON s.id = sv.standard_id
+      ${where}
       GROUP BY d.id
-      ORDER BY d.status, d.created_at DESC`);
-    return result.rows;
+      ORDER BY d.status, d.plan_number
+      LIMIT $${limitParameter} OFFSET $${offsetParameter}`, listValues);
+    return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
+  }
+
+  async listDefinitionMethods() {
+    const result = await this.pool.query(`
+      SELECT check_method FROM supervision_definitions
+      ORDER BY check_method`);
+    return result.rows.map(row => row.check_method);
+  }
+
+  async listDefinitionScopes() {
+    const result = await this.pool.query(`
+      SELECT DISTINCT scope FROM supervision_definitions
+      WHERE scope IS NOT NULL AND btrim(scope) <> ''
+      ORDER BY scope`);
+    return result.rows.map(row => row.scope);
   }
 
   async listStandardItems() {
