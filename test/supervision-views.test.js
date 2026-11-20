@@ -49,6 +49,7 @@ test('escapes standard content before placing supervision definitions in script 
   const attackText = '</script><script>alert(1)</script>';
   const html = await ejs.renderFile(path.join(viewRoot, 'supervision-executions/index.ejs'), {
     project: { id: 'project-1', name: '测试项目' },
+    user: { roles: [ { projectId: 'project-1', code: 'operator' } ] },
     executions: [],
     definitions: [ {
       id: 'plan-1',

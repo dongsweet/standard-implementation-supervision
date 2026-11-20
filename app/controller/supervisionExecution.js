@@ -16,6 +16,7 @@ class SupervisionExecutionController extends Controller {
       project,
       ...await this.ctx.service.supervisionExecution.list(project.id),
       csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
     });
   }
 
