@@ -13,10 +13,13 @@ class SupervisionExecutionRepository {
              ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
       FROM supervision_definitions d
       LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
-      LEFT JOIN standard_items si ON si.id = dsi.standard_item_id
+      LEFT JOIN project_standard_items psi
+        ON psi.standard_item_id = dsi.standard_item_id AND psi.project_id = $1
+      LEFT JOIN standard_items si ON si.id = psi.standard_item_id
       WHERE d.status = 'active'
       GROUP BY d.id
-      ORDER BY d.object_name, d.check_method`);
+      HAVING count(psi.standard_item_id) > 0
+      ORDER BY d.object_name, d.check_method`, [ projectId ]);
     const cloudCenters = await this.pool.query(`
       SELECT cc.id, cc.code, cc.name, cc.center_type
       FROM project_cloud_centers pcc JOIN cloud_centers cc ON cc.id = pcc.cloud_center_id
@@ -53,12 +56,21 @@ class SupervisionExecutionRepository {
         FROM supervision_definitions d
         JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
         JOIN standard_items si ON si.id = dsi.standard_item_id
+        JOIN project_standard_items psi ON psi.standard_item_id = si.id AND psi.project_id = $2
         WHERE d.id = $1 AND d.status = 'active'
-        ORDER BY si.item_code`, [ definitionId ]);
+        ORDER BY si.item_code`, [ definitionId, projectId ]);
       if (!definition.rowCount) {
-        const error = new Error('监督定义不存在、已归并或未关联标准项');
+        const error = new Error('监督定义不存在、已归并或未关联当前项目标准');
         error.code = 'INVALID_DEFINITION';
         throw error;
+      }
+      const definitionItemIds = new Set(definition.rows.map(row => row.id));
+      for (const standardItemId of itemResults.keys()) {
+        if (!definitionItemIds.has(standardItemId)) {
+          const error = new Error('提交的标准项结果不属于所选检查方案');
+          error.code = 'INVALID_ITEM_RESULTS';
+          throw error;
+        }
       }
       if (cloudCenterId) {
         const center = await client.query('SELECT 1 FROM project_cloud_centers WHERE project_id = $1 AND cloud_center_id = $2', [ projectId, cloudCenterId ]);
@@ -83,6 +95,19 @@ class SupervisionExecutionRepository {
           item.description || null, item.problemDescription || null, item.rectificationDueAt || null,
         ]);
       }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'create_supervision_execution', 'supervision_execution', $2, $3)`, [
+        checkedBy || null, execution.rows[0].id,
+        JSON.stringify({
+          projectId,
+          definitionId,
+          cloudCenterId: cloudCenterId || null,
+          checkedAt,
+          overallResult: overallResult || null,
+          standardItemCount: definition.rows.length,
+        }),
+      ]);
       await client.query('COMMIT');
       return execution.rows[0];
     } catch (error) {

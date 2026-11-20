@@ -7,15 +7,35 @@ class SupervisionDefinitionRepository {
 
   async listCandidates(limit = 50) {
     const result = await this.pool.query(`
-      SELECT id, candidate_id, object_name, object_category, check_layer,
-             check_method, description, steps, frequency, access_mode, status,
-             merged_into_id, normalized_hash, similarity_score, candidate_type,
-             candidate_object_name, candidate_object_category, candidate_check_layer,
-             candidate_check_method, candidate_description, candidate_steps, candidate_frequency, candidate_access_mode,
-             standard_item_codes, candidate_standard_item_codes, execution_count, candidate_execution_count, created_at
-      FROM supervision_definition_candidates
+      SELECT v.id, v.candidate_id, v.object_name, v.object_category, v.check_layer,
+             v.check_method, v.description, v.steps, v.frequency, v.access_mode, v.status,
+             v.merged_into_id, v.normalized_hash, v.similarity_score,
+             CASE WHEN v.candidate_type = 'exact_duplicate_candidate'
+               AND d.scope IS NOT DISTINCT FROM c.scope
+               AND d.recognized_object IS NOT DISTINCT FROM c.recognized_object
+               AND d.priority IS NOT DISTINCT FROM c.priority
+               AND d.access_mode IS NOT DISTINCT FROM c.access_mode
+               AND d.reference_result IS NOT DISTINCT FROM c.reference_result
+               AND d.reference_materials IS NOT DISTINCT FROM c.reference_materials
+               THEN 'exact_duplicate_candidate' ELSE 'similar_candidate' END AS candidate_type,
+             v.candidate_object_name, v.candidate_object_category, v.candidate_check_layer,
+             v.candidate_check_method, v.candidate_description, v.candidate_steps, v.candidate_frequency, v.candidate_access_mode,
+             v.standard_item_codes, v.candidate_standard_item_codes, v.execution_count, v.candidate_execution_count, v.created_at,
+             d.scope, d.recognized_object, d.priority, d.reference_result, d.reference_materials,
+             c.scope AS candidate_scope, c.recognized_object AS candidate_recognized_object,
+             c.priority AS candidate_priority, c.reference_result AS candidate_reference_result,
+             c.reference_materials AS candidate_reference_materials
+      FROM supervision_definition_candidates v
+      JOIN supervision_definitions d ON d.id = v.id
+      JOIN supervision_definitions c ON c.id = v.candidate_id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM supervision_definition_reviews r
+        WHERE r.decision IN ('similar_but_distinct', 'unrelated')
+          AND ((r.left_definition_id = v.id AND r.right_definition_id = v.candidate_id)
+            OR (r.left_definition_id = v.candidate_id AND r.right_definition_id = v.id))
+      )
       ORDER BY candidate_type = 'exact_duplicate_candidate' DESC,
-               similarity_score DESC NULLS LAST, created_at DESC
+               v.similarity_score DESC NULLS LAST, v.created_at DESC
       LIMIT $1`, [ limit ]);
     return result.rows;
   }
@@ -53,10 +73,16 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
-  async create({ fields, standardItemIds }) {
+  async create({ fields, standardItemIds }, actorId) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const availableItems = await client.query('SELECT id FROM standard_items WHERE id = ANY($1::uuid[])', [ standardItemIds ]);
+      if (availableItems.rowCount !== standardItemIds.length) {
+        const error = new Error('所选标准项不存在或已删除');
+        error.code = 'INVALID_STANDARD_ITEMS';
+        throw error;
+      }
       const result = await client.query(`
         INSERT INTO supervision_definitions
           (object_name, scope, recognized_object, object_category, check_layer, check_method, description, steps, frequency, access_mode, priority, reference_result, reference_materials, normalized_hash)
@@ -72,6 +98,12 @@ class SupervisionDefinitionRepository {
           SELECT $1, id FROM standard_items WHERE id = $2
           ON CONFLICT DO NOTHING`, [ result.rows[0].id, standardItemId ]);
       }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'create_supervision_definition', 'supervision_definition', $2, $3)`, [
+        actorId || null, result.rows[0].id,
+        JSON.stringify({ objectName: fields.objectName, standardItemIds }),
+      ]);
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {
@@ -82,10 +114,16 @@ class SupervisionDefinitionRepository {
     }
   }
 
-  async update(id, { fields, standardItemIds }) {
+  async update(id, { fields, standardItemIds }, actorId) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const availableItems = await client.query('SELECT id FROM standard_items WHERE id = ANY($1::uuid[])', [ standardItemIds ]);
+      if (availableItems.rowCount !== standardItemIds.length) {
+        const error = new Error('所选标准项不存在或已删除');
+        error.code = 'INVALID_STANDARD_ITEMS';
+        throw error;
+      }
       const result = await client.query(`
         UPDATE supervision_definitions
         SET object_name = $2, scope = $3, recognized_object = $4, object_category = $5, check_layer = $6,
@@ -108,6 +146,12 @@ class SupervisionDefinitionRepository {
           SELECT $1, id FROM standard_items WHERE id = $2
           ON CONFLICT DO NOTHING`, [ id, standardItemId ]);
       }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'update_supervision_definition', 'supervision_definition', $2, $3)`, [
+        actorId || null, id,
+        JSON.stringify({ objectName: fields.objectName, standardItemIds }),
+      ]);
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {

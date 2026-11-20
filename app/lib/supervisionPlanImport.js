@@ -96,8 +96,8 @@ function splitStandardNumbers(value) {
     .map(item => item.trim())
     .filter(Boolean);
   const distinct = [ ...new Set(unique) ];
-  const ignoredX = distinct.filter(item => /^X\d+$/i.test(item));
-  const values = distinct.filter(item => !/^X\d+$/i.test(item));
+  const ignoredX = distinct.filter(item => /^X/i.test(item));
+  const values = distinct.filter(item => !/^X/i.test(item));
   const invalid = values.filter(item => !/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i.test(item));
   return { values, invalid, ignoredX };
 }
@@ -179,8 +179,21 @@ function parseSupervisionPlanRows(sheets) {
       if (!objectName) errors.push(`工作表“${sheet.name}”第${sourceRow}行缺少检查对象`);
       if (!checkMethod) errors.push(`工作表“${sheet.name}”第${sourceRow}行缺少检查方法`);
       if (!description) errors.push(`工作表“${sheet.name}”第${sourceRow}行缺少检查项描述`);
-      if (objectName.length > 500 || checkMethod.length > 2000 || description.length > 5000) {
-        errors.push(`工作表“${sheet.name}”第${sourceRow}行的必填文本超出长度限制`);
+      const lengthLimits = [
+        [ '检查对象', objectName, 500 ],
+        [ '检查范围', readCell(source, header.map.scope), 200 ],
+        [ '对象分类', readCell(source, header.map.objectCategory), 200 ],
+        [ '检查层面', readCell(source, header.map.checkLayer), 200 ],
+        [ '检查方法', checkMethod, 2000 ],
+        [ '检查项描述', description, 5000 ],
+        [ '检查频率', readCell(source, header.map.frequency), 100 ],
+        [ '重点项', readCell(source, header.map.priority), 50 ],
+        [ '执行方式', readCell(source, header.map.accessMode), 50 ],
+      ];
+      for (const [ label, value, maxLength ] of lengthLimits) {
+        if ([ ...value ].length > maxLength) {
+          errors.push(`工作表“${sheet.name}”第${sourceRow}行“${label}”超过${maxLength}字限制`);
+        }
       }
       const recognizedErrors = [];
       const recognizedObject = optionalBoolean(readCell(source, header.map.recognizedObject), '是否公认对象', sourceRow, recognizedErrors);

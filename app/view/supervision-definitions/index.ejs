@@ -18,7 +18,7 @@
           <td><% (definition.standard_items || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item.standardCode %> / <%= item.version %> · <%= item.standardNumber || item.code %></span><% }) %><% if (!(definition.standard_items || []).length) { %><span class="text-secondary">未关联</span><% } %></td>
           <td><%= definition.priority || '-' %><div class="small text-secondary"><%= definition.recognized_object === true ? '公认对象' : definition.recognized_object === false ? '非公认对象' : '未指定' %></div></td>
           <td><span class="badge <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
-          <td class="text-end text-nowrap"><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition).replace(/&/g, '&amp;').replace(/&quot;/g, '&amp;quot;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') %>">编辑</button><% } %></td>
+          <td class="text-end text-nowrap"><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition) %>">编辑</button><% } %></td>
         </tr>
       <% }) %>
       <% if (!definitions.length) { %><tr><td colspan="9" class="text-center text-secondary py-5">暂无检查方案，请先导入或新增。</td></tr><% } %>
@@ -52,7 +52,7 @@
       <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="3" placeholder="按顺序填写检查步骤"></textarea></div>
       <div class="col-md-6"><label class="form-label" for="createReferenceResult">参考判定描述</label><textarea class="form-control" id="createReferenceResult" name="referenceResult" rows="3"></textarea></div>
       <div class="col-md-6"><label class="form-label" for="createReferenceMaterials">参考材料</label><textarea class="form-control" id="createReferenceMaterials" name="referenceMaterials" rows="3"></textarea></div>
-      <div class="col-12"><label class="form-label" for="createStandardItems">关联标准项（可多选）</label><select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="8"><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select><div class="form-text">一条监督定义可以覆盖多个标准项；按住 Ctrl/⌘ 可多选。</div></div>
+      <div class="col-12"><label class="form-label" for="createStandardItems">关联标准项（可多选）</label><select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="8" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select><div class="form-text">一条监督定义可以覆盖多个标准项；按住 Ctrl/⌘ 可多选。</div></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存检查方案</button></div>
   </form>
@@ -76,7 +76,7 @@
       <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="3"></textarea></div>
       <div class="col-md-6"><label class="form-label" for="editReferenceResult">参考判定描述</label><textarea class="form-control" id="editReferenceResult" name="referenceResult" rows="3"></textarea></div>
       <div class="col-md-6"><label class="form-label" for="editReferenceMaterials">参考材料</label><textarea class="form-control" id="editReferenceMaterials" name="referenceMaterials" rows="3"></textarea></div>
-      <div class="col-12"><label class="form-label" for="editStandardItems">关联标准项（可多选）</label><select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="8"><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select></div>
+      <div class="col-12"><label class="form-label" for="editStandardItems">关联标准项（可多选）</label><select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="8" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select></div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
   </form>

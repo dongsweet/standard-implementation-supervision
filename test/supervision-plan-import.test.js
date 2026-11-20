@@ -64,6 +64,12 @@ test('ignores X-only rows and keeps valid system numbers from mixed cells', () =
   assert.equal(parsed.ignoredXNumberCount, 2);
 });
 
+test('ignores every identifier beginning with X, including mixed separators', () => {
+  assert.deepEqual(splitStandardNumbers('X-6091\n31168-2023-06008'), {
+    values: [ '31168-2023-06008' ], invalid: [], ignoredX: [ 'X-6091' ],
+  });
+});
+
 test('rejects legacy IDs and incomplete plan rows', () => {
   assert.throws(() => parseSupervisionPlanRows([ { name: '检查方案', rows: [
     [ '标准化编号', '是否公认对象', '检查范围', '对象分类', '检查对象', '检查层面', '检查方法', '检查项描述' ],
@@ -74,6 +80,14 @@ test('rejects legacy IDs and incomplete plan rows', () => {
     [ '标准化编号', '检查对象', '检查方法', '检查项描述' ],
     [ '31168-2023-06008', '云平台', '', '检查内容' ],
   ] } ]), /缺少检查方法/);
+});
+
+test('rejects optional plan fields that exceed database column limits', () => {
+  const tooLongFrequency = '年'.repeat(101);
+  assert.throws(() => parseSupervisionPlanRows([ { name: '检查方案', rows: [
+    [ '标准化编号', '检查对象', '检查方法', '检查项描述', '检查频率' ],
+    [ '31168-2023-06008', '云平台', '证据材料核查', '检查内容', tooLongFrequency ],
+  ] } ]), /检查频率.*超过100字限制/);
 });
 
 test('parses supervision workbooks whose OOXML main parts use an x namespace prefix', { skip: !ExcelJS || !JSZip }, async () => {
@@ -112,7 +126,7 @@ test('imports plan definitions and multiple item links without creating executio
       statements.push({ statement, values });
       if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: null };
       if (statement.startsWith('SELECT * FROM supervision_plan_import_jobs')) {
-        return { rows: [ { id: 'job-1', status: 'ready', payload: { rows: [ {
+        return { rows: [ { id: 'job-1', original_filename: 'plans.xlsx', status: 'ready', payload: { rows: [ {
           standardNumbers: [ '31168-2023-06008', '31168-2023-07002' ],
           objectName: '《云平台网络拓扑图》', scope: '云中心', recognizedObject: true,
           objectCategory: '设计方案', checkLayer: '管理层面', checkMethod: '证据材料核查',
@@ -130,6 +144,7 @@ test('imports plan definitions and multiple item links without creating executio
       if (statement.startsWith('INSERT INTO supervision_definitions')) return { rows: [ { id: 'definition-1' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO supervision_definition_standard_items')) return { rows: [ { definition_id: 'definition-1' } ], rowCount: 1 };
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
     },
     release() {},
@@ -139,6 +154,13 @@ test('imports plan definitions and multiple item links without creating executio
   assert.equal(result.importedRowCount, 1);
   assert.equal(result.createdCount, 1);
   assert.equal(result.linkCount, 2);
+  const audit = statements.find(item => item.statement.startsWith('INSERT INTO audit_logs'));
+  assert.ok(audit);
+  assert.equal(audit.values[0], 'user-1');
+  assert.equal(audit.values[1], 'job-1');
+  assert.deepEqual(JSON.parse(audit.values[2]), {
+    originalFilename: 'plans.xlsx', importedRowCount: 1, createdCount: 1, reusedCount: 0, linkCount: 2,
+  });
   assert.equal(statements.some(item => item.statement.includes('supervision_executions')), false);
   assert.equal(statements.some(item => item.statement.includes('supervision_item_results')), false);
 });
@@ -184,6 +206,7 @@ test('keeps otherwise identical plans separate when their scopes differ', async 
         return { rows: [ { definition_id: values[0] } ], rowCount: 1 };
       }
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
     },
     release() {},

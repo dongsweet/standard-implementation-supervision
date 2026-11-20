@@ -2,7 +2,7 @@
 
 const Service = require('egg').Service;
 const crypto = require('node:crypto');
-const { normalizeDefinition, scoreDefinition } = require('../lib/dedupe');
+const { definitionConflicts, normalizeDefinition, scoreDefinition, normalizeText } = require('../lib/dedupe');
 const SupervisionDefinitionRepository = require('../repository/supervisionDefinition');
 
 class DedupeService extends Service {
@@ -21,7 +21,17 @@ class DedupeService extends Service {
       WHERE (id = $1 AND candidate_id = $2) OR (id = $2 AND candidate_id = $1)
       LIMIT 1`, [ leftId, rightId ]);
     if (!candidate.rowCount) this.ctx.throw(400, 'AI 仅复核规则层产生的候选定义');
-    const inputPair = [ normalizeDefinition(left).normalizedHash, normalizeDefinition(right).normalizedHash ].sort();
+    const fingerprint = definition => JSON.stringify([
+      definition.id,
+      normalizeDefinition(definition).normalizedHash,
+      definition.scope,
+      definition.recognized_object,
+      definition.priority,
+      normalizeText(definition.access_mode),
+      normalizeText(definition.reference_result),
+      normalizeText(definition.reference_materials),
+    ]);
+    const inputPair = [ fingerprint(left), fingerprint(right) ].sort();
     const inputHash = crypto.createHash('sha256').update(JSON.stringify(inputPair)).digest('hex');
     const aiService = this.ctx.service.aiProvider;
     const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
@@ -79,13 +89,16 @@ class DedupeService extends Service {
         }
         const mergedId = canonicalId === leftId ? rightId : leftId;
         const locked = await client.query(`
-          SELECT id, frequency, steps, access_mode, status
+          SELECT id, frequency, steps, access_mode, status, scope, recognized_object,
+                 priority, reference_result, reference_materials
           FROM supervision_definitions WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [ [ leftId, rightId ] ]);
         if (locked.rows.length !== 2 || locked.rows.some(item => item.status !== 'active')) this.ctx.throw(409, '候选定义已发生变化，请刷新后再复核');
         const loser = locked.rows.find(item => item.id === mergedId);
         const winner = locked.rows.find(item => item.id === canonicalId);
-        const conflicts = [ 'frequency', 'steps', 'access_mode' ].filter(field => (loser[field] || '') !== (winner[field] || ''));
-        if (conflicts.length && !confirmConflicts) this.ctx.throw(409, `归并存在字段冲突（${conflicts.join('、')}），需明确确认后重试`);
+        const conflicts = definitionConflicts(loser, winner);
+        if (conflicts.length && !confirmConflicts) {
+          this.ctx.throw(409, `归并存在字段冲突（${conflicts.map(([, label ]) => label).join('、')}），需明确确认后重试`);
+        }
         const updated = await client.query(`
           UPDATE supervision_definitions
           SET status = 'merged', merged_into_id = $1, updated_at = now()
@@ -100,7 +113,7 @@ class DedupeService extends Service {
         await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ mergedId ]);
         await client.query(`
           INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
-          VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [ reviewerId, canonicalId, JSON.stringify({ mergedId, reviewId: review.rows[0].id, conflicts }) ]);
+          VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [ reviewerId, canonicalId, JSON.stringify({ mergedId, reviewId: review.rows[0].id, conflicts: conflicts.map(([ field ]) => field) }) ]);
       }
       await client.query('COMMIT');
       return review.rows[0];

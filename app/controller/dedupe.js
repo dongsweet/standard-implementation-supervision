@@ -12,7 +12,8 @@ class DedupeController extends Controller {
 
   async candidates() {
     requireGlobalRead(this.ctx);
-    const limit = Math.min(Number(this.ctx.query.limit || 50), 200);
+    const requestedLimit = Number.parseInt(this.ctx.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 200)) : 50;
     this.ctx.body = { data: await this.ctx.service.dedupe.listCandidates({ limit }) };
   }
 

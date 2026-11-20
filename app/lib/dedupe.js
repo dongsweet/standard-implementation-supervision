@@ -39,4 +39,27 @@ function scoreDefinition(left, right) {
   return Object.entries(weights).reduce((sum, [ field, weight ]) => sum + similarity(left[field], right[field]) * weight, 0);
 }
 
-module.exports = { normalizeText, normalizeDefinition, similarity, scoreDefinition };
+function definitionConflicts(left, right) {
+  const fields = [
+    [ 'object_name', '检查对象' ],
+    [ 'object_category', '对象分类' ],
+    [ 'check_layer', '检查层面' ],
+    [ 'check_method', '检查方法' ],
+    [ 'description', '检查项描述' ],
+    [ 'steps', '检查步骤' ],
+    [ 'frequency', '检查频率' ],
+    [ 'access_mode', '执行方式' ],
+    [ 'scope', '检查范围' ],
+    [ 'recognized_object', '是否公认对象' ],
+    [ 'priority', '重点项' ],
+    [ 'reference_result', '参考判定描述' ],
+    [ 'reference_materials', '参考材料' ],
+  ];
+  return fields.filter(([ field ]) => {
+    const leftValue = typeof left[field] === 'boolean' ? String(left[field]) : normalizeText(left[field]);
+    const rightValue = typeof right[field] === 'boolean' ? String(right[field]) : normalizeText(right[field]);
+    return leftValue !== rightValue;
+  });
+}
+
+module.exports = { definitionConflicts, normalizeText, normalizeDefinition, similarity, scoreDefinition };

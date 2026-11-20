@@ -15,13 +15,13 @@ class SupervisionDefinitionController extends Controller {
 
   async create() {
     requireGlobalWrite(this.ctx);
-    await this.ctx.service.supervisionDefinition.create(this.ctx.request.body || {});
+    await this.ctx.service.supervisionDefinition.create(this.ctx.request.body || {}, this.ctx.session.userId);
     this.ctx.redirect('/supervision-definitions?notice=' + encodeURIComponent('监督定义已创建'));
   }
 
   async update() {
     requireGlobalWrite(this.ctx);
-    await this.ctx.service.supervisionDefinition.update(this.ctx.params.definitionId, this.ctx.request.body || {});
+    await this.ctx.service.supervisionDefinition.update(this.ctx.params.definitionId, this.ctx.request.body || {}, this.ctx.session.userId);
     this.ctx.redirect('/supervision-definitions?notice=' + encodeURIComponent('监督定义已更新'));
   }
 }

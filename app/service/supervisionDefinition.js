@@ -5,6 +5,9 @@ const { normalizeDefinition } = require('../lib/dedupe');
 const { DEFAULT_SUPERVISION_METHODS, joinSupervisionMethods, splitSupervisionMethods } = require('../lib/supervisionMethods');
 const Repository = require('../repository/supervisionDefinition');
 
+// PostgreSQL accepts UUIDs with any version/variant bits; validate the shape only.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 class SupervisionDefinitionService extends Service {
   get repository() {
     return new Repository(this.ctx.app.db);
@@ -50,9 +53,13 @@ class SupervisionDefinitionService extends Service {
     }
     if (fields.priority && ![ '重点项', '非重点项' ].includes(fields.priority)) this.ctx.throw(400, '重点项只能填写“重点项”或“非重点项”');
     if (!fields.object_name || !fields.check_method || !fields.description) this.ctx.throw(400, '检查对象、检查方法和检查描述不能为空');
-    if (fields.object_name.length > 500 || fields.scope.length > 200 || fields.check_method.length > 2000 || fields.description.length > 5000) this.ctx.throw(400, '监督定义字段长度超出限制');
+    if (fields.object_name.length > 500 || fields.scope.length > 200 || fields.object_category.length > 200 || fields.check_layer.length > 200
+      || fields.check_method.length > 2000 || fields.description.length > 5000 || fields.frequency.length > 100
+      || fields.access_mode.length > 50 || fields.priority.length > 50) this.ctx.throw(400, '监督定义字段长度超出限制');
     const itemIds = Array.isArray(payload.standardItemIds) ? payload.standardItemIds : [ payload.standardItemIds ];
     const standardItemIds = [ ...new Set(itemIds.map(item => String(item || '').trim()).filter(Boolean)) ];
+    if (!standardItemIds.length) this.ctx.throw(400, '请至少关联一个标准项');
+    if (standardItemIds.some(item => !UUID_RE.test(item))) this.ctx.throw(400, '标准项编号格式无效');
     return {
       fields: {
         objectName: fields.object_name,
@@ -74,16 +81,25 @@ class SupervisionDefinitionService extends Service {
     };
   }
 
-  async create(payload) {
+  async create(payload, actorId) {
+    const normalized = this.normalize(payload);
     try {
-      return await this.repository.create(this.normalize(payload));
+      return await this.repository.create(normalized, actorId);
     } catch (error) {
+      if (error.code === 'INVALID_STANDARD_ITEMS') this.ctx.throw(400, error.message);
       throw error;
     }
   }
 
-  async update(id, payload) {
-    const result = await this.repository.update(id, this.normalize(payload));
+  async update(id, payload, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '监督定义编号格式无效');
+    let result;
+    try {
+      result = await this.repository.update(id, this.normalize(payload), actorId);
+    } catch (error) {
+      if (error.code === 'INVALID_STANDARD_ITEMS') this.ctx.throw(400, error.message);
+      throw error;
+    }
     if (!result) this.ctx.throw(404, '监督定义不存在或已归并');
     return result;
   }

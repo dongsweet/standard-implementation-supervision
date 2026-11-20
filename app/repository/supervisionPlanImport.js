@@ -225,6 +225,17 @@ class SupervisionPlanImportRepository {
       await client.query(`
         UPDATE supervision_plan_import_jobs SET status = 'applied', applied_at = now()
         WHERE id = $1`, [ jobId ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'apply', 'supervision_plan_import_job', $2, $3::jsonb)`, [
+        actorId, jobId, JSON.stringify({
+          originalFilename: job.original_filename,
+          importedRowCount: rows.length,
+          createdCount,
+          reusedCount,
+          linkCount,
+        }),
+      ]);
       await client.query('COMMIT');
       return { importedRowCount: rows.length, createdCount, reusedCount, linkCount, actorId };
     } catch (error) {

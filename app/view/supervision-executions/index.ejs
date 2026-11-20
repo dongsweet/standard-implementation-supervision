@@ -23,7 +23,7 @@
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label" for="executionDefinition">监督定义</label><select class="form-select" id="executionDefinition" name="definitionId" required><option value="">请选择监督定义</option><% definitions.forEach(definition => { %><option value="<%= definition.id %>"><%= definition.object_name %> · <%= definition.check_method %>（<%= (definition.standard_items || []).length %> 项）</option><% }) %></select></div>
         <div class="col-md-3"><label class="form-label" for="executionCloudCenter">云中心</label><select class="form-select" id="executionCloudCenter" name="cloudCenterId"><option value="">项目级</option><% cloudCenters.forEach(center => { %><option value="<%= center.id %>"><%= center.name %></option><% }) %></select></div>
-        <div class="col-md-3"><label class="form-label" for="executionCheckedAt">检查时间</label><input class="form-control" id="executionCheckedAt" type="datetime-local" name="checkedAt" required></div>
+        <div class="col-md-3"><label class="form-label" for="executionCheckedAt">检查时间</label><input class="form-control" id="executionCheckedAt" type="datetime-local" required><input type="hidden" id="executionCheckedAtIso" name="checkedAt"></div>
         <div class="col-md-4"><label class="form-label" for="executionOverallResult">总体结论</label><select class="form-select" id="executionOverallResult" name="overallResult"><option value="">未填写</option><option value="satisfied">满足</option><option value="partially_satisfied">部分满足</option><option value="not_satisfied">不满足</option></select></div>
         <div class="col-md-8"><label class="form-label" for="executionNotes">总体备注</label><input class="form-control" id="executionNotes" name="notes" maxlength="2000"></div>
       </div>
@@ -34,17 +34,76 @@
   </form>
 </div></div></div>
 <script>
-  const executionDefinitions = <%- JSON.stringify(definitions) %>;
+  const executionDefinitions = <%- JSON.stringify(definitions).replace(/</g, '\\u003c') %>;
   const executionItems = document.getElementById('executionItems');
+
+  function createResultSelect(itemId) {
+    const select = document.createElement('select');
+    select.className = 'form-select form-select-sm execution-item-result';
+    select.dataset.id = String(itemId);
+    [
+      ['unassessed', '未评估'],
+      ['satisfied', '满足'],
+      ['partially_satisfied', '部分满足'],
+      ['not_satisfied', '不满足'],
+      ['not_applicable', '不适用'],
+    ].forEach(([value, labelText]) => {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = labelText;
+      select.appendChild(option);
+    });
+    return select;
+  }
+
+  function createItemField(labelText, className, itemId) {
+    const field = document.createElement('div');
+    const label = document.createElement('label');
+    const textarea = document.createElement('textarea');
+    field.className = className;
+    label.className = 'form-label small';
+    label.textContent = labelText;
+    textarea.className = labelText === '说明' ? 'form-control form-control-sm execution-item-description' : 'form-control form-control-sm execution-item-problem';
+    textarea.dataset.id = String(itemId);
+    textarea.rows = 2;
+    field.append(label, textarea);
+    return field;
+  }
+
+  function createExecutionItem(item) {
+    const card = document.createElement('div');
+    const heading = document.createElement('div');
+    const row = document.createElement('div');
+    const resultColumn = document.createElement('div');
+    const resultLabel = document.createElement('label');
+    const resultSelect = createResultSelect(item.id);
+    card.className = 'border rounded p-3 mb-2';
+    heading.className = 'fw-semibold mb-2';
+    heading.textContent = [item.code, item.title].filter(Boolean).join(' · ');
+    row.className = 'row g-2';
+    resultColumn.className = 'col-md-3';
+    resultLabel.className = 'form-label small';
+    resultLabel.textContent = '结果';
+    resultColumn.append(resultLabel, resultSelect);
+    row.append(resultColumn, createItemField('说明', 'col-md-9', item.id));
+    card.append(heading, row, createItemField('问题与整改', 'mt-2', item.id));
+    return card;
+  }
+
   document.getElementById('executionDefinition').addEventListener('change', event => {
     const definition = executionDefinitions.find(item => item.id === event.target.value);
     if (!definition) {
-      executionItems.innerHTML = '<div class="text-secondary py-3">选择监督定义后，这里会显示关联的标准项结果。</div>';
+      const empty = document.createElement('div');
+      empty.className = 'text-secondary py-3';
+      empty.textContent = '选择监督定义后，这里会显示关联的标准项结果。';
+      executionItems.replaceChildren(empty);
       return;
     }
-    executionItems.innerHTML = (definition.standard_items || []).map(item => '<div class="border rounded p-3 mb-2"><div class="fw-semibold mb-2">' + item.code + ' · ' + (item.title || '') + '</div><div class="row g-2"><div class="col-md-3"><label class="form-label small">结果</label><select class="form-select form-select-sm execution-item-result" data-id="' + item.id + '"><option value="unassessed">未评估</option><option value="satisfied">满足</option><option value="partially_satisfied">部分满足</option><option value="not_satisfied">不满足</option><option value="not_applicable">不适用</option></select></div><div class="col-md-9"><label class="form-label small">说明</label><textarea class="form-control form-control-sm execution-item-description" data-id="' + item.id + '" rows="2"></textarea></div></div><div class="mt-2"><label class="form-label small">问题与整改</label><textarea class="form-control form-control-sm execution-item-problem" data-id="' + item.id + '" rows="2"></textarea></div></div>').join('');
+    executionItems.replaceChildren(...(definition.standard_items || []).map(createExecutionItem));
   });
   document.getElementById('createExecutionForm').addEventListener('submit', () => {
+    const localCheckedAt = document.getElementById('executionCheckedAt').value;
+    document.getElementById('executionCheckedAtIso').value = new Date(localCheckedAt).toISOString();
     const result = {};
     document.querySelectorAll('.execution-item-result').forEach(select => {
       const id = select.dataset.id;
