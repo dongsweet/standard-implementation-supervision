@@ -10,7 +10,9 @@ class SupervisionExecutionRepository {
       SELECT d.id, d.plan_number, d.object_name, d.check_method, d.frequency,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'code', si.item_code, 'title', si.title
-             ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
+             ) ORDER BY si.item_code) FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items,
+             COALESCE((SELECT json_agg(center_name ORDER BY center_name)
+                       FROM supervision_definition_centers WHERE definition_id = d.id), '[]'::json) AS supervision_centers
       FROM supervision_definitions d
       LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
       LEFT JOIN project_standard_items psi
@@ -19,6 +21,7 @@ class SupervisionExecutionRepository {
       WHERE d.status = 'active'
       GROUP BY d.id
       HAVING count(psi.standard_item_id) > 0
+         AND EXISTS (SELECT 1 FROM supervision_definition_centers dc WHERE dc.definition_id = d.id)
       ORDER BY d.object_name, d.check_method`, [ projectId ]);
     const cloudCenters = await this.pool.query(`
       SELECT cc.id, cc.code, cc.name, cc.center_type
@@ -31,7 +34,7 @@ class SupervisionExecutionRepository {
   async list(projectId) {
     const result = await this.pool.query(`
       SELECT e.id, e.checked_at, e.overall_result, e.notes,
-             d.plan_number, d.object_name, d.check_method,
+             d.plan_number, d.object_name, d.check_method, e.supervision_center,
              cc.name AS cloud_center_name,
              u.display_name AS checked_by_name,
              count(sir.id)::integer AS item_result_count,
@@ -47,7 +50,7 @@ class SupervisionExecutionRepository {
     return result.rows;
   }
 
-  async create({ projectId, definitionId, cloudCenterId, checkedAt, checkedBy, overallResult, notes, itemResults }) {
+  async create({ projectId, definitionId, cloudCenterId, supervisionCenter, checkedAt, checkedBy, overallResult, notes, itemResults }) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -65,6 +68,21 @@ class SupervisionExecutionRepository {
         throw error;
       }
       const definitionItemIds = new Set(definition.rows.map(row => row.id));
+      const applicableCenters = await client.query(`
+        SELECT center_name FROM supervision_definition_centers
+        WHERE definition_id = $1 ORDER BY center_name`, [ definitionId ]);
+      if (applicableCenters.rowCount && !supervisionCenter) {
+        const error = new Error('请选择本次执行的检查中心');
+        error.code = 'INVALID_SUPERVISION_CENTER';
+        throw error;
+      }
+      if (supervisionCenter) {
+        if (!applicableCenters.rows.some(row => row.center_name === supervisionCenter)) {
+          const error = new Error('所选检查中心不在该检查方案的适用范围内');
+          error.code = 'INVALID_SUPERVISION_CENTER';
+          throw error;
+        }
+      }
       for (const standardItemId of itemResults.keys()) {
         if (!definitionItemIds.has(standardItemId)) {
           const error = new Error('提交的标准项结果不属于所选检查方案');
@@ -73,6 +91,11 @@ class SupervisionExecutionRepository {
         }
       }
       if (cloudCenterId) {
+        if (supervisionCenter && supervisionCenter !== '云中心') {
+          const error = new Error('只有检查中心为“云中心”时才能选择具体云中心');
+          error.code = 'INVALID_CLOUD_CENTER';
+          throw error;
+        }
         const center = await client.query('SELECT 1 FROM project_cloud_centers WHERE project_id = $1 AND cloud_center_id = $2', [ projectId, cloudCenterId ]);
         if (!center.rowCount) {
           const error = new Error('所选云中心未纳入当前项目');
@@ -82,9 +105,9 @@ class SupervisionExecutionRepository {
       }
       const execution = await client.query(`
         INSERT INTO supervision_executions
-          (project_id, cloud_center_id, definition_id, checked_at, checked_by, overall_result, notes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id`, [ projectId, cloudCenterId || null, definitionId, checkedAt, checkedBy, overallResult || null, notes || null ]);
+          (project_id, cloud_center_id, definition_id, supervision_center, checked_at, checked_by, overall_result, notes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id`, [ projectId, cloudCenterId || null, definitionId, supervisionCenter || null, checkedAt, checkedBy, overallResult || null, notes || null ]);
       for (const standardItemId of definition.rows.map(row => row.id)) {
         const item = itemResults.get(standardItemId) || {};
         await client.query(`
@@ -102,6 +125,7 @@ class SupervisionExecutionRepository {
         JSON.stringify({
           projectId,
           definitionId,
+          ...(supervisionCenter ? { supervisionCenter } : {}),
           cloudCenterId: cloudCenterId || null,
           checkedAt,
           overallResult: overallResult || null,

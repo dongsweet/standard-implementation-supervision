@@ -3,8 +3,8 @@
   const statusValue = typeof status === 'undefined' ? '' : status;
   const priorityValue = typeof priority === 'undefined' ? '' : priority;
   const checkMethodValue = typeof checkMethod === 'undefined' ? '' : checkMethod;
-  const scopeValue = typeof scope === 'undefined' ? '' : scope;
-  const scopesValue = typeof scopes === 'undefined' ? [] : scopes;
+  const centerValue = typeof center === 'undefined' ? '' : center;
+  const centerOptionsValue = typeof centerOptions === 'undefined' ? [] : centerOptions;
   const totalValue = typeof total === 'undefined' ? definitions.length : total;
   const pageValue = typeof page === 'undefined' ? 1 : page;
   const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
@@ -14,7 +14,7 @@
     if (statusValue) params.push('status=' + encodeURIComponent(statusValue));
     if (priorityValue) params.push('priority=' + encodeURIComponent(priorityValue));
     if (checkMethodValue) params.push('checkMethod=' + encodeURIComponent(checkMethodValue));
-    if (scopeValue) params.push('scope=' + encodeURIComponent(scopeValue));
+    if (centerValue) params.push('center=' + encodeURIComponent(centerValue));
     params.push('page=' + targetPage);
     return '?' + params.join('&');
   };
@@ -30,7 +30,7 @@
       <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="definitionSearch">查找</label><input class="form-control" id="definitionSearch" name="search" value="<%= searchValue %>" placeholder="方案编号、检查对象、描述或标准编号"></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionPriority">重点项</label><select class="form-select" id="definitionPriority" name="priority"><option value="">全部</option><option value="重点项" <%= priorityValue === '重点项' ? 'selected' : '' %>>重点项</option><option value="非重点项" <%= priorityValue === '非重点项' ? 'selected' : '' %>>非重点项</option><option value="未指定" <%= priorityValue === '未指定' ? 'selected' : '' %>>未指定</option></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionMethod">检查方法</label><select class="form-select" id="definitionMethod" name="checkMethod"><option value="">全部方法</option><% checkMethodOptions.forEach(method => { %><option value="<%= method %>" <%= checkMethodValue === method ? 'selected' : '' %>><%= method %></option><% }) %></select></div>
-      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionScope">检查范围</label><select class="form-select" id="definitionScope" name="scope"><option value="">全部范围</option><% scopesValue.forEach(scopeOption => { %><option value="<%= scopeOption %>" <%= scopeValue === scopeOption ? 'selected' : '' %>><%= scopeOption %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionCenter">适用检查中心</label><select class="form-select" id="definitionCenter" name="center"><option value="">全部中心</option><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>" <%= centerValue === centerOption ? 'selected' : '' %>><%= centerOption %></option><% }) %></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionStatus">状态</label><select class="form-select" id="definitionStatus" name="status"><option value="">全部状态</option><option value="active" <%= statusValue === 'active' ? 'selected' : '' %>>有效</option><option value="merged" <%= statusValue === 'merged' ? 'selected' : '' %>>已归并</option></select></div>
       <div class="col-12 d-flex justify-content-end gap-2"><button class="btn btn-outline-primary" type="submit">查找</button><a class="btn btn-outline-secondary" href="/supervision-definitions">重置</a></div>
     </form>
@@ -44,7 +44,7 @@
     <tbody>
       <% definitions.forEach(definition => { %>
         <tr>
-          <td><span class="badge text-bg-primary me-1"><%= String(definition.plan_number || '').padStart(3, '0') %></span><strong><%= definition.object_name %></strong><div class="small text-secondary mt-1"><%= definition.scope || '未指定范围' %></div></td>
+          <td><span class="badge text-bg-primary me-1"><%= String(definition.plan_number || '').padStart(3, '0') %></span><strong><%= definition.object_name %></strong><div class="small text-secondary mt-1"><%= (definition.centers || []).join('、') || '未指定中心' %></div></td>
           <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
           <td><div class="text-truncate" style="max-width:300px" title="<%= definition.description %>"><%= definition.description %></div></td>
           <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
@@ -74,7 +74,8 @@
     <div class="modal-header"><h2 class="modal-title fs-5" id="createDefinitionModalLabel">新增检查方案</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-md-4"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" required maxlength="500" placeholder="例如：云平台账号管理"></div>
-      <div class="col-md-4"><label class="form-label" for="createScope">检查范围</label><input class="form-control" id="createScope" name="scope" placeholder="例如：云中心"></div>
+      <div class="col-md-4"><label class="form-label" for="createScope">检查范围</label><input class="form-control" id="createScope" name="scope" placeholder="描述适用范围或位置"></div>
+      <div class="col-md-8"><label class="form-label" for="createCenters">适用检查中心（可多选）</label><select class="form-select" id="createCenters" name="centers" multiple size="3" required><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>"><%= centerOption %></option><% }) %></select><div class="form-text">同一检查对象和内容可同时适用于多个中心；执行时按中心分别记录。</div></div>
       <div class="col-md-2"><label class="form-label" for="createRecognizedObject">公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
       <div class="col-md-2"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
       <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" placeholder="例如：制度、技术、现场"></div>
@@ -99,6 +100,7 @@
     <div class="modal-body row g-3">
       <div class="col-md-4"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" required maxlength="500"></div>
       <div class="col-md-4"><label class="form-label" for="editScope">检查范围</label><input class="form-control" id="editScope" name="scope"></div>
+      <div class="col-md-8"><label class="form-label" for="editCenters">适用检查中心（可多选）</label><select class="form-select" id="editCenters" name="centers" multiple size="3" required><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>"><%= centerOption %></option><% }) %></select><div class="form-text">同一检查对象和内容可同时适用于多个中心；执行时按中心分别记录。</div></div>
       <div class="col-md-2"><label class="form-label" for="editRecognizedObject">公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
       <div class="col-md-2"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
       <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory"></div>
@@ -123,6 +125,7 @@
     const rows = [
       ['方案编号', String(definition.plan_number || '').padStart(3, '0')],
       ['检查对象', definition.object_name],
+      ['适用检查中心', (definition.centers || []).join('、') || '未指定'],
       ['范围 / 分类 / 层面', [definition.scope, definition.object_category, definition.check_layer].filter(Boolean).join(' / ') || '未指定'],
       ['检查方法', definition.check_method],
       ['检查频率 / 执行方式', [definition.frequency, definition.access_mode].filter(Boolean).join(' / ') || '未指定'],
@@ -161,6 +164,7 @@
       editReferenceMaterials: definition.reference_materials || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
+    Array.from(document.getElementById('editCenters').options).forEach(option => { option.selected = (definition.centers || []).includes(option.value); });
     const methods = new Set((definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean));
     const methodSelect = document.getElementById('editCheckMethods');
     const knownMethods = new Set(Array.from(methodSelect.options).map(option => option.value));

@@ -49,9 +49,9 @@ function definitionConflicts(left, right) {
     [ 'steps', '检查步骤' ],
     [ 'frequency', '检查频率' ],
     [ 'access_mode', '执行方式' ],
-    [ 'scope', '检查范围' ],
     [ 'recognized_object', '是否公认对象' ],
     [ 'priority', '重点项' ],
+    [ 'scope', '检查范围' ],
     [ 'reference_result', '参考判定描述' ],
     [ 'reference_materials', '参考材料' ],
   ];

@@ -121,7 +121,7 @@ class AiProvider {
   async classifyPair(left, right) {
     if (!this.enabled) return { result: { relation: 'uncertain', confidence: 0, differences: [], reason: 'AI 服务未配置', recommendedCanonicalId: null }, providerStatus: null, durationMs: 0 };
     const response = await this.request([
-      { role: 'system', content: '你是监督检查定义去重助手。只判断语义是否等价，不修改数据。必须返回 JSON：relation、confidence、differences、reason、recommendedCanonicalId。' },
+      { role: 'system', content: '你是监督检查定义去重助手。只判断语义是否等价，不修改数据。检查对象必须相同才可建议 duplicate；适用检查中心列表属于方案适用范围元数据，中心不同不代表检查定义不同，也不得单独作为不重复理由。必须返回 JSON：relation、confidence、differences、reason、recommendedCanonicalId。' },
       { role: 'user', content: JSON.stringify({ left, right }) },
     ]);
     return { result: parseAiResult(response.content), providerStatus: response.providerStatus, durationMs: response.durationMs };

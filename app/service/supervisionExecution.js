@@ -46,6 +46,7 @@ class SupervisionExecutionService extends Service {
   async create(projectId, payload, checkedBy) {
     const definitionId = String(payload.definitionId || '').trim();
     const cloudCenterId = String(payload.cloudCenterId || '').trim() || null;
+    const supervisionCenter = String(payload.supervisionCenter || '').trim() || null;
     const checkedAt = String(payload.checkedAt || '').trim();
     if (!definitionId || !checkedAt) this.ctx.throw(400, '请选择监督定义并填写检查时间');
     if (!UUID_RE.test(definitionId)) this.ctx.throw(400, '监督定义编号格式无效');
@@ -78,11 +79,11 @@ class SupervisionExecutionService extends Service {
     }
     try {
       return await this.repository.create({
-        projectId, definitionId, cloudCenterId, checkedAt, checkedBy,
+        projectId, definitionId, cloudCenterId, supervisionCenter, checkedAt, checkedBy,
         overallResult, notes: String(payload.notes || '').trim(), itemResults,
       });
     } catch (error) {
-      if ([ 'INVALID_DEFINITION', 'INVALID_CLOUD_CENTER', 'INVALID_ITEM_RESULTS' ].includes(error.code)) this.ctx.throw(400, error.message);
+      if ([ 'INVALID_DEFINITION', 'INVALID_CLOUD_CENTER', 'INVALID_ITEM_RESULTS', 'INVALID_SUPERVISION_CENTER' ].includes(error.code)) this.ctx.throw(400, error.message);
       throw error;
     }
   }

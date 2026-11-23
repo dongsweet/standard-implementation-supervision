@@ -6,10 +6,10 @@
 <div class="card">
   <div class="card-header d-flex align-items-center"><h3 class="card-title">检查记录</h3><span class="badge text-bg-secondary ms-auto"><%= executions.length %> 条</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th>检查时间</th><th>监督定义</th><th>云中心</th><th>总体结论</th><th>标准项结果</th><th>检查人</th><th>备注</th></tr></thead>
+    <thead><tr><th>检查时间</th><th>检查方案</th><th>适用中心/云中心</th><th>总体结论</th><th>标准项结果</th><th>检查人</th><th>备注</th></tr></thead>
     <tbody>
       <% executions.forEach(execution => { %>
-        <tr><td><%= new Date(execution.checked_at).toLocaleString('zh-CN') %></td><td><strong><%= execution.object_name %></strong><div class="small text-secondary">方案编号 <%= String(execution.plan_number || '').padStart(3, '0') %> · <%= execution.check_method %></div></td><td><%= execution.cloud_center_name || '项目级' %></td><td><span class="badge <%= execution.overall_result === 'satisfied' ? 'text-bg-success' : execution.overall_result === 'not_satisfied' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= execution.overall_result === 'satisfied' ? '满足' : execution.overall_result === 'partially_satisfied' ? '部分满足' : execution.overall_result === 'not_satisfied' ? '不满足' : '未填写' %></span></td><td><%= execution.satisfied_count %> / <%= execution.item_result_count %> 项满足</td><td><%= execution.checked_by_name || '-' %></td><td><%= execution.notes || '-' %></td></tr>
+        <tr><td><%= new Date(execution.checked_at).toLocaleString('zh-CN') %></td><td><strong><%= execution.object_name %></strong><div class="small text-secondary">方案编号 <%= String(execution.plan_number || '').padStart(3, '0') %> · <%= execution.check_method %></div></td><td><%= execution.supervision_center || '未指定中心' %><% if (execution.cloud_center_name) { %><div class="small text-secondary"><%= execution.cloud_center_name %></div><% } %></td><td><span class="badge <%= execution.overall_result === 'satisfied' ? 'text-bg-success' : execution.overall_result === 'not_satisfied' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= execution.overall_result === 'satisfied' ? '满足' : execution.overall_result === 'partially_satisfied' ? '部分满足' : execution.overall_result === 'not_satisfied' ? '不满足' : '未填写' %></span></td><td><%= execution.satisfied_count %> / <%= execution.item_result_count %> 项满足</td><td><%= execution.checked_by_name || '-' %></td><td><%= execution.notes || '-' %></td></tr>
       <% }) %>
       <% if (!executions.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">暂无检查记录，请先新建一次检查执行。</td></tr><% } %>
     </tbody>
@@ -22,7 +22,8 @@
     <div class="modal-body">
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label" for="executionDefinition">检查方案</label><select class="form-select" id="executionDefinition" name="definitionId" required><option value="">请选择检查方案</option><% definitions.forEach(definition => { %><option value="<%= definition.id %>"><%= String(definition.plan_number || '').padStart(3, '0') %> · <%= definition.object_name %> · <%= definition.check_method %>（<%= (definition.standard_items || []).length %> 项）</option><% }) %></select></div>
-        <div class="col-md-3"><label class="form-label" for="executionCloudCenter">云中心</label><select class="form-select" id="executionCloudCenter" name="cloudCenterId"><option value="">项目级</option><% cloudCenters.forEach(center => { %><option value="<%= center.id %>"><%= center.name %></option><% }) %></select></div>
+        <div class="col-md-3"><label class="form-label" for="executionSupervisionCenter">本次检查中心</label><select class="form-select" id="executionSupervisionCenter" name="supervisionCenter" required><option value="">先选择检查方案</option></select></div>
+        <div class="col-md-3"><label class="form-label" for="executionCloudCenter">具体云中心（如适用）</label><select class="form-select" id="executionCloudCenter" name="cloudCenterId" disabled><option value="">不指定</option><% cloudCenters.forEach(center => { %><option value="<%= center.id %>"><%= center.name %></option><% }) %></select></div>
         <div class="col-md-3"><label class="form-label" for="executionCheckedAt">检查时间</label><input class="form-control" id="executionCheckedAt" type="datetime-local" required><input type="hidden" id="executionCheckedAtIso" name="checkedAt"></div>
         <div class="col-md-4"><label class="form-label" for="executionOverallResult">总体结论</label><select class="form-select" id="executionOverallResult" name="overallResult"><option value="">未填写</option><option value="satisfied">满足</option><option value="partially_satisfied">部分满足</option><option value="not_satisfied">不满足</option></select></div>
         <div class="col-md-8"><label class="form-label" for="executionNotes">总体备注</label><input class="form-control" id="executionNotes" name="notes" maxlength="2000"></div>
@@ -36,6 +37,8 @@
 <script>
   const executionDefinitions = <%- JSON.stringify(definitions).replace(/</g, '\\u003c') %>;
   const executionItems = document.getElementById('executionItems');
+  const executionCenter = document.getElementById('executionSupervisionCenter');
+  const executionCloudCenter = document.getElementById('executionCloudCenter');
 
   function createResultSelect(itemId) {
     const select = document.createElement('select');
@@ -92,6 +95,11 @@
 
   document.getElementById('executionDefinition').addEventListener('change', event => {
     const definition = executionDefinitions.find(item => item.id === event.target.value);
+    executionCenter.replaceChildren(new Option('请选择本次检查中心', ''));
+    (definition?.supervision_centers || []).forEach(center => executionCenter.add(new Option(center, center)));
+    if (definition?.supervision_centers?.length === 1) executionCenter.value = definition.supervision_centers[0];
+    executionCloudCenter.disabled = executionCenter.value !== '云中心';
+    if (executionCloudCenter.disabled) executionCloudCenter.value = '';
     if (!definition) {
       const empty = document.createElement('div');
       empty.className = 'text-secondary py-3';
@@ -100,6 +108,10 @@
       return;
     }
     executionItems.replaceChildren(...(definition.standard_items || []).map(createExecutionItem));
+  });
+  executionCenter.addEventListener('change', () => {
+    executionCloudCenter.disabled = executionCenter.value !== '云中心';
+    if (executionCloudCenter.disabled) executionCloudCenter.value = '';
   });
   document.getElementById('createExecutionForm').addEventListener('submit', () => {
     const localCheckedAt = document.getElementById('executionCheckedAt').value;

@@ -28,11 +28,12 @@
 <div class="card mb-3">
   <div class="card-header"><h2 class="card-title h6 mb-0">方案预览（前20条）</h2></div>
   <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
-    <thead><tr><th>检查对象/范围</th><th>分类/层面</th><th>检查方法</th><th>检查项描述</th><th>频率/方式</th><th>关联标准项</th></tr></thead>
+    <thead><tr><th>检查对象/范围</th><th>适用检查中心</th><th>分类/层面</th><th>检查方法</th><th>检查项描述</th><th>频率/方式</th><th>关联标准项</th></tr></thead>
     <tbody>
       <% rows.slice(0, 20).forEach(row => { %>
         <tr>
           <td><strong><%= row.objectName %></strong><div class="small text-secondary"><%= row.scope || '-' %></div></td>
+          <td><%= (row.centers || []).join('、') || '未指定' %></td>
           <td><%= row.objectCategory || '-' %><div class="small text-secondary"><%= row.checkLayer || '-' %> · <%= row.priority || '重点项未指定' %></div></td>
           <td><%= row.checkMethod %><% if (row.steps) { %><details class="small mt-1"><summary>查看检查步骤</summary><div class="mt-1 text-break"><%= row.steps %></div></details><% } %></td>
           <td><div class="text-break"><%= row.description %></div><% if (row.referenceResult || row.referenceMaterials) { %><details class="small mt-1"><summary>参考信息</summary><% if (row.referenceResult) { %><div class="mt-1"><strong>判定：</strong><%= row.referenceResult %></div><% } %><% if (row.referenceMaterials) { %><div class="mt-1"><strong>材料：</strong><%= row.referenceMaterials %></div><% } %></details><% } %></td>
@@ -40,7 +41,7 @@
           <td><% row.standardNumbers.forEach(number => { const item = row.standardItems.find(candidate => candidate.standard_number === number); %><span class="badge <%= item ? 'text-bg-light border' : 'text-bg-danger' %> me-1 mb-1"><%= number %><% if (item) { %> · <%= item.item_code %><% } else { %> · 未匹配<% } %></span><% }) %></td>
         </tr>
       <% }) %>
-      <% if (!rows.length) { %><tr><td colspan="6" class="text-center text-secondary py-4">没有可预览的检查方案。</td></tr><% } %>
+      <% if (!rows.length) { %><tr><td colspan="7" class="text-center text-secondary py-4">没有可预览的检查方案。</td></tr><% } %>
     </tbody>
   </table></div>
 </div>

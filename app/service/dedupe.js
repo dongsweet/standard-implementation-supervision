@@ -25,6 +25,7 @@ class DedupeService extends Service {
       definition.id,
       normalizeDefinition(definition).normalizedHash,
       definition.scope,
+      definition.centers || [],
       definition.recognized_object,
       definition.priority,
       normalizeText(definition.access_mode),
@@ -111,6 +112,11 @@ class DedupeService extends Service {
           WHERE definition_id = $2
           ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
         await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ mergedId ]);
+        await client.query(`
+          INSERT INTO supervision_definition_centers (definition_id, center_name)
+          SELECT $1, center_name FROM supervision_definition_centers WHERE definition_id = $2
+          ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
+        await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ mergedId ]);
         await client.query(`
           INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
           VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [ reviewerId, canonicalId, JSON.stringify({ mergedId, reviewId: review.rows[0].id, conflicts: conflicts.map(([ field ]) => field) }) ]);

@@ -11,7 +11,6 @@ class SupervisionDefinitionRepository {
              v.check_method, v.description, v.steps, v.frequency, v.access_mode, v.status,
              v.merged_into_id, v.normalized_hash, v.similarity_score,
              CASE WHEN v.candidate_type = 'exact_duplicate_candidate'
-               AND d.scope IS NOT DISTINCT FROM c.scope
                AND d.recognized_object IS NOT DISTINCT FROM c.recognized_object
                AND d.priority IS NOT DISTINCT FROM c.priority
                AND d.access_mode IS NOT DISTINCT FROM c.access_mode
@@ -22,7 +21,8 @@ class SupervisionDefinitionRepository {
              v.candidate_check_method, v.candidate_description, v.candidate_steps, v.candidate_frequency, v.candidate_access_mode,
              v.standard_item_codes, v.candidate_standard_item_codes, v.execution_count, v.candidate_execution_count, v.created_at,
              d.scope, d.recognized_object, d.priority, d.reference_result, d.reference_materials,
-             c.scope AS candidate_scope, c.recognized_object AS candidate_recognized_object,
+             v.centers, c.scope AS candidate_scope, c.recognized_object AS candidate_recognized_object,
+             v.candidate_centers,
              c.priority AS candidate_priority, c.reference_result AS candidate_reference_result,
              c.reference_materials AS candidate_reference_materials
       FROM supervision_definition_candidates v
@@ -40,7 +40,7 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
-  async listDefinitions({ search = '', status = '', priority = '', checkMethod = '', scope = '', page = 1, pageSize = 20 } = {}) {
+  async listDefinitions({ search = '', status = '', priority = '', checkMethod = '', center = '', page = 1, pageSize = 20 } = {}) {
     const conditions = [];
     const values = [];
     if (search) {
@@ -83,9 +83,9 @@ class SupervisionDefinitionRepository {
       values.push(`%${checkMethod}%`);
       conditions.push(`d.check_method ILIKE $${values.length}`);
     }
-    if (scope) {
-      values.push(scope);
-      conditions.push(`d.scope = $${values.length}`);
+    if (center) {
+      values.push(center);
+      conditions.push(`EXISTS (SELECT 1 FROM supervision_definition_centers dc WHERE dc.definition_id = d.id AND dc.center_name = $${values.length})`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const countResult = await this.pool.query(`
@@ -109,7 +109,9 @@ class SupervisionDefinitionRepository {
                'title', si.title, 'chapterCode', sc.code, 'chapterName', sc.name,
                'standardCode', s.code, 'version', sv.version
              ) ORDER BY s.code, sv.version, si.item_code)
-             FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items
+             FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items,
+             COALESCE((SELECT json_agg(center_name ORDER BY center_name)
+                        FROM supervision_definition_centers WHERE definition_id = d.id), '[]'::json) AS centers
       FROM supervision_definitions d
       LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
       LEFT JOIN standard_items si ON si.id = dsi.standard_item_id
@@ -136,6 +138,13 @@ class SupervisionDefinitionRepository {
       WHERE scope IS NOT NULL AND btrim(scope) <> ''
       ORDER BY scope`);
     return result.rows.map(row => row.scope);
+  }
+
+  async listDefinitionCenters() {
+    const result = await this.pool.query(`
+      SELECT DISTINCT center_name FROM supervision_definition_centers
+      ORDER BY center_name`);
+    return result.rows.map(row => row.center_name);
   }
 
   async listStandardItems() {
@@ -172,6 +181,10 @@ class SupervisionDefinitionRepository {
           INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
           SELECT $1, id FROM standard_items WHERE id = $2
           ON CONFLICT DO NOTHING`, [ result.rows[0].id, standardItemId ]);
+      }
+      for (const centerName of fields.centers || []) {
+        await client.query(`INSERT INTO supervision_definition_centers (definition_id, center_name)
+          VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ result.rows[0].id, centerName ]);
       }
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
@@ -221,6 +234,11 @@ class SupervisionDefinitionRepository {
           SELECT $1, id FROM standard_items WHERE id = $2
           ON CONFLICT DO NOTHING`, [ id, standardItemId ]);
       }
+      await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ id ]);
+      for (const centerName of fields.centers || []) {
+        await client.query(`INSERT INTO supervision_definition_centers (definition_id, center_name)
+          VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ id, centerName ]);
+      }
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
         VALUES ($1, 'update_supervision_definition', 'supervision_definition', $2, $3)`, [
@@ -241,7 +259,9 @@ class SupervisionDefinitionRepository {
     const result = await client.query(`
       SELECT id, object_name, scope, recognized_object, object_category, check_layer, check_method,
              description, steps, frequency, access_mode, priority, reference_result,
-             reference_materials, normalized_hash, status
+             reference_materials, normalized_hash, status,
+             COALESCE((SELECT array_agg(center_name ORDER BY center_name)
+                       FROM supervision_definition_centers WHERE definition_id = supervision_definitions.id), ARRAY[]::varchar[]) AS centers
       FROM supervision_definitions WHERE id = $1`, [ id ]);
     return result.rows[0] || null;
   }

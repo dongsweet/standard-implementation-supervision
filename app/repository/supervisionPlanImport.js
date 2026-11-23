@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizeDefinition, normalizeText } = require('../lib/dedupe');
+const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('../lib/supervisionCenters');
 
 const PLAN_METADATA_FIELDS = [ 'scope', 'recognized_object', 'priority', 'access_mode', 'reference_result', 'reference_materials' ];
 
@@ -159,9 +160,15 @@ class SupervisionPlanImportRepository {
       let reusedCount = 0;
       let linkCount = 0;
       for (const row of rows) {
+        const legacyCenters = splitSupervisionCenters(row.scope);
+        const hasLegacyCenterScope = legacyCenters.length > 0
+          && legacyCenters.every(center => DEFAULT_SUPERVISION_CENTERS.includes(center));
         const fields = {
           object_name: row.objectName,
-          scope: row.scope || null,
+          scope: row.scope && !hasLegacyCenterScope ? row.scope : null,
+          centers: Array.isArray(row.centers) && row.centers.length
+            ? row.centers
+            : hasLegacyCenterScope ? legacyCenters : [],
           recognized_object: row.recognizedObject,
           object_category: row.objectCategory || null,
           check_layer: row.checkLayer || null,
@@ -179,7 +186,7 @@ class SupervisionPlanImportRepository {
         let definitionId = definitionsByKey.get(planKey);
         if (!definitionId) {
           const existing = await client.query(`
-            SELECT id, scope, recognized_object, priority, access_mode, reference_result, reference_materials
+            SELECT id, recognized_object, priority, access_mode, reference_result, reference_materials
             FROM supervision_definitions
             WHERE normalized_hash = $1 AND status = 'active'
             ORDER BY created_at FOR UPDATE`, [ normalizedHash ]);
@@ -189,12 +196,12 @@ class SupervisionPlanImportRepository {
             reusedCount += 1;
             await client.query(`
               UPDATE supervision_definitions
-              SET scope = COALESCE(scope, $2), recognized_object = COALESCE(recognized_object, $3),
-                  priority = COALESCE(priority, $4), access_mode = COALESCE(access_mode, $5),
-                  reference_result = COALESCE(reference_result, $6),
-                  reference_materials = COALESCE(reference_materials, $7), updated_at = now()
+              SET recognized_object = COALESCE(recognized_object, $2),
+                  priority = COALESCE(priority, $3), access_mode = COALESCE(access_mode, $4),
+                  reference_result = COALESCE(reference_result, $5),
+                  reference_materials = COALESCE(reference_materials, $6), updated_at = now()
               WHERE id = $1`, [
-              definitionId, fields.scope, fields.recognized_object, fields.priority,
+              definitionId, fields.recognized_object, fields.priority,
               fields.access_mode, fields.reference_result, fields.reference_materials,
             ]);
           } else {
@@ -213,6 +220,11 @@ class SupervisionPlanImportRepository {
             createdCount += 1;
           }
           definitionsByKey.set(planKey, definitionId);
+        }
+        for (const centerName of fields.centers) {
+          await client.query(`
+            INSERT INTO supervision_definition_centers (definition_id, center_name)
+            VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ definitionId, centerName ]);
         }
         for (const number of row.standardNumbers || []) {
           const standardItemId = byNumber.get(standardKey(number))[0].id;

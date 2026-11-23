@@ -22,6 +22,8 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   assert.match(planView, /name="priority"/);
   assert.match(planView, /name="checkMethod"/);
   assert.match(planView, /name="scope"/);
+  assert.match(planView, /name="centers"/);
+  assert.match(planView, /适用检查中心/);
   assert.match(planView, /name="status"/);
   assert.match(planView, /buildPageUrl\(pageValue - 1\)/);
   assert.match(planView, /definitionDetailModal/);

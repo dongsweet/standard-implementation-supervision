@@ -3,6 +3,7 @@
 const Service = require('egg').Service;
 const { normalizeDefinition } = require('../lib/dedupe');
 const { DEFAULT_SUPERVISION_METHODS, joinSupervisionMethods, splitSupervisionMethods } = require('../lib/supervisionMethods');
+const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('../lib/supervisionCenters');
 const Repository = require('../repository/supervisionDefinition');
 
 // PostgreSQL accepts UUIDs with any version/variant bits; validate the shape only.
@@ -18,7 +19,7 @@ class SupervisionDefinitionService extends Service {
     const status = String(query.status || '').trim();
     const priority = String(query.priority || '').trim();
     const checkMethod = String(query.checkMethod || '').trim().slice(0, 100);
-    const scope = String(query.scope || '').trim().slice(0, 200);
+    const center = String(query.center || '').trim();
     const allowedStatuses = new Set([ '', 'active', 'merged' ]);
     const allowedPriorities = new Set([ '', '重点项', '非重点项', '未指定' ]);
     if (!allowedStatuses.has(status)) this.ctx.throw(400, '无效的方案状态');
@@ -26,11 +27,11 @@ class SupervisionDefinitionService extends Service {
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-    const [ definitionResult, standardItems, methodRows, scopes ] = await Promise.all([
-      this.repository.listDefinitions({ search, status, priority, checkMethod, scope, page, pageSize }),
+    const [ definitionResult, standardItems, methodRows, centers ] = await Promise.all([
+      this.repository.listDefinitions({ search, status, priority, checkMethod, center, page, pageSize }),
       this.repository.listStandardItems(),
       this.repository.listDefinitionMethods(),
-      this.repository.listDefinitionScopes(),
+      this.repository.listDefinitionCenters(),
     ]);
     const checkMethodOptions = new Set(DEFAULT_SUPERVISION_METHODS);
     for (const methodValue of methodRows) {
@@ -40,7 +41,8 @@ class SupervisionDefinitionService extends Service {
       definitions: definitionResult.rows,
       standardItems,
       checkMethodOptions: [ ...checkMethodOptions ].sort((left, right) => left.localeCompare(right, 'zh-CN')),
-      scopes,
+      centers,
+      centerOptions: DEFAULT_SUPERVISION_CENTERS,
       total: definitionResult.total,
       page: definitionResult.page,
       pageSize,
@@ -49,7 +51,7 @@ class SupervisionDefinitionService extends Service {
       status,
       priority,
       checkMethod,
-      scope,
+      center,
     };
   }
 
@@ -62,6 +64,7 @@ class SupervisionDefinitionService extends Service {
     const fields = {
       object_name: String(payload.objectName || '').trim(),
       scope: String(payload.scope || '').trim(),
+      centers: splitSupervisionCenters(payload.centers),
       recognized_object: payload.recognizedObject === '' || payload.recognizedObject === undefined
         ? null
         : payload.recognizedObject === true || payload.recognizedObject === 'true' || payload.recognizedObject === '是',
@@ -84,6 +87,8 @@ class SupervisionDefinitionService extends Service {
     if (fields.object_name.length > 500 || fields.scope.length > 200 || fields.object_category.length > 200 || fields.check_layer.length > 200
       || fields.check_method.length > 2000 || fields.description.length > 5000 || fields.frequency.length > 100
       || fields.access_mode.length > 50 || fields.priority.length > 50) this.ctx.throw(400, '监督定义字段长度超出限制');
+    if (fields.centers.some(center => !DEFAULT_SUPERVISION_CENTERS.includes(center))) this.ctx.throw(400, '适用检查中心只能选择云中心、统一运维中心或总部');
+    if (!fields.centers.length) this.ctx.throw(400, '请至少选择一个适用检查中心');
     const itemIds = Array.isArray(payload.standardItemIds) ? payload.standardItemIds : [ payload.standardItemIds ];
     const standardItemIds = [ ...new Set(itemIds.map(item => String(item || '').trim()).filter(Boolean)) ];
     if (!standardItemIds.length) this.ctx.throw(400, '请至少关联一个标准项');
@@ -92,6 +97,7 @@ class SupervisionDefinitionService extends Service {
       fields: {
         objectName: fields.object_name,
         scope: fields.scope,
+        centers: fields.centers,
         recognizedObject: fields.recognized_object,
         objectCategory: fields.object_category,
         checkLayer: fields.check_layer,

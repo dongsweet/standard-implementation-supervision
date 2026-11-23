@@ -44,12 +44,23 @@ test('parses plan fields and keeps multiple standard links on one definition row
   assert.equal(parsed.rows.length, 1);
   assert.deepEqual(parsed.rows[0].standardNumbers, [ '31168-2023-06008', '31168-2023-07002' ]);
   assert.equal(parsed.rows[0].recognizedObject, true);
-  assert.equal(parsed.rows[0].scope, '云中心');
+  assert.equal(parsed.rows[0].scope, '');
+  assert.deepEqual(parsed.rows[0].centers, [ '云中心' ]);
   assert.equal(parsed.rows[0].checkMethod, '证据材料核查,上机查看');
   assert.equal(parsed.rows[0].priority, '重点项');
   assert.equal(parsed.rows[0].referenceResult, '应划定物理和逻辑安全边界');
   assert.equal(parsed.importedSheetCount, 1);
   assert.equal(parsed.skippedSheetCount, 1);
+});
+
+test('merges center names from repeated import rows into one definition with multiple centers', () => {
+  const parsed = parseSupervisionPlanRows([ { name: '检查方案', rows: [
+    [ '标准化编号', '检查范围', '适用检查中心', '检查对象', '检查方法', '检查项描述' ],
+    [ '31168-2023-06008', '生产', '云中心', '云平台账号', '证据材料核查', '核查高权限账号' ],
+    [ '31168-2023-06009', '生产', '统一运维', '云平台账号', '证据材料核查', '核查高权限账号' ],
+  ] } ]);
+  assert.deepEqual(parsed.rows.map(row => row.centers), [ [ '云中心' ], [ '统一运维中心' ] ]);
+  assert.equal(parsed.rows[0].scope, parsed.rows[1].scope);
 });
 
 test('ignores X-only rows and keeps valid system numbers from mixed cells', () => {
@@ -140,9 +151,10 @@ test('imports plan definitions and multiple item links without creating executio
           { id: 'item-2', standard_number: '31168-2023-07002' },
         ], rowCount: 2 };
       }
-      if (statement.startsWith('SELECT id, scope, recognized_object')) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT id, recognized_object')) return { rows: [], rowCount: 0 };
       if (statement.startsWith('INSERT INTO supervision_definitions')) return { rows: [ { id: 'definition-1' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO supervision_definition_standard_items')) return { rows: [ { definition_id: 'definition-1' } ], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_definition_centers')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
@@ -165,13 +177,13 @@ test('imports plan definitions and multiple item links without creating executio
   assert.equal(statements.some(item => item.statement.includes('supervision_item_results')), false);
 });
 
-test('keeps otherwise identical plans separate when their scopes differ', async () => {
+test('merges otherwise identical plans while combining their applicable centers', async () => {
   const statements = [];
   const definitions = [];
   const links = new Set();
-  const rows = [ '云中心', '总部', '云中心' ].map(scope => ({
+  const rows = [ '云中心', '总部', '云中心' ].map(center => ({
     standardNumbers: [ '31168-2023-06008' ],
-    objectName: '《云平台网络拓扑图》', scope, recognizedObject: true,
+    objectName: '《云平台网络拓扑图》', scope: '', centers: [ center ], recognizedObject: true,
     objectCategory: '设计方案', checkLayer: '管理层面', checkMethod: '证据材料核查',
     description: '检查云平台是否有安全边界', steps: '检查边界', frequency: '仅一次',
     accessMode: '远程', priority: '重点项', referenceResult: '', referenceMaterials: '',
@@ -187,7 +199,7 @@ test('keeps otherwise identical plans separate when their scopes differ', async 
       if (statement.includes('FROM standard_items si') && statement.includes('ANY($1::text[])')) {
         return { rows: [ { id: 'item-1', standard_number: '31168-2023-06008' } ], rowCount: 1 };
       }
-      if (statement.startsWith('SELECT id, scope, recognized_object')) {
+      if (statement.startsWith('SELECT id, recognized_object')) {
         return { rows: definitions.filter(definition => definition.normalizedHash === values[0]), rowCount: definitions.length };
       }
       if (statement.startsWith('INSERT INTO supervision_definitions')) {
@@ -205,6 +217,7 @@ test('keeps otherwise identical plans separate when their scopes differ', async 
         links.add(key);
         return { rows: [ { definition_id: values[0] } ], rowCount: 1 };
       }
+      if (statement.startsWith('INSERT INTO supervision_definition_centers')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
@@ -214,9 +227,9 @@ test('keeps otherwise identical plans separate when their scopes differ', async 
   const repository = new SupervisionPlanImportRepository({ connect: async () => client });
   const result = await repository.apply('job-scope', 'user-1');
   assert.equal(result.importedRowCount, 3);
-  assert.equal(result.createdCount, 2);
-  assert.equal(result.linkCount, 2);
-  assert.deepEqual(definitions.map(definition => definition.scope), [ '云中心', '总部' ]);
+  assert.equal(result.createdCount, 1);
+  assert.equal(result.linkCount, 1);
+  assert.deepEqual(definitions.map(definition => definition.scope), [ null ]);
 });
 
 test('blocks the whole plan batch when a standard number cannot be resolved', async () => {

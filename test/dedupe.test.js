@@ -25,9 +25,9 @@ test('detects content and metadata conflicts before merging definitions', () => 
     [ 'object_name', '检查对象' ],
     [ 'description', '检查项描述' ],
     [ 'access_mode', '执行方式' ],
-    [ 'scope', '检查范围' ],
     [ 'recognized_object', '是否公认对象' ],
     [ 'priority', '重点项' ],
+    [ 'scope', '检查范围' ],
   ]);
 });
 

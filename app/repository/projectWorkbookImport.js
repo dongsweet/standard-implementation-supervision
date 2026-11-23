@@ -493,16 +493,23 @@ class ProjectWorkbookImportRepository {
             VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING definition_id`, [ definitionId, row.standardItemId ]);
           if (linked.rowCount) definitionLinkCount += 1;
           for (const observation of supervision.observations || []) {
-            const cloudCenterId = resolveCenterId(observation.centerName, observation.slot, chosenCenters, projectCentersResult.rows);
+            const supervisionCenter = /统一运维/.test(observation.centerName || '') ? '统一运维中心'
+              : /总部/.test(observation.centerName || '') ? '总部' : '云中心';
+            const resolvedCenterId = resolveCenterId(observation.centerName, observation.slot, chosenCenters, projectCentersResult.rows);
+            const cloudCenterId = supervisionCenter === '云中心' ? resolvedCenterId : null;
             const checkedAt = parseCheckedAt(observation.content);
-            if (!checkedAt || !cloudCenterId) {
+            if (!checkedAt || (supervisionCenter === '云中心' && !cloudCenterId)) {
               skippedObservationCount += 1;
               continue;
             }
-            const key = [ definitionId, cloudCenterId, checkedAt ].join('|');
+            await client.query(`
+              INSERT INTO supervision_definition_centers (definition_id, center_name)
+              VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ definitionId, supervisionCenter ]);
+            const key = [ definitionId, supervisionCenter, cloudCenterId, checkedAt ].join('|');
             if (!executionGroups.has(key)) {
               executionGroups.set(key, {
                 definitionId,
+                supervisionCenter,
                 cloudCenterId,
                 checkedAt,
                 notes: '从项目整理工作簿导入',
@@ -529,9 +536,9 @@ class ProjectWorkbookImportRepository {
       for (const execution of executionGroups.values()) {
         const created = await client.query(`
           INSERT INTO supervision_executions
-            (project_id, cloud_center_id, definition_id, checked_at, overall_result, notes)
-          VALUES ($1, $2, $3, $4, NULL, $5) RETURNING id`, [
-          projectId, execution.cloudCenterId, execution.definitionId, execution.checkedAt, execution.notes,
+            (project_id, cloud_center_id, definition_id, supervision_center, checked_at, overall_result, notes)
+          VALUES ($1, $2, $3, $4, $5, NULL, $6) RETURNING id`, [
+          projectId, execution.cloudCenterId, execution.definitionId, execution.supervisionCenter, execution.checkedAt, execution.notes,
         ]);
         executionCount += 1;
         for (const [ standardItemId, result ] of execution.results) {

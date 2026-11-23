@@ -23,7 +23,7 @@ test('filters and paginates supervision definitions with stable readable-number 
     status: 'active',
     priority: '重点项',
     checkMethod: '访谈',
-    scope: '云中心',
+    center: '云中心',
     page: 2,
     pageSize: 20,
   });
@@ -40,7 +40,7 @@ test('filters and paginates supervision definitions with stable readable-number 
   assert.match(calls[0].statement, /d\.check_method ILIKE \$4/);
   assert.match(calls[0].statement, /filter_si\.standard_number ILIKE \$1/);
   assert.match(calls[1].statement, /ORDER BY d\.status, d\.plan_number/);
-  assert.match(calls[0].statement, /d\.scope = \$5/);
+  assert.match(calls[0].statement, /dc\.center_name = \$5/);
   assert.match(calls[1].statement, /LIMIT \$6 OFFSET \$7/);
 });
 
