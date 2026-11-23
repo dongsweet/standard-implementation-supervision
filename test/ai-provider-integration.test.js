@@ -64,8 +64,11 @@ test('exposes center object semantic review through the Egg AI service', { skip:
   };
   try {
     const context = {
-      service: {
-        systemSetting: { getAiConfig: async () => ({ enabled: true, baseUrl: 'https://example.com', apiKey: 'key', model: 'model' }) },
+      getProvider: AiProviderService.prototype.getProvider,
+      ctx: {
+        service: {
+          systemSetting: { getAiConfig: async () => ({ enabled: true, baseUrl: 'https://example.com', apiKey: 'key', model: 'model' }) },
+        },
       },
     };
     const result = await AiProviderService.prototype.classifyCenterObjectPair.call(
