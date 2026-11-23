@@ -1,5 +1,7 @@
 'use strict';
 
+const { normalizeDefinition } = require('../lib/dedupe');
+
 class SupervisionDefinitionRepository {
   constructor(pool) {
     this.pool = pool;
@@ -190,6 +192,202 @@ class SupervisionDefinitionRepository {
       ORDER BY dc.center_name, d.object_name
       LIMIT $${limitParameter} OFFSET $${offsetParameter}`, [ ...values, pageSize, (currentPage - 1) * pageSize ]);
     return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
+  }
+
+  async listCenterObjectEntries() {
+    const result = await this.pool.query(`
+      SELECT dc.center_name, d.object_name,
+             count(DISTINCT d.id)::integer AS plan_count,
+             count(DISTINCT dsi.standard_item_id)::integer AS standard_item_count,
+             COALESCE(array_agg(DISTINCT d.plan_number ORDER BY d.plan_number)
+               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::integer[]) AS plan_numbers,
+             COALESCE(array_agg(DISTINCT d.object_category ORDER BY d.object_category)
+               FILTER (WHERE d.object_category IS NOT NULL), ARRAY[]::text[]) AS object_categories,
+             COALESCE(array_agg(DISTINCT d.check_layer ORDER BY d.check_layer)
+               FILTER (WHERE d.check_layer IS NOT NULL), ARRAY[]::text[]) AS check_layers,
+             COALESCE(array_agg(DISTINCT d.check_method ORDER BY d.check_method)
+               FILTER (WHERE d.check_method IS NOT NULL), ARRAY[]::text[]) AS check_methods,
+             COALESCE(array_agg(DISTINCT left(d.description, 300) ORDER BY left(d.description, 300))
+               FILTER (WHERE d.description IS NOT NULL), ARRAY[]::text[]) AS descriptions
+      FROM supervision_definition_centers dc
+      JOIN supervision_definitions d ON d.id = dc.definition_id
+      LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
+      WHERE d.status = 'active'
+      GROUP BY dc.center_name, d.object_name
+      ORDER BY dc.center_name, d.object_name`);
+    return result.rows;
+  }
+
+  async listCenterObjectReviews() {
+    const result = await this.pool.query(`
+      SELECT id, center_name, left_object_name, right_object_name, decision,
+             canonical_object_name, notes, affected_plan_ids, created_at
+      FROM supervision_object_dedupe_reviews
+      ORDER BY created_at DESC`);
+    return result.rows;
+  }
+
+  async centerObjectEntry(centerName, objectName, client = this.pool) {
+    const result = await client.query(`
+      SELECT dc.center_name, d.object_name,
+             count(DISTINCT d.id)::integer AS plan_count,
+             COALESCE(array_agg(DISTINCT d.plan_number ORDER BY d.plan_number)
+               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::integer[]) AS plan_numbers,
+             COALESCE(array_agg(DISTINCT d.check_method ORDER BY d.check_method)
+               FILTER (WHERE d.check_method IS NOT NULL), ARRAY[]::text[]) AS check_methods
+      FROM supervision_definition_centers dc
+      JOIN supervision_definitions d ON d.id = dc.definition_id
+      WHERE d.status = 'active' AND dc.center_name = $1 AND d.object_name = $2
+      GROUP BY dc.center_name, d.object_name`, [ centerName, objectName ]);
+    return result.rows[0] || null;
+  }
+
+  async centerObjectPlans(centerName, objectName, client = this.pool) {
+    const result = await client.query(`
+      SELECT d.id, d.object_name, d.object_category, d.check_layer, d.check_method,
+             d.description, d.steps, d.frequency, d.access_mode, d.priority,
+             d.reference_result, d.reference_materials,
+             ARRAY(SELECT dc2.center_name FROM supervision_definition_centers dc2
+               WHERE dc2.definition_id = d.id ORDER BY dc2.center_name) AS centers
+      FROM supervision_definitions d
+      JOIN supervision_definition_centers dc ON dc.definition_id = d.id
+      WHERE d.status = 'active' AND dc.center_name = $1 AND d.object_name = $2
+      ORDER BY d.plan_number`, [ centerName, objectName ]);
+    return result.rows;
+  }
+
+  async findObjectAiJob(inputHash, modelName, promptVersion, client = this.pool) {
+    const result = await client.query(`
+      SELECT * FROM ai_supervision_object_dedupe_jobs
+      WHERE input_hash = $1 AND model_name IS NOT DISTINCT FROM $2
+        AND prompt_version = $3 AND status = 'completed'
+      ORDER BY created_at DESC LIMIT 1`, [ inputHash, modelName || null, promptVersion ]);
+    return result.rows[0] || null;
+  }
+
+  async createObjectAiJob({ centerName, leftObjectName, rightObjectName, inputHash, algorithmVersion, promptVersion, modelName }, client = this.pool) {
+    const result = await client.query(`
+      INSERT INTO ai_supervision_object_dedupe_jobs
+        (center_name, left_object_name, right_object_name, input_hash, algorithm_version,
+         prompt_version, model_name, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'running')
+      ON CONFLICT (input_hash, model_name, prompt_version)
+      DO UPDATE SET status = 'running', error_message = NULL, completed_at = NULL
+      RETURNING *`, [
+      centerName, leftObjectName, rightObjectName, inputHash, algorithmVersion,
+      promptVersion, modelName || null,
+    ]);
+    return result.rows[0];
+  }
+
+  async completeObjectAiJob(id, result, client = this.pool) {
+    const query = await client.query(`
+      UPDATE ai_supervision_object_dedupe_jobs
+      SET status = 'completed', result = $2, provider_status = $3,
+          duration_ms = $4, completed_at = now(), error_message = NULL
+      WHERE id = $1 RETURNING *`, [
+      id, JSON.stringify(result.result), result.providerStatus, result.durationMs,
+    ]);
+    return query.rows[0];
+  }
+
+  async failObjectAiJob(id, error, client = this.pool) {
+    const query = await client.query(`
+      UPDATE ai_supervision_object_dedupe_jobs
+      SET status = 'failed', error_message = $2, provider_status = $3,
+          duration_ms = $4, completed_at = now()
+      WHERE id = $1 RETURNING *`, [
+      id, error.message, error.providerStatus || null, error.durationMs || null,
+    ]);
+    return query.rows[0];
+  }
+
+  async reviewCenterObject({ centerName, leftObjectName, rightObjectName, decision, canonicalObjectName, notes, reviewerId }, client = null) {
+    const ownClient = !client;
+    const db = client || await this.pool.connect();
+    try {
+      if (ownClient) await db.query('BEGIN');
+      const entries = await db.query(`
+        SELECT d.id, d.object_name, d.plan_number, d.object_category, d.check_layer,
+               d.check_method, d.description, d.steps, d.frequency, d.access_mode,
+               d.priority, d.reference_result, d.reference_materials, d.normalized_hash,
+               ARRAY(SELECT dc2.center_name FROM supervision_definition_centers dc2
+                 WHERE dc2.definition_id = d.id ORDER BY dc2.center_name) AS centers
+        FROM supervision_definitions d
+        JOIN supervision_definition_centers dc ON dc.definition_id = d.id
+        WHERE d.status = 'active' AND dc.center_name = $1 AND d.object_name = ANY($2::text[])
+        FOR UPDATE OF d`, [ centerName, [ leftObjectName, rightObjectName ] ]);
+      const leftPlans = entries.rows.filter(plan => plan.object_name === leftObjectName);
+      const rightPlans = entries.rows.filter(plan => plan.object_name === rightObjectName);
+      if (!leftPlans.length || !rightPlans.length) {
+        const error = new Error('待复核的中心检查对象已发生变化，请刷新后重试');
+        error.code = 'OBJECT_DEDUPE_CANDIDATE_CHANGED';
+        throw error;
+      }
+      let affectedPlanIds = [];
+      if (decision === 'merged') {
+        const sourceObjectName = canonicalObjectName === leftObjectName ? rightObjectName : leftObjectName;
+        if (![ leftObjectName, rightObjectName ].includes(canonicalObjectName)) {
+          const error = new Error('保留对象必须是候选对象之一');
+          error.code = 'OBJECT_DEDUPE_INVALID_CANONICAL';
+          throw error;
+        }
+        const sourcePlans = entries.rows.filter(plan => plan.object_name === sourceObjectName);
+        if (sourcePlans.some(plan => (plan.centers || []).some(center => center !== centerName))) {
+          const error = new Error('待合并对象关联的检查方案还适用于其他检查中心；为避免跨中心串改，不能在此合并');
+          error.code = 'OBJECT_DEDUPE_CROSS_CENTER';
+          throw error;
+        }
+        for (const plan of sourcePlans) {
+          const fields = {
+            object_name: canonicalObjectName,
+            object_category: plan.object_category || '',
+            check_layer: plan.check_layer || '',
+            check_method: plan.check_method || '',
+            description: plan.description || '',
+            steps: plan.steps || '',
+            frequency: plan.frequency || '',
+          };
+          const normalizedHash = normalizeDefinition(fields).normalizedHash;
+          await db.query(`
+            UPDATE supervision_definitions
+            SET object_name = $2, normalized_hash = $3, updated_at = now()
+            WHERE id = $1`, [ plan.id, canonicalObjectName, normalizedHash ]);
+        }
+        affectedPlanIds = sourcePlans.map(plan => plan.id);
+      }
+      const review = await db.query(`
+        INSERT INTO supervision_object_dedupe_reviews
+          (center_name, left_object_name, right_object_name, decision,
+           canonical_object_name, reviewer_id, notes, affected_plan_ids)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        RETURNING *`, [
+        centerName, leftObjectName, rightObjectName, decision,
+        canonicalObjectName || null, reviewerId || null, notes || null,
+        JSON.stringify(affectedPlanIds),
+      ]);
+      if (decision === 'merged') {
+        await db.query(`
+          INSERT INTO audit_logs (actor_user_id, action, entity_type, metadata)
+          VALUES ($1, 'merge_center_object', 'supervision_center_object', $2)`, [
+          reviewerId || null,
+          JSON.stringify({
+            centerName,
+            sourceObjectName: canonicalObjectName === leftObjectName ? rightObjectName : leftObjectName,
+            canonicalObjectName,
+            affectedPlanIds,
+            reviewId: review.rows[0].id,
+          }),
+        ]);
+      }
+      if (ownClient) await db.query('COMMIT');
+      return review.rows[0];
+    } catch (error) {
+      if (ownClient) await db.query('ROLLBACK');
+      throw error;
+    } finally {
+      if (ownClient) db.release();
+    }
   }
 
   async listStandardItems() {

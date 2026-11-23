@@ -1,0 +1,132 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">中心检查对象去重</h2>
+    <p class="text-secondary mb-0">规则先筛候选，AI 只提供建议；合并必须由人工确认。合并后，该中心下对应检查方案会更新为保留对象。</p>
+  </div>
+  <a class="btn btn-outline-secondary ms-auto" href="/supervision-center-objects">返回中心检查对象</a>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">待复核候选</div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">规范化后同名</div><div class="fs-3 fw-semibold text-danger"><%= summary.exactCount %></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">名称相似</div><div class="fs-3 fw-semibold text-warning"><%= summary.similarCount %></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">已确认合并</div><div class="fs-3 fw-semibold text-success"><%= summary.mergedCount %></div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3 class="card-title">规则去重候选</h3></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:9rem">规则判定</th><th style="width:15rem">复核操作</th></tr></thead>
+    <tbody>
+      <% candidates.forEach(candidate => { %>
+        <tr>
+          <td><span class="badge text-bg-light border"><%= candidate.center_name %></span></td>
+          <td>
+            <strong><%= candidate.left_object_name %></strong>
+            <div class="small text-secondary mt-1"><%= candidate.left.plan_count %> 个方案 · 关联标准项 <%= candidate.left.standard_item_count || 0 %> 项</div>
+            <div class="small text-secondary"><%= (candidate.left.check_methods || []).join('、') || '-' %></div>
+            <details class="small mt-1"><summary>查看方案与描述</summary><div class="mt-1"><%= (candidate.left.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') || '-' %></div><% (candidate.left.descriptions || []).slice(0, 5).forEach(description => { %><div class="text-break mt-1"><%= description %></div><% }) %></details>
+          </td>
+          <td>
+            <strong><%= candidate.right_object_name %></strong>
+            <div class="small text-secondary mt-1"><%= candidate.right.plan_count %> 个方案 · 关联标准项 <%= candidate.right.standard_item_count || 0 %> 项</div>
+            <div class="small text-secondary"><%= (candidate.right.check_methods || []).join('、') || '-' %></div>
+            <details class="small mt-1"><summary>查看方案与描述</summary><div class="mt-1"><%= (candidate.right.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') || '-' %></div><% (candidate.right.descriptions || []).slice(0, 5).forEach(description => { %><div class="text-break mt-1"><%= description %></div><% }) %></details>
+          </td>
+          <td>
+            <span class="badge <%= candidate.candidate_type === 'exact' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= candidate.candidate_type === 'exact' ? '规范化后同名' : '名称相似' %></span>
+            <div class="small mt-1">相似度 <%= Number(candidate.similarity_score || 0).toFixed(3) %></div>
+            <% if (candidate.review?.decision === 'uncertain') { %><span class="badge text-bg-secondary mt-1">已标暂不确定</span><% } %>
+          </td>
+          <td class="text-nowrap">
+            <button class="btn btn-sm btn-outline-primary mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">AI 分析</button><br>
+            <button class="btn btn-sm btn-danger mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.left_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 A 并合并</button><br>
+            <button class="btn btn-sm btn-danger mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.right_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 B 并合并</button><br>
+            <button class="btn btn-sm btn-outline-secondary mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">不是重复</button><br>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'uncertain')">暂不确定</button>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">当前没有符合规则的中心检查对象去重候选。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<% if (reviews.length) { %>
+<div class="card">
+  <div class="card-header"><h3 class="card-title">最近人工复核</h3></div>
+  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+    <thead><tr><th>时间</th><th>检查中心</th><th>对象 A</th><th>对象 B</th><th>结论</th><th>保留对象 / 迁移方案</th></tr></thead>
+    <tbody><% reviews.slice(0, 20).forEach(review => { %><tr><td class="text-nowrap"><%= new Date(review.created_at).toLocaleString('zh-CN') %></td><td><%= review.center_name %></td><td><%= review.left_object_name %></td><td><%= review.right_object_name %></td><td><span class="badge <%= review.decision === 'merged' ? 'text-bg-success' : review.decision === 'distinct' ? 'text-bg-secondary' : 'text-bg-warning' %>"><%= review.decision === 'merged' ? '已合并' : review.decision === 'distinct' ? '不是重复' : '暂不确定' %></span></td><td><%= review.canonical_object_name || '-' %><% if ((review.affected_plan_ids || []).length) { %><div class="small text-secondary"><%= review.affected_plan_ids.length %> 个方案已更新</div><% } %></td></tr><% }) %></tbody>
+  </table></div>
+</div>
+<% } %>
+
+<div class="modal fade" id="objectAiResultModal" tabindex="-1" aria-labelledby="objectAiResultTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="objectAiResultTitle">AI 对象去重建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  <div class="modal-body"><pre class="mb-0 text-wrap" id="objectAiResultBody"></pre></div>
+  <div class="modal-footer"><button class="btn btn-primary" type="button" data-bs-dismiss="modal">关闭</button></div>
+</div></div></div>
+
+<script>
+  const objectCsrfToken = '<%= csrf %>';
+  async function objectSend(path, body) {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': objectCsrfToken },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || '请求失败');
+    return data.data;
+  }
+  async function analyzeObject(button) {
+    button.disabled = true;
+    try {
+      const job = await objectSend('/api/supervision-center-objects/ai-review', {
+        centerName: button.dataset.center,
+        leftObjectName: button.dataset.left,
+        rightObjectName: button.dataset.right,
+      });
+      document.getElementById('objectAiResultBody').textContent = JSON.stringify(job.result || job, null, 2);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('objectAiResultModal')).show();
+    } catch (error) {
+      window.showAppNotice(error.message, 'AI 分析未完成');
+    } finally {
+      button.disabled = false;
+    }
+  }
+  async function mergeObject(button) {
+    const canonical = button.dataset.canonical;
+    const source = canonical === button.dataset.left ? button.dataset.right : button.dataset.left;
+    const plans = canonical === button.dataset.left ? button.dataset.rightPlans : button.dataset.leftPlans;
+    if (!await window.confirmAppAction(`保留“${canonical}”并合并对象“${source}”？该中心下 ${plans} 个检查方案会更新到保留对象。`, '确认合并中心检查对象')) return;
+    try {
+      await objectSend('/api/supervision-center-objects/reviews', {
+        centerName: button.dataset.center,
+        leftObjectName: button.dataset.left,
+        rightObjectName: button.dataset.right,
+        decision: 'merged',
+        canonicalObjectName: canonical,
+      });
+      window.location.assign('/supervision-center-objects/dedupe?notice=' + encodeURIComponent('对象已合并，检查方案已更新'));
+    } catch (error) {
+      window.showAppNotice(error.message, '对象合并未完成');
+    }
+  }
+  async function reviewObject(button, decision) {
+    const label = decision === 'distinct' ? '确认这两个对象不是重复？' : '将这两个对象标记为暂不确定？';
+    if (!await window.confirmAppAction(label, '确认对象复核结论')) return;
+    try {
+      await objectSend('/api/supervision-center-objects/reviews', {
+        centerName: button.dataset.center,
+        leftObjectName: button.dataset.left,
+        rightObjectName: button.dataset.right,
+        decision,
+      });
+      window.location.assign('/supervision-center-objects/dedupe?notice=' + encodeURIComponent('对象复核结论已保存'));
+    } catch (error) {
+      window.showAppNotice(error.message, '对象复核未完成');
+    }
+  }
+</script>

@@ -14,6 +14,9 @@ module.exports = app => {
   router.post('/cloud-centers/:cloudCenterId', controller.cloudCenter.update);
   router.get('/supervision-definitions', controller.supervisionDefinition.index);
   router.get('/supervision-center-objects', controller.supervisionDefinition.centerObjects);
+  router.get('/supervision-center-objects/dedupe', controller.supervisionDefinition.centerObjectDedupe);
+  router.post('/api/supervision-center-objects/ai-review', controller.supervisionDefinition.aiReviewCenterObject);
+  router.post('/api/supervision-center-objects/reviews', controller.supervisionDefinition.reviewCenterObject);
   router.get('/supervision-definitions/import-template', controller.supervisionPlanImport.template);
   router.post('/supervision-plan-imports', controller.supervisionPlanImport.create);
   router.get('/supervision-plan-imports/:jobId', controller.supervisionPlanImport.review);

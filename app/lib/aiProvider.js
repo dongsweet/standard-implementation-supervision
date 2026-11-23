@@ -127,6 +127,38 @@ class AiProvider {
     return { result: parseAiResult(response.content), providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
+  async classifyCenterObjectPair({ centerName, left, right }) {
+    if (!this.enabled) {
+      return {
+        result: {
+          relation: 'uncertain',
+          confidence: 0,
+          differences: [],
+          reason: 'AI 服务未配置',
+          recommendedCanonicalName: null,
+        },
+        providerStatus: null,
+        durationMs: 0,
+      };
+    }
+    const response = await this.request([
+      {
+        role: 'system',
+        content: [
+          '你是检查中心“检查对象”去重助手。只判断两个对象名称是否表示同一个可检查对象，不修改数据。',
+          '必须结合对象名称、关联检查方案的方法、描述、步骤、频率和执行方式判断；不能只看字面相似。',
+          '如果只是同一类检查应用到不同设备或不同对象，必须判为 similar_but_distinct；如果只是名称包含附加材料或列表，必须判为 similar_but_distinct。',
+          'relation 只能是 duplicate、similar_but_distinct、unrelated、uncertain。',
+          'recommendedCanonicalName 必须是 left.name 或 right.name；不确定时为 null。',
+          '只返回 JSON：{"relation":"duplicate|similar_but_distinct|unrelated|uncertain","confidence":0到1,"differences":["..."],"reason":"不超过120字","recommendedCanonicalName":"左侧或右侧对象名称或null"}。',
+        ].join('\n'),
+      },
+      { role: 'user', content: JSON.stringify({ centerName, left, right }) },
+    ]);
+    const result = parseObjectAiResult(response.content);
+    return { result, providerStatus: response.providerStatus, durationMs: response.durationMs };
+  }
+
   async testConnection() {
     if (!this.enabled) throw aiError('AI服务未完整配置', 'AI_CONFIG_ERROR');
     const response = await this.request([
@@ -224,6 +256,24 @@ function parseStandardReviewSuggestions(content, sourceById) {
   return result;
 }
 
+function parseObjectAiResult(content) {
+  if (!content) throw new Error('AI 返回内容为空');
+  const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
+  const relations = new Set([ 'duplicate', 'similar_but_distinct', 'unrelated', 'uncertain' ]);
+  if (!relations.has(json.relation)) throw new Error('AI relation 无效');
+  const confidence = Number(json.confidence);
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error('AI confidence 无效');
+  return {
+    relation: json.relation,
+    confidence,
+    differences: Array.isArray(json.differences) ? json.differences.map(String).slice(0, 20) : [],
+    reason: String(json.reason || '').slice(0, 500),
+    recommendedCanonicalName: json.recommendedCanonicalName
+      ? String(json.recommendedCanonicalName)
+      : null,
+  };
+}
+
 function parseAiResult(content) {
   if (!content) throw new Error('AI 返回内容为空');
   const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
@@ -244,5 +294,6 @@ module.exports = {
   AiProvider,
   friendlyAiError,
   parseAiResult,
+  parseObjectAiResult,
   parseStandardReviewSuggestions,
 };

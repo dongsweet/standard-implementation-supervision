@@ -87,6 +87,23 @@ test('escapes standard content before placing supervision definitions in script 
   assert.match(html, /heading\.textContent = \[item\.code, item\.title\]/);
 });
 
+test('links the center object page to manual object deduplication', () => {
+  const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
+  assert.match(html, /\/supervision-center-objects\/dedupe/);
+  assert.match(html, /对象去重复核/);
+});
+
+test('keeps object dedupe AI and merge actions behind explicit human controls', () => {
+  const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe.ejs'), 'utf8');
+  assert.match(html, /规则先筛候选/);
+  assert.match(html, /AI 只提供建议/);
+  assert.match(html, /合并必须由人工确认/);
+  assert.match(html, /保留 A 并合并/);
+  assert.match(html, /保留 B 并合并/);
+  assert.match(html, /confirmAppAction/);
+  assert.match(html, /检查方案会更新到保留对象/);
+});
+
 test('renders the center object page with shared layout inputs', { skip: !ejs }, async () => {
   const html = await ejs.renderFile(path.join(viewRoot, 'supervision-center-objects/index.ejs'), {
     centerObjects: [],

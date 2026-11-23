@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { AiProvider, friendlyAiError } = require('../app/lib/aiProvider');
+const { AiProvider, friendlyAiError, parseObjectAiResult } = require('../app/lib/aiProvider');
 
 function createServer(handler) {
   return new Promise(resolve => {
@@ -23,6 +23,23 @@ test('maps network, authentication, endpoint, and rate-limit errors to actionabl
   assert.equal(friendlyAiError({ providerStatus: 401 }, 'https://ai.example.com').code, 'AI_AUTH_ERROR');
   assert.equal(friendlyAiError({ providerStatus: 404 }, 'https://ai.example.com').code, 'AI_ENDPOINT_NOT_FOUND');
   assert.equal(friendlyAiError({ providerStatus: 429 }, 'https://ai.example.com').code, 'AI_RATE_LIMIT');
+});
+
+test('validates center object semantic dedupe responses', () => {
+  const result = parseObjectAiResult(JSON.stringify({
+    relation: 'duplicate',
+    confidence: 0.93,
+    differences: [ '名称包含书名号' ],
+    reason: '两个名称指向同一检查对象。',
+    recommendedCanonicalName: '采购合同或协议',
+  }));
+  assert.equal(result.relation, 'duplicate');
+  assert.equal(result.confidence, 0.93);
+  assert.equal(result.recommendedCanonicalName, '采购合同或协议');
+  assert.throws(
+    () => parseObjectAiResult(JSON.stringify({ relation: 'merge_now', confidence: 1 })),
+    /relation 无效/
+  );
 });
 
 test('tests an OpenAI-compatible endpoint and validates smart review suggestions', async () => {

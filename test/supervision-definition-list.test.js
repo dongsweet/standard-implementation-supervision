@@ -62,6 +62,54 @@ test('clamps out-of-range supervision pages before querying rows', async () => {
   assert.deepEqual(calls[1].values, [ 20, 40 ]);
 });
 
+test('merges center object names and updates plans only within the selected center', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push({ statement, values });
+      if ([ 'BEGIN', 'COMMIT' ].includes(statement)) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT d.id, d.object_name')) return {
+        rows: [
+          {
+            id: 'plan-1', object_name: '《采购合同或协议》', object_category: '管理',
+            check_layer: '管理层面', check_method: '证据材料核查', description: '检查合同A',
+            steps: null, frequency: null, access_mode: null, priority: null,
+            reference_result: null, reference_materials: null, centers: [ '总部' ],
+          },
+          {
+            id: 'plan-2', object_name: '采购合同或协议', object_category: '管理',
+            check_layer: '管理层面', check_method: '证据材料核查', description: '检查合同B',
+            steps: null, frequency: null, access_mode: null, priority: null,
+            reference_result: null, reference_materials: null, centers: [ '总部' ],
+          },
+        ],
+        rowCount: 2,
+      };
+      if (statement.startsWith('UPDATE supervision_definitions')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_dedupe_reviews')) return {
+        rows: [ { id: 'review-1', decision: 'merged' } ],
+        rowCount: 1,
+      };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  const repository = new Repository({ connect: async () => client });
+  const result = await repository.reviewCenterObject({
+    centerName: '总部', leftObjectName: '《采购合同或协议》', rightObjectName: '采购合同或协议',
+    decision: 'merged', canonicalObjectName: '采购合同或协议', reviewerId: 'user-1',
+  });
+  assert.equal(result.id, 'review-1');
+  const update = calls.find(call => call.statement.startsWith('UPDATE supervision_definitions'));
+  assert.equal(update.values[0], 'plan-1');
+  assert.equal(update.values[1], '采购合同或协议');
+  const reviewInsert = calls.find(call => call.statement.startsWith('INSERT INTO supervision_object_dedupe_reviews'));
+  assert.deepEqual(JSON.parse(reviewInsert.values[7]), [ 'plan-1' ]);
+  assert.ok(calls.some(call => call.statement === 'COMMIT'));
+});
+
 test('lists center and object combinations with independent filters and pagination', async () => {
   const calls = [];
   const pool = {

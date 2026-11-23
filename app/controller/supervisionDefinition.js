@@ -23,6 +23,38 @@ class SupervisionDefinitionController extends Controller {
     });
   }
 
+  async centerObjectDedupe() {
+    requireGlobalRead(this.ctx);
+    await this.ctx.render('supervision-center-objects/dedupe', {
+      title: '中心检查对象去重',
+      ...await this.ctx.service.supervisionDefinition.listCenterObjectDedupe(),
+      csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
+    });
+  }
+
+  async aiReviewCenterObject() {
+    requireGlobalWrite(this.ctx);
+    const payload = this.ctx.request.body || {};
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.aiReviewCenterObjectCandidate({
+        centerName: payload.centerName,
+        leftObjectName: payload.leftObjectName,
+        rightObjectName: payload.rightObjectName,
+      }),
+    };
+  }
+
+  async reviewCenterObject() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.reviewCenterObjectCandidate(
+        this.ctx.request.body || {},
+        this.ctx.session.userId
+      ),
+    };
+  }
+
   async create() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.supervisionDefinition.create(this.ctx.request.body || {}, this.ctx.session.userId);

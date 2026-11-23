@@ -1,7 +1,9 @@
 'use strict';
 
 const Service = require('egg').Service;
+const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
+const { buildObjectCandidates, objectCandidate } = require('../lib/centerObjectDedupe');
 const { DEFAULT_SUPERVISION_METHODS, joinSupervisionMethods, splitSupervisionMethods } = require('../lib/supervisionMethods');
 const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('../lib/supervisionCenters');
 const Repository = require('../repository/supervisionDefinition');
@@ -73,6 +75,145 @@ class SupervisionDefinitionService extends Service {
       pageSize,
       pageCount: result.pageCount,
     };
+  }
+
+  async listCenterObjectCandidates() {
+    const [ entries, reviews ] = await Promise.all([
+      this.repository.listCenterObjectEntries(),
+      this.repository.listCenterObjectReviews(),
+    ]);
+    return buildObjectCandidates(entries, reviews).map(candidate => ({
+      ...candidate,
+      id: crypto.createHash('sha256')
+        .update(JSON.stringify([
+          candidate.center_name,
+          ...[ candidate.left_object_name, candidate.right_object_name ].sort(),
+        ]))
+        .digest('hex'),
+    }));
+  }
+
+  async listCenterObjectDedupe() {
+    const [ candidates, reviews ] = await Promise.all([
+      this.listCenterObjectCandidates(),
+      this.repository.listCenterObjectReviews(),
+    ]);
+    return {
+      candidates,
+      reviews,
+      summary: {
+        candidateCount: candidates.length,
+        exactCount: candidates.filter(candidate => candidate.candidate_type === 'exact').length,
+        similarCount: candidates.filter(candidate => candidate.candidate_type === 'similar').length,
+        reviewedCount: reviews.length,
+        mergedCount: reviews.filter(review => review.decision === 'merged').length,
+      },
+    };
+  }
+
+  async objectCandidateContext(centerName, leftObjectName, rightObjectName) {
+    const left = await this.repository.centerObjectEntry(centerName, leftObjectName);
+    const right = await this.repository.centerObjectEntry(centerName, rightObjectName);
+    if (!left || !right || !objectCandidate(leftObjectName, rightObjectName)) {
+      this.ctx.throw(409, '对象去重候选已发生变化，请刷新后重试');
+    }
+    const [ leftPlans, rightPlans ] = await Promise.all([
+      this.repository.centerObjectPlans(centerName, leftObjectName),
+      this.repository.centerObjectPlans(centerName, rightObjectName),
+    ]);
+    return { left, right, leftPlans, rightPlans };
+  }
+
+  async aiReviewCenterObjectCandidate({ centerName, leftObjectName, rightObjectName }) {
+    const context = await this.objectCandidateContext(centerName, leftObjectName, rightObjectName);
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
+    const modelName = aiConfig.model || 'unconfigured';
+    const promptVersion = 'center-object-dedupe-v1';
+    const inputHash = crypto.createHash('sha256').update(JSON.stringify([
+      centerName,
+      [ leftObjectName, rightObjectName ].sort(),
+      context.leftPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+      context.rightPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+      modelName,
+      promptVersion,
+    ])).digest('hex');
+    const existing = await this.repository.findObjectAiJob(inputHash, modelName, promptVersion);
+    if (existing?.result) return existing;
+    const job = await this.repository.createObjectAiJob({
+      centerName,
+      leftObjectName,
+      rightObjectName,
+      inputHash,
+      algorithmVersion: 'object-normalized-trigram-v1',
+      promptVersion,
+      modelName,
+    });
+    try {
+      const result = await this.ctx.service.aiProvider.classifyCenterObjectPair({
+        centerName,
+        left: {
+          name: leftObjectName,
+          planCount: context.left.plan_count,
+          methods: context.left.check_methods,
+          plans: context.leftPlans.map(plan => ({
+            description: plan.description,
+            steps: plan.steps,
+            frequency: plan.frequency,
+            accessMode: plan.access_mode,
+          })),
+        },
+        right: {
+          name: rightObjectName,
+          planCount: context.right.plan_count,
+          methods: context.right.check_methods,
+          plans: context.rightPlans.map(plan => ({
+            description: plan.description,
+            steps: plan.steps,
+            frequency: plan.frequency,
+            accessMode: plan.access_mode,
+          })),
+        },
+      });
+      if (result.result.recommendedCanonicalName
+        && ![ leftObjectName, rightObjectName ].includes(result.result.recommendedCanonicalName)) {
+        result.result.recommendedCanonicalName = null;
+      }
+      return this.repository.completeObjectAiJob(job.id, result);
+    } catch (error) {
+      await this.repository.failObjectAiJob(job.id, error);
+      throw error;
+    }
+  }
+
+  async reviewCenterObjectCandidate(payload, reviewerId) {
+    const centerName = String(payload.centerName || '').trim();
+    const leftObjectName = String(payload.leftObjectName || '').trim();
+    const rightObjectName = String(payload.rightObjectName || '').trim();
+    const decision = String(payload.decision || '').trim();
+    const canonicalObjectName = String(payload.canonicalObjectName || '').trim();
+    if (!DEFAULT_SUPERVISION_CENTERS.includes(centerName)) this.ctx.throw(400, '无效的检查中心');
+    if (!leftObjectName || !rightObjectName || leftObjectName === rightObjectName) this.ctx.throw(400, '请提供两个不同的检查对象');
+    if (![ 'merged', 'distinct', 'uncertain' ].includes(decision)) this.ctx.throw(400, '无效的对象复核结论');
+    await this.objectCandidateContext(centerName, leftObjectName, rightObjectName);
+    if (decision === 'merged' && ![ leftObjectName, rightObjectName ].includes(canonicalObjectName)) {
+      this.ctx.throw(400, '合并时必须选择一个保留对象');
+    }
+    try {
+      return await this.repository.reviewCenterObject({
+        centerName,
+        leftObjectName,
+        rightObjectName,
+        decision,
+        canonicalObjectName: decision === 'merged' ? canonicalObjectName : null,
+        notes: String(payload.notes || '').trim() || null,
+        reviewerId,
+      });
+    } catch (error) {
+      if ([ 'OBJECT_DEDUPE_CANDIDATE_CHANGED', 'OBJECT_DEDUPE_INVALID_CANONICAL', 'OBJECT_DEDUPE_CROSS_CENTER' ].includes(error.code)) {
+        this.ctx.throw(409, error.message);
+      }
+      throw error;
+    }
   }
 
   normalize(payload) {
