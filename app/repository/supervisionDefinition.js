@@ -147,6 +147,51 @@ class SupervisionDefinitionRepository {
     return result.rows.map(row => row.center_name);
   }
 
+  async listCenterObjects({ center = '', search = '', page = 1, pageSize = 20 } = {}) {
+    const conditions = [ `d.status = 'active'` ];
+    const values = [];
+    if (center) {
+      values.push(center);
+      conditions.push(`dc.center_name = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`d.object_name ILIKE $${values.length}`);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const countResult = await this.pool.query(`
+      SELECT count(*)::integer AS total
+      FROM (
+        SELECT dc.center_name, d.object_name
+        FROM supervision_definition_centers dc
+        JOIN supervision_definitions d ON d.id = dc.definition_id
+        ${where}
+        GROUP BY dc.center_name, d.object_name
+      ) grouped`, values);
+    const total = Number(countResult.rows[0]?.total || 0);
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(Math.max(Number(page) || 1, 1), pageCount);
+    const limitParameter = values.length + 1;
+    const offsetParameter = values.length + 2;
+    const result = await this.pool.query(`
+      SELECT dc.center_name,
+             d.object_name,
+             count(DISTINCT d.id)::integer AS plan_count,
+             count(DISTINCT dsi.standard_item_id)::integer AS standard_item_count,
+             COALESCE(array_agg(DISTINCT d.check_method ORDER BY d.check_method)
+               FILTER (WHERE d.check_method IS NOT NULL), ARRAY[]::text[]) AS check_methods,
+             COALESCE(array_agg(DISTINCT d.plan_number ORDER BY d.plan_number)
+               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::integer[]) AS plan_numbers
+      FROM supervision_definition_centers dc
+      JOIN supervision_definitions d ON d.id = dc.definition_id
+      LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
+      ${where}
+      GROUP BY dc.center_name, d.object_name
+      ORDER BY dc.center_name, d.object_name
+      LIMIT $${limitParameter} OFFSET $${offsetParameter}`, [ ...values, pageSize, (currentPage - 1) * pageSize ]);
+    return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
+  }
+
   async listStandardItems() {
     const result = await this.pool.query(`
       SELECT si.id, si.item_code, si.standard_number, si.title, s.code AS standard_code, sv.version

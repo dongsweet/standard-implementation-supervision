@@ -40,11 +40,13 @@
 <div class="card">
   <div class="card-header d-flex align-items-center"><h3 class="card-title">检查方案列表</h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 条</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th>检查方案</th><th>检查方法</th><th>检查描述</th><th>频率/方式</th><th>关联标准项</th><th>方案属性</th><th class="text-end">操作</th></tr></thead>
+    <thead><tr><th>方案编号</th><th>检查中心</th><th>检查对象</th><th>检查方法</th><th>检查描述</th><th>频率/方式</th><th>关联标准项</th><th>方案属性</th><th class="text-end">操作</th></tr></thead>
     <tbody>
       <% definitions.forEach(definition => { %>
         <tr>
-          <td><span class="badge text-bg-primary me-1"><%= String(definition.plan_number || '').padStart(3, '0') %></span><strong><%= definition.object_name %></strong><div class="small text-secondary mt-1"><%= (definition.centers || []).join('、') || '未指定中心' %></div></td>
+          <td><span class="badge text-bg-primary"><%= String(definition.plan_number || '').padStart(3, '0') %></span></td>
+          <td><% (definition.centers || []).forEach(centerName => { %><span class="badge text-bg-light border me-1 mb-1"><%= centerName %></span><% }) %><% if (!(definition.centers || []).length) { %><span class="text-secondary">未指定</span><% } %></td>
+          <td><strong><%= definition.object_name %></strong><div class="small text-secondary mt-1"><%= definition.scope || '-' %></div></td>
           <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
           <td><div class="text-truncate" style="max-width:300px" title="<%= definition.description %>"><%= definition.description %></div></td>
           <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
@@ -53,7 +55,7 @@
           <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#definitionDetailModal" data-definition="<%= JSON.stringify(definition) %>">详情</button><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %> <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition) %>">编辑</button><% } %></td>
         </tr>
       <% }) %>
-      <% if (!definitions.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">没有找到匹配的检查方案。</td></tr><% } %>
+      <% if (!definitions.length) { %><tr><td colspan="9" class="text-center text-secondary py-5">没有找到匹配的检查方案。</td></tr><% } %>
     </tbody>
   </table></div>
   <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto" aria-label="检查方案分页"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildPageUrl(pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildPageUrl(number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildPageUrl(pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %>

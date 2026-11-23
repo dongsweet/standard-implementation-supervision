@@ -1,0 +1,49 @@
+<%
+  const centerValue = typeof center === 'undefined' ? '' : center;
+  const searchValue = typeof search === 'undefined' ? '' : search;
+  const totalValue = typeof total === 'undefined' ? centerObjects.length : total;
+  const pageValue = typeof page === 'undefined' ? 1 : page;
+  const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
+  const buildPageUrl = targetPage => {
+    const params = [];
+    if (centerValue) params.push('center=' + encodeURIComponent(centerValue));
+    if (searchValue) params.push('search=' + encodeURIComponent(searchValue));
+    params.push('page=' + targetPage);
+    return '?' + params.join('&');
+  };
+%>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <p class="text-secondary mb-0">按“检查中心 × 检查对象”查看持续监督覆盖范围。同一对象可以适用于多个检查中心，具体检查内容仍在检查方案中维护。</p>
+  <a class="btn btn-outline-secondary ms-auto" href="/supervision-definitions">查看检查方案</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/supervision-center-objects" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5"><label class="form-label" for="centerObjectSearch">检查对象</label><input class="form-control" id="centerObjectSearch" name="search" value="<%= searchValue %>" placeholder="搜索检查对象名称"></div>
+      <div class="col-12 col-md-4"><label class="form-label" for="centerObjectCenter">检查中心</label><select class="form-select" id="centerObjectCenter" name="center"><option value="">全部中心</option><% centerOptions.forEach(option => { %><option value="<%= option %>" <%= centerValue === option ? 'selected' : '' %>><%= option %></option><% }) %></select></div>
+      <div class="col-12 col-md-3 d-flex gap-2"><button class="btn btn-outline-primary" type="submit">筛选</button><a class="btn btn-outline-secondary" href="/supervision-center-objects">重置</a></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">中心检查对象</h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 个中心对象组合</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>检查中心</th><th>检查对象</th><th>检查方案</th><th>关联标准项</th><th>检查方法</th><th class="text-end">操作</th></tr></thead>
+    <tbody>
+      <% centerObjects.forEach(row => { %>
+        <tr>
+          <td><span class="badge text-bg-light border"><%= row.center_name %></span></td>
+          <td><strong><%= row.object_name %></strong></td>
+          <td><span class="badge text-bg-primary"><%= row.plan_count %> 个</span><div class="small text-secondary mt-1"><%= (row.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') %></div></td>
+          <td><%= row.standard_item_count %> 项</td>
+          <td><% (row.check_methods || []).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
+          <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-primary" href="/supervision-definitions?center=<%= encodeURIComponent(row.center_name) %>&search=<%= encodeURIComponent(row.object_name) %>">查看方案</a></td>
+        </tr>
+      <% }) %>
+      <% if (!centerObjects.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">没有找到匹配的中心检查对象。</td></tr><% } %>
+    </tbody>
+  </table></div>
+  <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto" aria-label="中心检查对象分页"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildPageUrl(pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildPageUrl(number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildPageUrl(pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %>
+</div>

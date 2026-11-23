@@ -55,6 +55,26 @@ class SupervisionDefinitionService extends Service {
     };
   }
 
+  async listCenterObjects(query = {}) {
+    const center = String(query.center || '').trim();
+    const search = String(query.search || '').trim().slice(0, 100);
+    if (center && !DEFAULT_SUPERVISION_CENTERS.includes(center)) this.ctx.throw(400, '无效的检查中心筛选');
+    const pageSize = 20;
+    const requestedPage = Number.parseInt(query.page, 10);
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const result = await this.repository.listCenterObjects({ center, search, page, pageSize });
+    return {
+      center,
+      search,
+      centerOptions: DEFAULT_SUPERVISION_CENTERS,
+      centerObjects: result.rows,
+      total: result.total,
+      page: result.page,
+      pageSize,
+      pageCount: result.pageCount,
+    };
+  }
+
   normalize(payload) {
     const checkMethod = joinSupervisionMethods([
       payload.checkMethods,

@@ -61,3 +61,28 @@ test('clamps out-of-range supervision pages before querying rows', async () => {
   assert.equal(result.pageCount, 3);
   assert.deepEqual(calls[1].values, [ 20, 40 ]);
 });
+
+test('lists center and object combinations with independent filters and pagination', async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push({ statement, values });
+      if (statement.startsWith('SELECT count(*)')) return { rows: [ { total: 25 } ], rowCount: 1 };
+      if (statement.startsWith('SELECT dc.center_name')) {
+        return { rows: [ { center_name: '云中心', object_name: '云平台', plan_count: 2 } ], rowCount: 1 };
+      }
+      throw new Error('Unexpected query: ' + statement);
+    },
+  };
+  const result = await new Repository(pool).listCenterObjects({ center: '云中心', search: '云平台', page: 2, pageSize: 20 });
+
+  assert.equal(result.total, 25);
+  assert.equal(result.page, 2);
+  assert.equal(result.pageCount, 2);
+  assert.deepEqual(result.rows[0], { center_name: '云中心', object_name: '云平台', plan_count: 2 });
+  assert.deepEqual(calls[0].values, [ '云中心', '%云平台%' ]);
+  assert.deepEqual(calls[1].values, [ '云中心', '%云平台%', 20, 20 ]);
+  assert.match(calls[0].statement, /GROUP BY dc\.center_name, d\.object_name/);
+  assert.match(calls[1].statement, /ORDER BY dc\.center_name, d\.object_name LIMIT \$3 OFFSET \$4/);
+});
