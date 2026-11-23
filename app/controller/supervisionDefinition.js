@@ -2,6 +2,7 @@
 
 const Controller = require('egg').Controller;
 const { requireGlobalRead, requireGlobalWrite } = require('../lib/authorization');
+const { friendlyAiError } = require('../lib/aiProvider');
 
 class SupervisionDefinitionController extends Controller {
   async index() {
@@ -36,13 +37,21 @@ class SupervisionDefinitionController extends Controller {
   async aiReviewCenterObject() {
     requireGlobalWrite(this.ctx);
     const payload = this.ctx.request.body || {};
-    this.ctx.body = {
-      data: await this.ctx.service.supervisionDefinition.aiReviewCenterObjectCandidate({
-        centerName: payload.centerName,
-        leftObjectName: payload.leftObjectName,
-        rightObjectName: payload.rightObjectName,
-      }),
-    };
+    try {
+      this.ctx.body = {
+        data: await this.ctx.service.supervisionDefinition.aiReviewCenterObjectCandidate({
+          centerName: payload.centerName,
+          leftObjectName: payload.leftObjectName,
+          rightObjectName: payload.rightObjectName,
+        }),
+      };
+    } catch (error) {
+      if (error.status || error.statusCode) throw error;
+      const friendly = friendlyAiError(error, error.baseUrl);
+      this.ctx.status = friendly.statusCode;
+      this.ctx.body = { error: friendly.code, message: friendly.message };
+      this.ctx.logger.warn('Center object AI review failed: %s (%s)', friendly.code, error.message);
+    }
   }
 
   async reviewCenterObject() {

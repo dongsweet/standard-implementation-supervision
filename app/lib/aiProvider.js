@@ -112,6 +112,9 @@ class AiProvider {
       error.durationMs = Date.now() - startedAt;
       error.baseUrl = this.config.baseUrl;
       if (!error.aiCode && error.name === 'AbortError') error.aiCode = 'AI_TIMEOUT';
+      if (!error.aiCode && /fetch failed/i.test(error.message || '')) {
+        error.aiCode = error.cause?.code || 'AI_NETWORK_ERROR';
+      }
       throw error;
     } finally {
       clearTimeout(timer);

@@ -29,6 +29,9 @@ test('maps network, authentication, endpoint, and rate-limit errors to actionabl
   assert.equal(friendlyAiError({ providerStatus: 401 }, 'https://ai.example.com').code, 'AI_AUTH_ERROR');
   assert.equal(friendlyAiError({ providerStatus: 404 }, 'https://ai.example.com').code, 'AI_ENDPOINT_NOT_FOUND');
   assert.equal(friendlyAiError({ providerStatus: 429 }, 'https://ai.example.com').code, 'AI_RATE_LIMIT');
+  const refused = new Error('fetch failed');
+  refused.aiCode = 'ECONNREFUSED';
+  assert.equal(friendlyAiError(refused, 'https://ai.example.com').code, 'ECONNREFUSED');
 });
 
 test('validates center object semantic dedupe responses', () => {
@@ -60,8 +63,15 @@ test('exposes center object semantic review through the Egg AI service', { skip:
     };
   };
   try {
-    const service = new AiProviderService({});
-    const result = await service.classifyCenterObjectPair({ centerName: '总部', left: {}, right: {} });
+    const context = {
+      service: {
+        systemSetting: { getAiConfig: async () => ({ enabled: true, baseUrl: 'https://example.com', apiKey: 'key', model: 'model' }) },
+      },
+    };
+    const result = await AiProviderService.prototype.classifyCenterObjectPair.call(
+      context,
+      { centerName: '总部', left: {}, right: {} }
+    );
     assert.equal(result.result.relation, 'duplicate');
     assert.equal(received.centerName, '总部');
   } finally {
