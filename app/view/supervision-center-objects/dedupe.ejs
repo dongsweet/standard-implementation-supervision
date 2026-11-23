@@ -52,7 +52,7 @@
 <div class="card mb-3">
   <div class="card-header d-flex align-items-center"><h3 class="card-title">确认合并候选</h3><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:15rem">筛选结论</th><th style="width:15rem">复核操作</th></tr></thead>
+    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:15rem">筛选结论</th><th style="width:24rem">复核操作</th></tr></thead>
     <tbody>
       <% candidates.forEach(candidate => { %>
         <tr>
@@ -74,11 +74,17 @@
             <div class="small mt-1">名称相似度 <%= Number(candidate.similarity_score || 0).toFixed(3) %></div>
             <% if (candidate.ai) { %><div class="small mt-1">AI 置信度 <%= Number(candidate.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary mt-1"><%= candidate.ai.reason || '-' %></div><% } %>
           </td>
-          <td class="text-nowrap">
-            <button class="btn btn-sm btn-outline-primary mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">单独 AI 分析</button><br>
-            <button class="btn btn-sm btn-danger mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.left_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 A 并合并</button><br>
-            <button class="btn btn-sm btn-danger mb-1" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.right_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 B 并合并</button><br>
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">人工判定不是重复</button>
+          <td>
+            <div class="d-flex flex-column align-items-start gap-1 object-review-actions">
+              <div class="d-flex flex-nowrap gap-1">
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.left_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 A 并合并</button>
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.right_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 B 并合并</button>
+              </div>
+              <div class="d-flex flex-nowrap gap-1">
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">不是重复</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'uncertain')">暂不确定</button>
+              </div>
+            </div>
           </td>
         </tr>
       <% }) %>

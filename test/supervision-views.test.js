@@ -104,6 +104,10 @@ test('keeps rule scanning and AI review manual and threshold configurable', () =
   assert.match(html, /检查方案会更新到保留对象/);
   assert.match(html, /保留 A 并合并/);
   assert.match(html, /保留 B 并合并/);
+  assert.match(html, /不是重复/);
+  assert.match(html, /暂不确定/);
+  assert.match(html, /object-review-actions/);
+  assert.match(html, /d-flex flex-nowrap gap-1/);
   assert.match(html, /confirmAppAction/);
 });
 
