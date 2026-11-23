@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { splitSupervisionCenters } = require('../app/lib/supervisionCenters');
 const { normalizeDefinition, definitionConflicts } = require('../app/lib/dedupe');
 const { planImportKey } = require('../app/repository/supervisionPlanImport');
-const { buildObjectCandidates, objectCandidate } = require('../app/lib/centerObjectDedupe');
+const { buildObjectCandidates, objectCandidate, partitionSemanticCandidates } = require('../app/lib/centerObjectDedupe');
 
 test('parses and canonicalizes multiple applicable supervision centers', () => {
   assert.deepEqual(splitSupervisionCenters('云中心，统一运维、总部；云中心'), [ '云中心', '统一运维中心', '总部' ]);
@@ -36,6 +36,14 @@ test('center object rule candidates distinguish punctuation variants from unrela
   assert.equal(objectCandidate('云平台', '堡垒机'), null);
 });
 
+test('center object rule candidates honor the user supplied similarity threshold', () => {
+  assert.equal(objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.75), null);
+  assert.equal(
+    objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.7).candidateType,
+    'similar'
+  );
+});
+
 test('center object candidates stay within one center and dismiss reviewed pairs', () => {
   const candidates = buildObjectCandidates([
     { center_name: '总部', object_name: '《采购合同或协议》', plan_count: 1 },
@@ -48,6 +56,22 @@ test('center object candidates stay within one center and dismiss reviewed pairs
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].center_name, '总部');
   assert.equal(candidates[0].candidate_type, 'exact');
+});
+
+test('AI semantics exclude similar-looking but opposite objects from merge candidates', () => {
+  const candidates = [
+    { id: 'exact', candidate_type: 'exact', ai: null, ai_status: 'pending' },
+    { id: 'same', candidate_type: 'similar', ai: { relation: 'duplicate' }, ai_status: 'completed' },
+    { id: 'opposite', candidate_type: 'similar', ai: { relation: 'similar_but_distinct' }, ai_status: 'completed' },
+    { id: 'unknown', candidate_type: 'similar', ai: { relation: 'uncertain' }, ai_status: 'completed' },
+    { id: 'pending', candidate_type: 'similar', ai: null, ai_status: 'pending' },
+    { id: 'failed', candidate_type: 'similar', ai: null, ai_status: 'failed' },
+  ];
+  const result = partitionSemanticCandidates(candidates);
+  assert.deepEqual(result.actionable.map(item => item.id), [ 'exact', 'same' ]);
+  assert.deepEqual(result.excluded.map(item => item.id), [ 'opposite' ]);
+  assert.deepEqual(result.pending.map(item => item.id), [ 'pending' ]);
+  assert.deepEqual(result.failed.map(item => item.id), [ 'failed' ]);
 });
 
 test('plan import identity keeps scope semantics but excludes applicable centers', () => {

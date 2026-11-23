@@ -26,9 +26,21 @@ class SupervisionDefinitionController extends Controller {
 
   async centerObjectDedupe() {
     requireGlobalRead(this.ctx);
+    const rawThreshold = this.ctx.query.threshold;
+    const threshold = rawThreshold === undefined || rawThreshold === ''
+      ? null
+      : Number(rawThreshold);
+    const scanned = this.ctx.query.run === '1' && Number.isFinite(threshold)
+      && threshold >= 0 && threshold <= 1;
     await this.ctx.render('supervision-center-objects/dedupe', {
       title: '中心检查对象去重',
-      ...await this.ctx.service.supervisionDefinition.listCenterObjectDedupe(),
+      ...await this.ctx.service.supervisionDefinition.listCenterObjectDedupe({
+        threshold: scanned ? threshold : null,
+        scanned,
+      }),
+      queryThreshold: threshold === null || !Number.isFinite(threshold)
+        ? 0.6
+        : threshold,
       csrf: this.ctx.csrf,
       user: this.ctx.state.user,
     });
@@ -52,6 +64,20 @@ class SupervisionDefinitionController extends Controller {
       this.ctx.body = { error: friendly.code, message: friendly.message };
       this.ctx.logger.warn('Center object AI review failed: %s (%s)', friendly.code, error.message);
     }
+  }
+
+  async aiScreenCenterObjects() {
+    requireGlobalWrite(this.ctx);
+    const threshold = Number(this.ctx.request.body?.threshold);
+    if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+      this.ctx.throw(400, '名称相似度门限必须在 0 到 1 之间');
+    }
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.aiScreenCenterObjectCandidates({
+        limit: this.ctx.request.body?.limit,
+        threshold,
+      }),
+    };
   }
 
   async reviewCenterObject() {

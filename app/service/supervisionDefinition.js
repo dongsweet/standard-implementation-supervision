@@ -3,7 +3,12 @@
 const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
-const { buildObjectCandidates, objectCandidate } = require('../lib/centerObjectDedupe');
+const {
+  buildObjectCandidates,
+  objectCandidate,
+  pairKey,
+  partitionSemanticCandidates,
+} = require('../lib/centerObjectDedupe');
 const { DEFAULT_SUPERVISION_METHODS, joinSupervisionMethods, splitSupervisionMethods } = require('../lib/supervisionMethods');
 const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('../lib/supervisionCenters');
 const Repository = require('../repository/supervisionDefinition');
@@ -77,32 +82,117 @@ class SupervisionDefinitionService extends Service {
     };
   }
 
-  async listCenterObjectCandidates() {
-    const [ entries, reviews ] = await Promise.all([
+  async listCenterObjectCandidates({ threshold = 0.6 } = {}) {
+    const [ entries, reviews, aiJobs ] = await Promise.all([
       this.repository.listCenterObjectEntries(),
       this.repository.listCenterObjectReviews(),
+      this.repository.listObjectAiJobs(),
     ]);
-    return buildObjectCandidates(entries, reviews).map(candidate => ({
-      ...candidate,
-      id: crypto.createHash('sha256')
-        .update(JSON.stringify([
-          candidate.center_name,
-          ...[ candidate.left_object_name, candidate.right_object_name ].sort(),
-        ]))
-        .digest('hex'),
-    }));
+    const aiByPair = new Map(aiJobs.map(job => [
+      pairKey(job.center_name, job.left_object_name, job.right_object_name),
+      job,
+    ]));
+    return buildObjectCandidates(entries, reviews, threshold).map(candidate => {
+      const aiJob = aiByPair.get(pairKey(
+        candidate.center_name,
+        candidate.left_object_name,
+        candidate.right_object_name
+      ));
+      const ai = aiJob?.status === 'completed' ? aiJob.result : null;
+      return {
+        ...candidate,
+        id: crypto.createHash('sha256')
+          .update(JSON.stringify([
+            candidate.center_name,
+            ...[ candidate.left_object_name, candidate.right_object_name ].sort(),
+          ]))
+          .digest('hex'),
+        ai,
+        ai_status: aiJob?.status || 'pending',
+        ai_error: aiJob?.status === 'failed' ? aiJob.error_message : null,
+      };
+    });
   }
 
-  async listCenterObjectDedupe() {
-    const [ candidates, reviews ] = await Promise.all([
-      this.listCenterObjectCandidates(),
-      this.repository.listCenterObjectReviews(),
-    ]);
+  async aiScreenCenterObjectCandidates({ limit = 6, threshold = 0.6 } = {}) {
+    const candidates = await this.listCenterObjectCandidates({ threshold });
+    const pending = candidates.filter(candidate =>
+      candidate.candidate_type === 'similar' && !candidate.ai
+    );
+    const batch = pending.slice(0, Math.max(1, Math.min(Number(limit) || 6, 12)));
+    const results = [];
+    const errors = [];
+    for (const candidate of batch) {
+      try {
+        const job = await this.aiReviewCenterObjectCandidate({
+          centerName: candidate.center_name,
+          leftObjectName: candidate.left_object_name,
+          rightObjectName: candidate.right_object_name,
+        });
+        results.push({
+          centerName: candidate.center_name,
+          leftObjectName: candidate.left_object_name,
+          rightObjectName: candidate.right_object_name,
+          relation: job.result?.relation || 'uncertain',
+        });
+      } catch (error) {
+        errors.push({
+          centerName: candidate.center_name,
+          leftObjectName: candidate.left_object_name,
+          rightObjectName: candidate.right_object_name,
+          message: error.message,
+        });
+      }
+    }
     return {
-      candidates,
+      processedCount: results.length,
+      errorCount: errors.length,
+      remainingCount: Math.max(0, pending.length - results.length - errors.length),
+      results,
+      errors,
+    };
+  }
+
+  async listCenterObjectDedupe({ threshold = null, scanned = false } = {}) {
+    const reviews = await this.repository.listCenterObjectReviews();
+    if (!scanned) {
+      return {
+        threshold,
+        scanned: false,
+        candidates: [],
+        excludedCandidates: [],
+        pendingCandidates: [],
+        failedCandidates: [],
+        reviews,
+        summary: {
+          candidateCount: 0,
+          actionableCount: 0,
+          pendingCount: 0,
+          excludedCount: 0,
+          failedCount: 0,
+          exactCount: 0,
+          similarCount: 0,
+          reviewedCount: reviews.length,
+          mergedCount: reviews.filter(review => review.decision === 'merged').length,
+        },
+      };
+    }
+    const candidates = await this.listCenterObjectCandidates({ threshold });
+    const partitioned = partitionSemanticCandidates(candidates);
+    return {
+      threshold,
+      scanned: true,
+      candidates: partitioned.actionable,
+      excludedCandidates: partitioned.excluded,
+      pendingCandidates: partitioned.pending,
+      failedCandidates: partitioned.failed,
       reviews,
       summary: {
         candidateCount: candidates.length,
+        actionableCount: partitioned.actionable.length,
+        pendingCount: partitioned.pending.length,
+        excludedCount: partitioned.excluded.length,
+        failedCount: partitioned.failed.length,
         exactCount: candidates.filter(candidate => candidate.candidate_type === 'exact').length,
         similarCount: candidates.filter(candidate => candidate.candidate_type === 'similar').length,
         reviewedCount: reviews.length,
@@ -114,7 +204,7 @@ class SupervisionDefinitionService extends Service {
   async objectCandidateContext(centerName, leftObjectName, rightObjectName) {
     const left = await this.repository.centerObjectEntry(centerName, leftObjectName);
     const right = await this.repository.centerObjectEntry(centerName, rightObjectName);
-    if (!left || !right || !objectCandidate(leftObjectName, rightObjectName)) {
+    if (!left || !right || !objectCandidate(leftObjectName, rightObjectName, 0)) {
       this.ctx.throw(409, '对象去重候选已发生变化，请刷新后重试');
     }
     const [ leftPlans, rightPlans ] = await Promise.all([

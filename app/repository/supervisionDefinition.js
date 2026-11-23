@@ -256,6 +256,18 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
+  async listObjectAiJobs() {
+    const result = await this.pool.query(`
+      SELECT DISTINCT ON (center_name, left_object_name, right_object_name)
+             id, center_name, left_object_name, right_object_name, status,
+             model_name, prompt_version, result, error_message, duration_ms,
+             created_at, completed_at
+      FROM ai_supervision_object_dedupe_jobs
+      WHERE status IN ('completed', 'failed')
+      ORDER BY center_name, left_object_name, right_object_name, created_at DESC`);
+    return result.rows;
+  }
+
   async findObjectAiJob(inputHash, modelName, promptVersion, client = this.pool) {
     const result = await client.query(`
       SELECT * FROM ai_supervision_object_dedupe_jobs

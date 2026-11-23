@@ -25,7 +25,7 @@ function objectSimilarity(left, right) {
   return (2 * intersection) / (first.size + second.size);
 }
 
-function objectCandidate(leftObject, rightObject) {
+function objectCandidate(leftObject, rightObject, threshold = 0.6) {
   const left = String(leftObject || '').trim();
   const right = String(rightObject || '').trim();
   if (!left || !right || left === right) return null;
@@ -35,7 +35,7 @@ function objectCandidate(leftObject, rightObject) {
   if (leftKey === rightKey) {
     return { candidateType: 'exact', similarity: 1 };
   }
-  if (score >= 0.6) {
+  if (score >= threshold) {
     return { candidateType: 'similar', similarity: score };
   }
   return null;
@@ -48,7 +48,7 @@ function pairKey(centerName, leftObject, rightObject) {
   ]);
 }
 
-function buildObjectCandidates(entries, reviews = []) {
+function buildObjectCandidates(entries, reviews = [], threshold = 0.6) {
   const reviewsByPair = new Map(reviews.map(review => [
     pairKey(review.center_name, review.left_object_name, review.right_object_name),
     review,
@@ -64,7 +64,7 @@ function buildObjectCandidates(entries, reviews = []) {
       for (let rightIndex = leftIndex + 1; rightIndex < centerEntries.length; rightIndex += 1) {
         const left = centerEntries[leftIndex];
         const right = centerEntries[rightIndex];
-        const rule = objectCandidate(left.object_name, right.object_name);
+        const rule = objectCandidate(left.object_name, right.object_name, threshold);
         if (!rule) continue;
         const review = reviewsByPair.get(pairKey(centerName, left.object_name, right.object_name));
         if (review && [ 'merged', 'distinct', 'unrelated' ].includes(review.decision)) continue;
@@ -89,10 +89,28 @@ function buildObjectCandidates(entries, reviews = []) {
   });
 }
 
+function partitionSemanticCandidates(candidates) {
+  return {
+    actionable: candidates.filter(candidate =>
+      candidate.candidate_type === 'exact' || candidate.ai?.relation === 'duplicate'
+    ),
+    excluded: candidates.filter(candidate =>
+      candidate.ai?.relation === 'similar_but_distinct' || candidate.ai?.relation === 'unrelated'
+    ),
+    pending: candidates.filter(candidate =>
+      candidate.candidate_type !== 'exact'
+      && !candidate.ai
+      && candidate.ai_status !== 'failed'
+    ),
+    failed: candidates.filter(candidate => candidate.ai_status === 'failed'),
+  };
+}
+
 module.exports = {
   buildObjectCandidates,
   objectCandidate,
   objectKey,
   objectSimilarity,
   pairKey,
+  partitionSemanticCandidates,
 };

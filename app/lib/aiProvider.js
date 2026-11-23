@@ -150,6 +150,7 @@ class AiProvider {
         content: [
           '你是检查中心“检查对象”去重助手。只判断两个对象名称是否表示同一个可检查对象，不修改数据。',
           '必须结合对象名称、关联检查方案的方法、描述、步骤、频率和执行方式判断；不能只看字面相似。',
+      '“对内发布/对外发布”“更换记录/盘点记录”等方向、用途或管理动作不同的对象，不算重复。',
           '如果只是同一类检查应用到不同设备或不同对象，必须判为 similar_but_distinct；如果只是名称包含附加材料或列表，必须判为 similar_but_distinct。',
           'relation 只能是 duplicate、similar_but_distinct、unrelated、uncertain。',
           'recommendedCanonicalName 必须是 left.name 或 right.name；不确定时为 null。',

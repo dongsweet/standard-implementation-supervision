@@ -93,15 +93,18 @@ test('links the center object page to manual object deduplication', () => {
   assert.match(html, /对象去重复核/);
 });
 
-test('keeps object dedupe AI and merge actions behind explicit human controls', () => {
+test('keeps rule scanning and AI review manual and threshold configurable', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe.ejs'), 'utf8');
-  assert.match(html, /规则先筛候选/);
-  assert.match(html, /AI 只提供建议/);
-  assert.match(html, /合并必须由人工确认/);
+  assert.match(html, /先按名称相似度规则筛选/);
+  assert.match(html, /人工手动触发 AI 语义复核/);
+  assert.match(html, /运行规则筛选/);
+  assert.match(html, /type="number" min="0" max="1" step="0.01"/);
+  assert.match(html, /进入页面不会自动扫描/);
+  assert.match(html, /页面不会自动查找候选，也不会自动调用 AI/);
+  assert.match(html, /检查方案会更新到保留对象/);
   assert.match(html, /保留 A 并合并/);
   assert.match(html, /保留 B 并合并/);
   assert.match(html, /confirmAppAction/);
-  assert.match(html, /检查方案会更新到保留对象/);
 });
 
 test('renders the center object page with shared layout inputs', { skip: !ejs }, async () => {
