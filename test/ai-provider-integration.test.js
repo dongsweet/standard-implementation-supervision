@@ -4,6 +4,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { AiProvider, friendlyAiError, parseObjectAiResult } = require('../app/lib/aiProvider');
+let AiProviderService;
+try {
+  AiProviderService = require('../app/service/aiProvider');
+} catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+}
 
 function createServer(handler) {
   return new Promise(resolve => {
@@ -40,6 +46,27 @@ test('validates center object semantic dedupe responses', () => {
     () => parseObjectAiResult(JSON.stringify({ relation: 'merge_now', confidence: 1 })),
     /relation 无效/
   );
+});
+
+test('exposes center object semantic review through the Egg AI service', { skip: !AiProviderService }, async () => {
+  const original = AiProviderService.prototype.getProvider;
+  let received;
+  AiProviderService.prototype.getProvider = async function getProvider() {
+    return {
+      async classifyCenterObjectPair(payload) {
+        received = payload;
+        return { result: { relation: 'duplicate', confidence: 0.9 } };
+      },
+    };
+  };
+  try {
+    const service = new AiProviderService({});
+    const result = await service.classifyCenterObjectPair({ centerName: '总部', left: {}, right: {} });
+    assert.equal(result.result.relation, 'duplicate');
+    assert.equal(received.centerName, '总部');
+  } finally {
+    AiProviderService.prototype.getProvider = original;
+  }
 });
 
 test('tests an OpenAI-compatible endpoint and validates smart review suggestions', async () => {
