@@ -18,6 +18,8 @@ class SupervisionDefinitionController extends Controller {
     await this.ctx.render('supervision-center-objects/index', {
       title: '中心检查对象',
       ...await this.ctx.service.supervisionDefinition.listCenterObjects(this.ctx.query),
+      csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
     });
   }
 

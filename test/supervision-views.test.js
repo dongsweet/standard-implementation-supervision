@@ -86,3 +86,15 @@ test('escapes standard content before placing supervision definitions in script 
   assert.equal(html.includes(attackText), false);
   assert.match(html, /heading\.textContent = \[item\.code, item\.title\]/);
 });
+
+test('renders the center object page with shared layout inputs', { skip: !ejs }, async () => {
+  const html = await ejs.renderFile(path.join(viewRoot, 'supervision-center-objects/index.ejs'), {
+    centerObjects: [],
+    centerOptions: [ '云中心' ],
+    csrf: 'test-token',
+    user: { display_name: '管理员', roles: [] },
+    currentPath: '/supervision-center-objects',
+  });
+  assert.match(html, /中心检查对象/);
+  assert.match(html, /name="center"/);
+});
