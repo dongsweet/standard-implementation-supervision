@@ -24,6 +24,16 @@ class SupervisionDefinitionController extends Controller {
     });
   }
 
+  async centerObjectDedupeHistory() {
+    requireGlobalRead(this.ctx);
+    await this.ctx.render('supervision-center-objects/dedupe-history', {
+      title: '中心检查对象去重复核历史',
+      reviews: await this.ctx.service.supervisionDefinition.listCenterObjectReviews(),
+      csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
+    });
+  }
+
   async centerObjectDedupe() {
     requireGlobalRead(this.ctx);
     const rawThreshold = this.ctx.query.threshold;

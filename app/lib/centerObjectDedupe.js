@@ -91,18 +91,15 @@ function buildObjectCandidates(entries, reviews = [], threshold = 0.6) {
 
 function partitionSemanticCandidates(candidates) {
   return {
-    actionable: candidates.filter(candidate =>
-      candidate.candidate_type === 'exact' || candidate.ai?.relation === 'duplicate'
-    ),
-    excluded: candidates.filter(candidate =>
+    ruleCandidates: candidates,
+    aiDuplicate: candidates.filter(candidate => candidate.ai?.relation === 'duplicate'),
+    aiExcluded: candidates.filter(candidate =>
       candidate.ai?.relation === 'similar_but_distinct' || candidate.ai?.relation === 'unrelated'
     ),
-    pending: candidates.filter(candidate =>
-      candidate.candidate_type !== 'exact'
-      && !candidate.ai
-      && candidate.ai_status !== 'failed'
+    aiPending: candidates.filter(candidate =>
+      !candidate.ai && candidate.ai_status !== 'failed'
     ),
-    failed: candidates.filter(candidate => candidate.ai_status === 'failed'),
+    aiFailed: candidates.filter(candidate => candidate.ai_status === 'failed'),
   };
 }
 

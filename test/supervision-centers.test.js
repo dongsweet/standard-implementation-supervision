@@ -58,7 +58,7 @@ test('center object candidates stay within one center and dismiss reviewed pairs
   assert.equal(candidates[0].candidate_type, 'exact');
 });
 
-test('AI semantics exclude similar-looking but opposite objects from merge candidates', () => {
+test('AI semantics annotate candidates without blocking manual review', () => {
   const candidates = [
     { id: 'exact', candidate_type: 'exact', ai: null, ai_status: 'pending' },
     { id: 'same', candidate_type: 'similar', ai: { relation: 'duplicate' }, ai_status: 'completed' },
@@ -68,10 +68,11 @@ test('AI semantics exclude similar-looking but opposite objects from merge candi
     { id: 'failed', candidate_type: 'similar', ai: null, ai_status: 'failed' },
   ];
   const result = partitionSemanticCandidates(candidates);
-  assert.deepEqual(result.actionable.map(item => item.id), [ 'exact', 'same' ]);
-  assert.deepEqual(result.excluded.map(item => item.id), [ 'opposite' ]);
-  assert.deepEqual(result.pending.map(item => item.id), [ 'pending' ]);
-  assert.deepEqual(result.failed.map(item => item.id), [ 'failed' ]);
+  assert.deepEqual(result.ruleCandidates.map(item => item.id), [ 'exact', 'same', 'opposite', 'unknown', 'pending', 'failed' ]);
+  assert.deepEqual(result.aiDuplicate.map(item => item.id), [ 'same' ]);
+  assert.deepEqual(result.aiExcluded.map(item => item.id), [ 'opposite' ]);
+  assert.deepEqual(result.aiPending.map(item => item.id), [ 'exact', 'pending' ]);
+  assert.deepEqual(result.aiFailed.map(item => item.id), [ 'failed' ]);
 });
 
 test('plan import identity keeps scope semantics but excludes applicable centers', () => {

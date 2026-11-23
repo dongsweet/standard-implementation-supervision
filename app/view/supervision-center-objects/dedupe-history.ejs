@@ -1,0 +1,29 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">中心检查对象去重复核历史</h2>
+    <p class="text-secondary mb-0">查看已合并、判定不是重复和暂不确定的记录。需要重新筛选时返回对象去重页面。</p>
+  </div>
+  <a class="btn btn-outline-secondary ms-auto" href="/supervision-center-objects/dedupe">返回对象去重</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <p class="text-secondary mb-2"><strong><%= reviews.length %></strong> 条人工复核记录。</p>
+    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th>复核时间</th><th>检查中心</th><th>对象 A</th><th>对象 B</th><th>人工结论</th><th>保留对象与迁移结果</th></tr></thead>
+      <tbody>
+        <% reviews.forEach(review => { %>
+          <tr>
+            <td><%= new Date(review.created_at).toLocaleString('zh-CN') %></td>
+            <td><%= review.center_name %></td>
+            <td><%= review.left_object_name %></td>
+            <td><%= review.right_object_name %></td>
+            <td><span class="badge <%= review.decision === 'merged' ? 'text-bg-success' : review.decision === 'distinct' ? 'text-bg-secondary' : 'text-bg-warning' %>"><%= review.decision === 'merged' ? '已合并' : review.decision === 'distinct' ? '不是重复' : '暂不确定' %></span></td>
+            <td><%= review.canonical_object_name || '-' %><% if ((review.affected_plan_ids || []).length) { %><div class="small text-secondary"><%= review.affected_plan_ids.length %> 个检查方案已迁移</div><% } %></td>
+          </tr>
+        <% }) %>
+        <% if (!reviews.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">暂无人工复核记录。</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>

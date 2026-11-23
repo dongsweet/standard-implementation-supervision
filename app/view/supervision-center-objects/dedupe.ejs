@@ -5,9 +5,12 @@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div>
     <h2 class="h4 mb-1">中心检查对象去重</h2>
-    <p class="text-secondary mb-0">先按名称相似度规则筛选，再由人工手动触发 AI 语义复核。AI 只提供判断，所有合并仍需人工确认。</p>
+    <p class="text-secondary mb-0">按名称相似度规则筛选后，可直接由人工判断是否重复。AI 语义复核为可选辅助，所有合并都必须人工确认。</p>
   </div>
-  <a class="btn btn-outline-secondary ms-auto" href="/supervision-center-objects">返回中心检查对象</a>
+  <div class="ms-auto d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="/supervision-center-objects/dedupe/history">查看复核历史</a>
+    <a class="btn btn-outline-secondary" href="/supervision-center-objects">返回中心检查对象</a>
+  </div>
 </div>
 
 <div class="card mb-3">
@@ -22,11 +25,11 @@
       </div>
       <div class="col-12 col-md-7 d-flex flex-wrap gap-2">
         <button class="btn btn-primary" type="button" id="runRuleScreen" onclick="runRuleScreen(this)">运行规则筛选</button>
-        <% if (hasResults && summary.pendingCount && !summary.failedCount) { %><button class="btn btn-outline-primary" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">AI 语义复核待判断项（<%= summary.pendingCount %>）</button><% } %>
-        <% if (hasResults && summary.failedCount) { %><button class="btn btn-outline-danger" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">重试 AI 语义复核</button><% } %>
+        <% if (hasResults && summary.pendingCount) { %><button class="btn btn-outline-primary" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">可选 AI 语义复核（<%= summary.pendingCount %>）</button><% } %>
+        <% if (hasResults && summary.failedCount) { %><button class="btn btn-outline-danger" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">重试可选 AI 复核</button><% } %>
       </div>
     </div>
-    <div class="form-text mt-2">门限可自行填写（0～1）。进入页面不会自动扫描；点击按钮后才查询候选。示例：门限 0.6 会筛出名称相似度不低于 0.6 的对象组合。</div>
+    <div class="form-text mt-2">门限可自行填写（0～1）。进入页面不会自动扫描；点击“运行规则筛选”后才查询候选。AI 不是合并前置条件，可以完全不运行。</div>
   </div>
 </div>
 
@@ -39,20 +42,16 @@
 </div></div>
 <% } else { %>
 <div class="row g-3 mb-3">
-  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">规则候选</div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div><div class="small text-secondary">名称相似度 ≥ <%= thresholdValue %></div></div></div></div>
-  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">建议合并</div><div class="fs-3 fw-semibold text-danger"><%= summary.actionableCount %></div><div class="small text-secondary">规则同名或 AI 判重</div></div></div></div>
-  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 已排除</div><div class="fs-3 fw-semibold text-success"><%= summary.excludedCount %></div><div class="small text-secondary">相似但不同或无关</div></div></div></div>
-  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">待 AI 判断</div><div class="fs-3 fw-semibold text-warning"><%= summary.pendingCount + summary.failedCount %></div><% if (summary.failedCount) { %><div class="small text-danger"><%= summary.failedCount %> 组上次分析失败</div><% } %></div></div></div>
-  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">已确认合并</div><div class="fs-3 fw-semibold text-success"><%= summary.mergedCount %></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">规则候选</div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div><div class="small text-secondary">名称相似度 ≥ <%= thresholdValue %></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 判重</div><div class="fs-3 fw-semibold text-danger"><%= summary.aiDuplicateCount %></div><div class="small text-secondary">可选复核结果</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 排除</div><div class="fs-3 fw-semibold text-success"><%= summary.excludedCount %></div><div class="small text-secondary">相似但不同或无关</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">未做 AI</div><div class="fs-3 fw-semibold text-warning"><%= summary.pendingCount + summary.failedCount %></div><div class="small text-secondary">不影响人工判断</div></div></div></div>
 </div>
 
-<% if (summary.pendingCount) { %><div class="alert alert-warning"><strong>还有 <%= summary.pendingCount %> 组名称相似对象未做 AI 语义判断。</strong>这些候选暂不提供合并按钮，需点击上方 AI 语义复核后才会生成 AI 判重结论。</div><% } %>
-<% if (summary.failedCount) { %><div class="alert alert-danger"><strong><%= summary.failedCount %> 组 AI 分析失败。</strong>失败候选暂不提供合并按钮；修复 AI 服务后可点击上方按钮重试。</div><% } %>
-
-<div class="card mb-3">
-  <div class="card-header d-flex align-items-center"><h3 class="card-title">确认合并候选</h3><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
+<section class="card mb-3">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">规则筛选结果</h3><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:15rem">筛选结论</th><th style="width:24rem">复核操作</th></tr></thead>
+    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:14rem">筛选结论</th><th style="width:24rem">人工复核</th></tr></thead>
     <tbody>
       <% candidates.forEach(candidate => { %>
         <tr>
@@ -70,9 +69,9 @@
             <details class="small mt-1"><summary>查看方案与描述</summary><div class="mt-1"><%= (candidate.right.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') || '-' %></div><% (candidate.right.descriptions || []).slice(0, 5).forEach(description => { %><div class="text-break mt-1"><%= description %></div><% }) %></details>
           </td>
           <td>
-            <% if (candidate.candidate_type === 'exact') { %><span class="badge text-bg-danger">规范化后同名</span><% } else { %><span class="badge text-bg-danger">AI 判定重复</span><% } %>
-            <div class="small mt-1">名称相似度 <%= Number(candidate.similarity_score || 0).toFixed(3) %></div>
-            <% if (candidate.ai) { %><div class="small mt-1">AI 置信度 <%= Number(candidate.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary mt-1"><%= candidate.ai.reason || '-' %></div><% } %>
+            <span class="badge <%= candidate.candidate_type === 'exact' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= candidate.candidate_type === 'exact' ? '规范化后同名' : '名称相似' %></span>
+            <div class="small mt-1">相似度 <%= Number(candidate.similarity_score || 0).toFixed(3) %></div>
+            <% if (candidate.ai) { %><div class="mt-1"><span class="badge <%= candidate.ai.relation === 'duplicate' ? 'text-bg-danger' : 'text-bg-success' %>"><%= candidate.ai.relation === 'duplicate' ? 'AI 判重' : candidate.ai.relation === 'unrelated' ? 'AI 判无关' : candidate.ai.relation === 'similar_but_distinct' ? 'AI 判不同' : 'AI 不确定' %></span></div><div class="small text-secondary mt-1">置信度 <%= Number(candidate.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary"><%= candidate.ai.reason || '-' %></div><% } %><% if (candidate.ai_status === 'failed') { %><div class="small text-danger mt-1">上次 AI 分析失败，不影响人工判断</div><% } %>
           </td>
           <td>
             <div class="d-flex flex-column align-items-start gap-1 object-review-actions">
@@ -84,46 +83,15 @@
                 <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">不是重复</button>
                 <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'uncertain')">暂不确定</button>
               </div>
+              <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">可选 AI 分析</button>
             </div>
           </td>
         </tr>
       <% }) %>
-      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">没有规则同名或经 AI 判重后的合并候选。</td></tr><% } %>
+      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">当前门限下没有规则候选。</td></tr><% } %>
     </tbody>
   </table></div>
-</div>
-
-<% if (pendingCandidates.length || failedCandidates.length) { %>
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">待 AI 语义判断</h3></div>
-  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-    <thead><tr><th>检查中心</th><th>对象 A</th><th>对象 B</th><th>相似度</th><th>状态</th><th class="text-end">操作</th></tr></thead>
-    <tbody>
-      <% [ ...pendingCandidates, ...failedCandidates ].forEach(candidate => { %><tr><td><%= candidate.center_name %></td><td><%= candidate.left_object_name %></td><td><%= candidate.right_object_name %></td><td><%= Number(candidate.similarity_score || 0).toFixed(3) %></td><td><% if (candidate.ai_status === 'failed') { %><span class="badge text-bg-danger">分析失败</span><div class="small text-secondary"><%= candidate.ai_error || '-' %></div><% } else { %><span class="badge text-bg-warning">待分析</span><% } %></td><td class="text-end"><button class="btn btn-sm btn-outline-primary" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">单独 AI 分析</button></td></tr><% }) %>
-    </tbody>
-  </table></div>
-</div>
-<% } %>
-
-<% if (excludedCandidates.length) { %>
-<div class="card mb-3">
-  <div class="card-header"><h3 class="card-title">AI 已排除</h3></div>
-  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-    <thead><tr><th>检查中心</th><th>对象 A</th><th>对象 B</th><th>AI 结论</th><th>原因</th></tr></thead>
-    <tbody><% excludedCandidates.forEach(candidate => { %><tr><td><%= candidate.center_name %></td><td><%= candidate.left_object_name %></td><td><%= candidate.right_object_name %></td><td><span class="badge text-bg-success"><%= candidate.ai.relation === 'unrelated' ? '无关' : '相似但不同' %></span><div class="small text-secondary">置信度 <%= Number(candidate.ai.confidence || 0).toFixed(3) %></div></td><td><%= candidate.ai.reason || '-' %></td></tr><% }) %></tbody>
-  </table></div>
-</div>
-<% } %>
-<% } %>
-
-<% if (reviews.length) { %>
-<div class="card">
-  <div class="card-header"><h3 class="card-title">最近人工复核</h3></div>
-  <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-    <thead><tr><th>时间</th><th>检查中心</th><th>对象 A</th><th>对象 B</th><th>结论</th><th>保留对象 / 迁移方案</th></tr></thead>
-    <tbody><% reviews.slice(0, 20).forEach(review => { %><tr><td class="text-nowrap"><%= new Date(review.created_at).toLocaleString('zh-CN') %></td><td><%= review.center_name %></td><td><%= review.left_object_name %></td><td><%= review.right_object_name %></td><td><span class="badge <%= review.decision === 'merged' ? 'text-bg-success' : review.decision === 'distinct' ? 'text-bg-secondary' : 'text-bg-warning' %>"><%= review.decision === 'merged' ? '已合并' : review.decision === 'distinct' ? '不是重复' : '暂不确定' %></span></td><td><%= review.canonical_object_name || '-' %><% if ((review.affected_plan_ids || []).length) { %><div class="small text-secondary"><%= review.affected_plan_ids.length %> 个方案已更新</div><% } %></td></tr><% }) %></tbody>
-  </table></div>
-</div>
+</section>
 <% } %>
 
 <div class="modal fade" id="objectAiResultModal" tabindex="-1" aria-labelledby="objectAiResultTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
@@ -141,6 +109,11 @@
     }
     return threshold;
   };
+  const reloadUrl = notice => {
+    const params = new URLSearchParams({ run: '1', threshold: currentThreshold() });
+    if (notice) params.set('notice', notice);
+    return `/supervision-center-objects/dedupe?${params.toString()}`;
+  };
   async function objectSend(path, body) {
     const response = await fetch(path, {
       method: 'POST',
@@ -154,8 +127,7 @@
   function runRuleScreen(button) {
     button.disabled = true;
     try {
-      const threshold = currentThreshold();
-      window.location.assign(`/supervision-center-objects/dedupe?run=1&threshold=${encodeURIComponent(threshold)}`);
+      window.location.assign(reloadUrl());
     } catch (error) {
       button.disabled = false;
       window.showAppNotice(error.message, '规则筛选未完成');
@@ -187,7 +159,7 @@
     try {
       const threshold = currentThreshold();
       while (true) {
-        progress.textContent = `AI 语义复核进行中：已完成 ${processed} 组${errors ? `，失败 ${errors} 组` : ''}`;
+        progress.textContent = `可选 AI 语义复核进行中：已完成 ${processed} 组${errors ? `，失败 ${errors} 组` : ''}`;
         const result = await objectSend('/api/supervision-center-objects/ai-screen', { limit: 6, threshold });
         processed += result.processedCount;
         errors += result.errorCount;
@@ -196,13 +168,13 @@
       }
       if (errors) {
         button.disabled = false;
-        window.showAppNotice(`${lastError}。已完成的判断会保留，修复 AI 服务后可继续重试。`, 'AI 语义复核未全部完成');
+        window.showAppNotice(`${lastError}。已完成的判断会保留，修复 AI 服务后可继续重试。`, '可选 AI 复核未全部完成');
         return;
       }
-      window.location.assign(`/supervision-center-objects/dedupe?run=1&threshold=${encodeURIComponent(threshold)}`);
+      window.location.assign(reloadUrl());
     } catch (error) {
       button.disabled = false;
-      window.showAppNotice(error.message, 'AI 语义复核未完成');
+      window.showAppNotice(error.message, '可选 AI 复核未完成');
     }
   }
   async function mergeObject(button) {
@@ -218,7 +190,7 @@
         decision: 'merged',
         canonicalObjectName: canonical,
       });
-      window.location.assign(`/supervision-center-objects/dedupe?run=1&threshold=${encodeURIComponent(currentThreshold())}&notice=${encodeURIComponent('对象已合并，检查方案已更新')}`);
+      window.location.assign(reloadUrl('对象已合并，检查方案已更新'));
     } catch (error) {
       window.showAppNotice(error.message, '对象合并未完成');
     }
@@ -233,7 +205,7 @@
         rightObjectName: button.dataset.right,
         decision,
       });
-      window.location.assign(`/supervision-center-objects/dedupe?run=1&threshold=${encodeURIComponent(currentThreshold())}&notice=${encodeURIComponent('对象复核结论已保存')}`);
+      window.location.assign(reloadUrl('对象复核结论已保存'));
     } catch (error) {
       window.showAppNotice(error.message, '对象复核未完成');
     }

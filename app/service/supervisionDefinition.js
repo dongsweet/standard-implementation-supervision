@@ -153,6 +153,10 @@ class SupervisionDefinitionService extends Service {
     };
   }
 
+  async listCenterObjectReviews() {
+    return this.repository.listCenterObjectReviews();
+  }
+
   async listCenterObjectDedupe({ threshold = null, scanned = false } = {}) {
     const reviews = await this.repository.listCenterObjectReviews();
     if (!scanned) {
@@ -163,10 +167,9 @@ class SupervisionDefinitionService extends Service {
         excludedCandidates: [],
         pendingCandidates: [],
         failedCandidates: [],
-        reviews,
         summary: {
           candidateCount: 0,
-          actionableCount: 0,
+          aiDuplicateCount: 0,
           pendingCount: 0,
           excludedCount: 0,
           failedCount: 0,
@@ -182,17 +185,17 @@ class SupervisionDefinitionService extends Service {
     return {
       threshold,
       scanned: true,
-      candidates: partitioned.actionable,
-      excludedCandidates: partitioned.excluded,
-      pendingCandidates: partitioned.pending,
-      failedCandidates: partitioned.failed,
+      candidates: partitioned.ruleCandidates,
+      excludedCandidates: partitioned.aiExcluded,
+      pendingCandidates: partitioned.aiPending,
+      failedCandidates: partitioned.aiFailed,
       reviews,
       summary: {
         candidateCount: candidates.length,
-        actionableCount: partitioned.actionable.length,
-        pendingCount: partitioned.pending.length,
-        excludedCount: partitioned.excluded.length,
-        failedCount: partitioned.failed.length,
+        aiDuplicateCount: partitioned.aiDuplicate.length,
+        pendingCount: partitioned.aiPending.length,
+        excludedCount: partitioned.aiExcluded.length,
+        failedCount: partitioned.aiFailed.length,
         exactCount: candidates.filter(candidate => candidate.candidate_type === 'exact').length,
         similarCount: candidates.filter(candidate => candidate.candidate_type === 'similar').length,
         reviewedCount: reviews.length,

@@ -93,22 +93,36 @@ test('links the center object page to manual object deduplication', () => {
   assert.match(html, /对象去重复核/);
 });
 
-test('keeps rule scanning and AI review manual and threshold configurable', () => {
+test('keeps rule scanning manual, AI optional, and manual review always available', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe.ejs'), 'utf8');
-  assert.match(html, /先按名称相似度规则筛选/);
-  assert.match(html, /人工手动触发 AI 语义复核/);
+  assert.match(html, /按名称相似度规则筛选后，可直接由人工判断是否重复/);
+  assert.match(html, /AI 语义复核为可选辅助/);
   assert.match(html, /运行规则筛选/);
   assert.match(html, /type="number" min="0" max="1" step="0.01"/);
   assert.match(html, /进入页面不会自动扫描/);
-  assert.match(html, /页面不会自动查找候选，也不会自动调用 AI/);
-  assert.match(html, /检查方案会更新到保留对象/);
+  assert.match(html, /AI 不是合并前置条件/);
+  assert.match(html, /规则筛选结果/);
   assert.match(html, /保留 A 并合并/);
   assert.match(html, /保留 B 并合并/);
   assert.match(html, /不是重复/);
   assert.match(html, /暂不确定/);
+  assert.match(html, /可选 AI 分析/);
   assert.match(html, /object-review-actions/);
-  assert.match(html, /d-flex flex-nowrap gap-1/);
-  assert.match(html, /confirmAppAction/);
+  assert.match(html, /该中心下.*检查方案会更新到保留对象/);
+  assert.match(html, /所有合并都必须人工确认/);
+  assert.doesNotMatch(html, /AI 已排除<\/h3>/);
+  assert.doesNotMatch(html, /最近人工复核/);
+});
+
+test('moves object dedupe history behind its own page', () => {
+  const entry = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
+  const dedupe = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe.ejs'), 'utf8');
+  const history = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe-history.ejs'), 'utf8');
+  assert.match(entry, /\/supervision-center-objects\/dedupe/);
+  assert.match(dedupe, /dedupe\/history/);
+  assert.match(dedupe, /查看复核历史/);
+  assert.match(history, /中心检查对象去重复核历史/);
+  assert.match(history, /检查方案已迁移/);
 });
 
 test('renders the center object page with shared layout inputs', { skip: !ejs }, async () => {

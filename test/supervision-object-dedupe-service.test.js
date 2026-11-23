@@ -38,7 +38,7 @@ test('does not scan object candidates until explicitly requested', { skip: !Serv
   assert.deepEqual(calls, [ 'reviews' ]);
 });
 
-test('keeps similar candidates pending until AI explicitly returns duplicate', { skip: !Service }, async () => {
+test('keeps all rule candidates available for manual review with optional AI annotations', { skip: !Service }, async () => {
   const baseEntries = [
     { center_name: '云中心', object_name: '安全信息对内发布记录', plan_count: 1 },
     { center_name: '云中心', object_name: '安全信息对外发布记录', plan_count: 1 },
@@ -63,10 +63,10 @@ test('keeps similar candidates pending until AI explicitly returns duplicate', {
     },
   });
   const result = await service.listCenterObjectDedupe({ scanned: true, threshold: 0.6 });
-  assert.equal(result.summary.actionableCount, 1);
+  assert.equal(result.summary.aiDuplicateCount, 0);
   assert.equal(result.summary.excludedCount, 1);
-  assert.equal(result.summary.pendingCount, 0);
-  assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].candidate_type, 'exact');
+  assert.equal(result.summary.pendingCount, 1);
+  assert.equal(result.candidates.length, 2);
+  assert.equal(result.candidates.some(candidate => candidate.left_object_name === '安全信息对内发布记录'), true);
   assert.equal(result.excludedCandidates[0].ai.relation, 'similar_but_distinct');
 });

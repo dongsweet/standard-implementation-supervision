@@ -15,6 +15,7 @@ module.exports = app => {
   router.get('/supervision-definitions', controller.supervisionDefinition.index);
   router.get('/supervision-center-objects', controller.supervisionDefinition.centerObjects);
   router.get('/supervision-center-objects/dedupe', controller.supervisionDefinition.centerObjectDedupe);
+  router.get('/supervision-center-objects/dedupe/history', controller.supervisionDefinition.centerObjectDedupeHistory);
   router.post('/api/supervision-center-objects/ai-review', controller.supervisionDefinition.aiReviewCenterObject);
   router.post('/api/supervision-center-objects/ai-screen', controller.supervisionDefinition.aiScreenCenterObjects);
   router.post('/api/supervision-center-objects/reviews', controller.supervisionDefinition.reviewCenterObject);
