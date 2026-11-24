@@ -222,7 +222,7 @@
             failed: errors,
             total: effectiveTotal,
             batch: batchNumber,
-            error: `${message}。已完成的判断会保留；修复 AI 服务后可继续重试。`,
+            error: `${message.replace(/[。；]+$/, '')}。已完成的判断会保留；修复 AI 服务后可继续重试。`,
           });
           window.showAppNotice(message, '可选 AI 复核未完成');
           return;
@@ -246,7 +246,7 @@
         failed: errors + 1,
         total,
         batch: batchNumber,
-        error: `${error.message}。请检查 AI 服务配置和网络后重试。`,
+        error: `${String(error.message || 'AI 服务请求失败').replace(/[。；]+$/, '')}。请检查 AI 服务配置和网络后重试。`,
       });
       window.showAppNotice(error.message, '可选 AI 复核未完成');
     }
