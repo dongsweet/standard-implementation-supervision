@@ -1,5 +1,5 @@
 <%
-  const thresholdValue = typeof queryThreshold === 'number' && Number.isFinite(queryThreshold) ? queryThreshold : 0.35;
+  const thresholdValue = typeof queryThreshold === 'number' && Number.isFinite(queryThreshold) ? queryThreshold : 0.6;
   const hasResults = typeof scanned !== 'undefined' && scanned;
   const activeFilter = [ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ].includes(filter) ? filter : 'all';
   const filterLabels = {

@@ -24,7 +24,7 @@ class DedupeController extends Controller {
         scanned,
         filter,
       }),
-      queryThreshold: threshold === null || !Number.isFinite(threshold) ? 0.35 : threshold,
+      queryThreshold: threshold === null || !Number.isFinite(threshold) ? 0.6 : threshold,
       csrf: this.ctx.csrf,
       user: this.ctx.state.user,
     });
@@ -44,7 +44,7 @@ class DedupeController extends Controller {
     requireGlobalRead(this.ctx);
     const requestedLimit = Number.parseInt(this.ctx.query.limit, 10);
     const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 200)) : 200;
-    const threshold = Number(this.ctx.query.threshold || 0.35);
+    const threshold = Number(this.ctx.query.threshold || 0.6);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) this.ctx.throw(400, '门限必须在 0 到 1 之间');
     this.ctx.body = { data: await this.ctx.service.dedupe.listCandidates({ limit, threshold }) };
   }

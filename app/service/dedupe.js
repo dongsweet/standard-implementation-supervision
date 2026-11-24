@@ -29,7 +29,7 @@ class DedupeService extends Service {
     ]);
   }
 
-  async listCandidates({ threshold = 0.35, limit = 1000 } = {}) {
+  async listCandidates({ threshold = 0.6, limit = 1000 } = {}) {
     const [ candidates, aiJobs ] = await Promise.all([
       this.repository.listCandidates({ threshold, limit }),
       this.repository.listDefinitionAiJobs(),
@@ -98,7 +98,7 @@ class DedupeService extends Service {
     };
   }
 
-  async aiScreenDefinitionCandidates({ limit = 4, threshold = 0.35 } = {}) {
+  async aiScreenDefinitionCandidates({ limit = 4, threshold = 0.6 } = {}) {
     const candidates = await this.listCandidates({ threshold });
     const pending = candidates.filter(candidate => !candidate.ai || candidate.ai_status === 'failed');
     const batch = pending.slice(0, Math.max(1, Math.min(Number(limit) || 4, 8)));

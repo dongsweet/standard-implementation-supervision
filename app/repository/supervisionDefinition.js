@@ -7,7 +7,7 @@ class SupervisionDefinitionRepository {
     this.pool = pool;
   }
 
-  async listCandidates({ threshold = 0.35, limit = 1000 } = {}) {
+  async listCandidates({ threshold = 0.6, limit = 1000 } = {}) {
     const result = await this.pool.query(`
       SELECT v.id, v.candidate_id, d.plan_number, c.plan_number AS candidate_plan_number,
              v.object_name, v.object_category, v.check_layer,
