@@ -1,0 +1,29 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">检查方案去重复核历史</h2>
+    <p class="text-secondary mb-0">查看已归并、相似但不归并、无关和待进一步确认的人工复核记录。</p>
+  </div>
+  <a class="btn btn-outline-secondary ms-auto" href="/dedupe">返回检查方案去重</a>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <p class="text-secondary mb-2"><strong><%= reviews.length %></strong> 条人工复核记录。</p>
+    <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr><th>复核时间</th><th>方案 A</th><th>方案 B</th><th>人工结论</th><th>保留方案</th><th>说明</th></tr></thead>
+      <tbody>
+        <% reviews.forEach(review => { %>
+          <tr>
+            <td><%= new Date(review.created_at).toLocaleString('zh-CN') %></td>
+            <td><%= review.left_object_name %></td>
+            <td><%= review.right_object_name %></td>
+            <td><span class="badge <%= review.decision === 'duplicate' ? 'text-bg-success' : review.decision === 'uncertain' ? 'text-bg-warning' : 'text-bg-secondary' %>"><%= review.decision === 'duplicate' ? '已归并' : review.decision === 'similar_but_distinct' ? '相似但不归并' : review.decision === 'unrelated' ? '无关' : '待进一步确认' %></span></td>
+            <td><%= review.canonical_object_name || '-' %></td>
+            <td><%= review.notes || '-' %></td>
+          </tr>
+        <% }) %>
+        <% if (!reviews.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">暂无检查方案人工复核记录。</td></tr><% } %>
+      </tbody>
+    </table></div>
+  </div>
+</div>

@@ -1,63 +1,267 @@
-<p class="text-secondary mb-3">规则筛选 → AI 判断 → 人工确认；AI 不会自动归并定义。</p>
-<div class="card">
-  <div class="card-header"><h3 class="card-title">待复核候选</h3></div>
-  <div class="table-responsive">
-    <table class="table table-striped table-hover align-middle mb-0">
-      <thead><tr><th>定义 A</th><th>定义 B</th><th>候选类型</th><th>关联标准项</th><th>历史执行</th><th>人工复核操作</th></tr></thead>
-      <tbody>
-        <% candidates.forEach(item => { %>
-          <tr>
-            <td><strong><%= item.object_name %></strong><div class="small text-secondary"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %></div><div class="small text-secondary">适用中心：<%= (item.centers || []).join('、') || '未指定' %> · <%= item.priority || '-' %> · <%= item.recognized_object === true ? '公认对象' : item.recognized_object === false ? '非公认对象' : '未指定' %></div><div class="mt-1"><b>方法：</b><%= item.check_method %></div><div><b>描述：</b><%= item.description %></div><div><b>步骤：</b><%= item.steps || '-' %></div><div><b>频率/方式：</b><%= item.frequency || '-' %> / <%= item.access_mode || '-' %></div><% if (item.reference_result || item.reference_materials) { %><details class="small"><summary>参考内容</summary><div>判定：<%= item.reference_result || '-' %></div><div>材料：<%= item.reference_materials || '-' %></div></details><% } %></td>
-            <td><strong><%= item.candidate_object_name %></strong><div class="small text-secondary"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %></div><div class="small text-secondary">适用中心：<%= (item.candidate_centers || []).join('、') || '未指定' %> · <%= item.candidate_priority || '-' %> · <%= item.candidate_recognized_object === true ? '公认对象' : item.candidate_recognized_object === false ? '非公认对象' : '未指定' %></div><div class="mt-1"><b>方法：</b><%= item.candidate_check_method %></div><div><b>描述：</b><%= item.candidate_description %></div><div><b>步骤：</b><%= item.candidate_steps || '-' %></div><div><b>频率/方式：</b><%= item.candidate_frequency || '-' %> / <%= item.candidate_access_mode || '-' %></div><% if (item.candidate_reference_result || item.candidate_reference_materials) { %><details class="small"><summary>参考内容</summary><div>判定：<%= item.candidate_reference_result || '-' %></div><div>材料：<%= item.candidate_reference_materials || '-' %></div></details><% } %></td>
-            <td><span class="badge <%= item.candidate_type === 'exact_duplicate_candidate' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= item.candidate_type === 'exact_duplicate_candidate' ? '完全重复候选' : '相似候选' %></span><div class="small mt-1">相似度 <%= Number(item.similarity_score || 0).toFixed(3) %></div></td>
-            <td><div>A：<%= (item.standard_item_codes || []).join(', ') || '无' %></div><div>B：<%= (item.candidate_standard_item_codes || []).join(', ') || '无' %></div></td>
-            <td><div>A：<%= item.execution_count || 0 %></div><div>B：<%= item.candidate_execution_count || 0 %></div></td>
-            <td class="text-nowrap"><button class="btn btn-sm btn-outline-primary mb-1" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="aiReview(this)">AI 分析</button><br>
-              <button class="btn btn-sm btn-danger mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">确认重复，保留 A</button><br>
-              <button class="btn btn-sm btn-outline-secondary mb-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','similar_but_distinct')">相似但不归并</button><br>
-              <button class="btn btn-sm btn-outline-secondary" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button><br>
-              <button class="btn btn-sm btn-outline-secondary mt-1" onclick="humanReview('<%= item.id %>','<%= item.candidate_id %>','uncertain')">待进一步确认</button></td>
-          </tr>
-        <% }) %>
-        <% if (!candidates.length) { %><tr><td colspan="6" class="text-center text-secondary p-4">暂无候选。维护监督定义后，规则层会生成去重候选。</td></tr><% } %>
-      </tbody>
-    </table>
+<%
+  const thresholdValue = typeof queryThreshold === 'number' && Number.isFinite(queryThreshold) ? queryThreshold : 0.35;
+  const hasResults = typeof scanned !== 'undefined' && scanned;
+  const activeFilter = [ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ].includes(filter) ? filter : 'all';
+  const filterLabels = {
+    all: '规则候选',
+    ai_duplicate: 'AI 判重',
+    ai_excluded: 'AI 排除',
+    ai_pending: '待 AI 判断',
+  };
+  const filterUrl = value => `/dedupe?run=1&threshold=${encodeURIComponent(thresholdValue)}&filter=${value}`;
+  const numberLabel = value => value ? String(value).padStart(3, '0') : '未编号';
+%>
+<style>
+  .definition-filter-cards a.card { transition: border-color 120ms ease, box-shadow 120ms ease; }
+  .definition-filter-cards a.card:hover { border-color: var(--bs-primary); box-shadow: 0 .25rem .75rem rgba(13, 110, 253, .12); }
+  .definition-filter-cards a.card:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+</style>
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">检查方案去重复核</h2>
+    <p class="text-secondary mb-0">按门限筛选同一检查对象下的方案候选，再直接人工确认；AI 语义复核仅作可选辅助，不会自动归并。</p>
+  </div>
+  <div class="ms-auto d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="/dedupe/history">查看复核历史</a>
+    <a class="btn btn-outline-secondary" href="/supervision-definitions">返回检查方案</a>
   </div>
 </div>
-<div class="modal fade" id="dedupeResultModal" tabindex="-1" aria-labelledby="dedupeResultModalTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-  <div class="modal-header"><h2 class="modal-title fs-5" id="dedupeResultModalTitle">AI 分析结果</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
-  <div class="modal-body"><pre class="mb-0 text-wrap" id="dedupeResultModalBody"></pre></div>
-  <div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button></div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-12 col-md-5">
+        <label class="form-label" for="definitionThreshold">规则预筛门限</label>
+        <div class="input-group">
+          <span class="input-group-text">内容相似度 ≥</span>
+          <input class="form-control" id="definitionThreshold" type="number" min="0" max="1" step="0.01" value="<%= thresholdValue %>">
+        </div>
+      </div>
+      <div class="col-12 col-md-7 d-flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="button" id="runDefinitionRuleScreen" onclick="runDefinitionRuleScreen(this)">运行规则筛选</button>
+        <% if (hasResults && summary.aiPendingCount) { %><button class="btn btn-outline-primary" type="button" id="runDefinitionAiScreen" data-pending="<%= summary.aiPendingCount %>" onclick="runDefinitionAiScreen(this)">可选 AI 语义复核（<%= summary.aiPendingCount %>）</button><% } %>
+      </div>
+    </div>
+    <div class="form-text mt-2">门限可填写 0～1。只比较同一检查对象、同对象分类、同检查层面的方案；进入页面不会自动扫描，也不会自动调用 AI。</div>
+  </div>
+</div>
+
+<% if (!hasResults) { %>
+<div class="card mb-3"><div class="card-body text-center text-secondary py-5">
+  <div class="fs-5 mb-2">尚未运行规则筛选</div>
+  <div>填写门限后点击“运行规则筛选”。检查方案候选和历史记录不会在进入页面时自动加载。</div>
+</div></div>
+<% } else { %>
+<div class="row g-3 mb-3 definition-filter-cards">
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'all' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('all') %>" <%= activeFilter === 'all' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">规则候选</div><% if (activeFilter === 'all') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div><div class="small text-secondary">内容相似度 ≥ <%= thresholdValue %></div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_duplicate' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_duplicate') %>" <%= activeFilter === 'ai_duplicate' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">AI 判重</div><% if (activeFilter === 'ai_duplicate') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-danger"><%= summary.aiDuplicateCount %></div><div class="small text-secondary">可选复核结果</div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_excluded' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_excluded') %>" <%= activeFilter === 'ai_excluded' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">AI 排除</div><% if (activeFilter === 'ai_excluded') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-success"><%= summary.aiExcludedCount %></div><div class="small text-secondary">相似但不同或无关</div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_pending' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_pending') %>" <%= activeFilter === 'ai_pending' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">待 AI 判断</div><% if (activeFilter === 'ai_pending') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-warning"><%= summary.aiPendingCount %></div><div class="small text-secondary">不影响人工判断</div></div></a></div>
+</div>
+
+<section class="card mb-3">
+  <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">检查方案筛选结果</h3><span class="badge text-bg-primary">当前：<%= filterLabels[activeFilter] %></span><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th style="width:7rem">方案 A</th><th>检查内容 A</th><th>检查内容 B</th><th style="width:14rem">筛选结论</th><th style="width:25rem">人工复核</th></tr></thead>
+    <tbody>
+      <% candidates.forEach(item => { %>
+        <tr>
+          <td>
+            <span class="badge text-bg-light border"><%= numberLabel(item.plan_number) %></span>
+            <div class="small text-secondary mt-1">执行 A：<%= item.execution_count || 0 %> 次</div>
+            <div class="small text-secondary">执行 B：<%= item.candidate_execution_count || 0 %> 次</div>
+            <div class="small text-secondary mt-1"><%= numberLabel(item.candidate_plan_number) %></div>
+          </td>
+          <td>
+            <strong><%= item.object_name %></strong>
+            <div class="small text-secondary mt-1"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %> · 适用中心：<%= (item.centers || []).join('、') || '未指定' %></div>
+            <div class="small mt-1"><b>方法：</b><%= item.check_method %></div>
+            <div class="small"><b>描述：</b><%= item.description %></div>
+            <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.steps || '-' %></div><div><b>频率/方式：</b><%= item.frequency || '-' %> / <%= item.access_mode || '-' %></div><div><b>标准项：</b><%= (item.standard_item_codes || []).join('、') || '无' %></div><% if (item.reference_result || item.reference_materials) { %><div><b>参考判定：</b><%= item.reference_result || '-' %></div><div><b>参考材料：</b><%= item.reference_materials || '-' %></div><% } %></details>
+          </td>
+          <td>
+            <strong><%= item.candidate_object_name %></strong>
+            <div class="small text-secondary mt-1"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %> · 适用中心：<%= (item.candidate_centers || []).join('、') || '未指定' %></div>
+            <div class="small mt-1"><b>方法：</b><%= item.candidate_check_method %></div>
+            <div class="small"><b>描述：</b><%= item.candidate_description %></div>
+            <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.candidate_steps || '-' %></div><div><b>频率/方式：</b><%= item.candidate_frequency || '-' %> / <%= item.candidate_access_mode || '-' %></div><div><b>标准项：</b><%= (item.candidate_standard_item_codes || []).join('、') || '无' %></div><% if (item.candidate_reference_result || item.candidate_reference_materials) { %><div><b>参考判定：</b><%= item.candidate_reference_result || '-' %></div><div><b>参考材料：</b><%= item.candidate_reference_materials || '-' %></div><% } %></details>
+          </td>
+          <td>
+            <span class="badge <%= item.candidate_type === 'exact_duplicate_candidate' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= item.candidate_type === 'exact_duplicate_candidate' ? '规范化内容相同' : '内容相似' %></span>
+            <div class="small mt-1">相似度 <%= Number(item.similarity_score || 0).toFixed(3) %></div>
+            <% if (item.ai) { %><div class="mt-1"><span class="badge <%= item.ai.relation === 'duplicate' ? 'text-bg-danger' : 'text-bg-success' %>"><%= item.ai.relation === 'duplicate' ? 'AI 判重' : item.ai.relation === 'unrelated' ? 'AI 判无关' : item.ai.relation === 'similar_but_distinct' ? 'AI 判不同' : 'AI 不确定' %></span></div><div class="small text-secondary mt-1">置信度 <%= Number(item.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary"><%= item.ai.reason || '-' %></div><% } %><% if (item.ai_status === 'failed') { %><div class="small text-danger mt-1">上次 AI 分析失败，不影响人工判断</div><% } %>
+          </td>
+          <td>
+            <div class="d-flex flex-column align-items-start gap-1">
+              <div class="d-flex flex-nowrap gap-1">
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">保留 A 并合并</button>
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.candidate_id %>')">保留 B 并合并</button>
+              </div>
+              <div class="d-flex flex-nowrap gap-1">
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','similar_but_distinct')">相似但不归并</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button>
+              </div>
+              <div class="d-flex flex-nowrap gap-1">
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','uncertain')">待进一步确认</button>
+                <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="definitionAiReview(this)">可选 AI 分析</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">当前门限和筛选条件下没有检查方案候选。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</section>
+<% } %>
+
+<div class="modal fade" id="definitionAiProgressModal" tabindex="-1" aria-labelledby="definitionAiProgressTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="definitionAiProgressTitle">检查方案 AI 复核进度</h2></div>
+  <div class="modal-body">
+    <div class="d-flex align-items-center gap-2 mb-2"><span class="spinner-border spinner-border-sm text-primary" id="definitionAiProgressSpinner" aria-hidden="true"></span><strong id="definitionAiProgressStatus" aria-live="polite">正在准备提交第一批...</strong></div>
+    <div class="progress mb-2" role="progressbar" aria-label="检查方案 AI 复核进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" id="definitionAiProgressBar" style="width:0%"></div></div>
+    <div class="d-flex justify-content-between small text-secondary"><span id="definitionAiProgressCount">成功 0 / 0 组</span><span id="definitionAiProgressBatch">批次 0</span></div>
+    <div class="alert alert-danger mt-3 mb-0 d-none" id="definitionAiProgressError"></div>
+    <div class="form-text mt-2">每批最多 4 组。AI 只提供判断，完成前不会自动归并任何检查方案。</div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" id="definitionAiProgressClose" type="button" data-bs-dismiss="modal" disabled>关闭</button></div>
 </div></div></div>
+
+<div class="modal fade" id="definitionAiResultModal" tabindex="-1" aria-labelledby="definitionAiResultTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="definitionAiResultTitle">检查方案 AI 建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  <div class="modal-body"><pre class="mb-0 text-wrap" id="definitionAiResultBody"></pre></div>
+  <div class="modal-footer"><button class="btn btn-primary" type="button" data-bs-dismiss="modal">关闭</button></div>
+</div></div></div>
+
 <script>
-  const csrfToken = '<%= csrf %>';
-  async function send(path, body) {
-    const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken }, body: JSON.stringify(body) });
+  const dedupeCsrfToken = '<%= csrf %>';
+  const currentDefinitionFilter = '<%= activeFilter %>';
+  const currentDefinitionThreshold = () => {
+    const threshold = Number(document.getElementById('definitionThreshold').value);
+    if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+      throw new Error('检查方案相似度门限必须是 0 到 1 之间的数字');
+    }
+    return threshold;
+  };
+  const dedupeReloadUrl = (notice, filterOverride = currentDefinitionFilter) => {
+    const params = new URLSearchParams({ run: '1', threshold: currentDefinitionThreshold(), filter: filterOverride });
+    if (notice) params.set('notice', notice);
+    return `/dedupe?${params.toString()}`;
+  };
+  async function dedupeSend(path, body) {
+    const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': dedupeCsrfToken }, body: JSON.stringify(body) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || '请求失败');
     return data.data;
   }
-  async function aiReview(button) {
+  function runDefinitionRuleScreen(button) {
     button.disabled = true;
     try {
-      const job = await send('/api/dedupe/ai-review', { leftId: button.dataset.left, rightId: button.dataset.right });
-      document.getElementById('dedupeResultModalBody').textContent = JSON.stringify(job.result || job, null, 2);
-      bootstrap.Modal.getOrCreateInstance(document.getElementById('dedupeResultModal')).show();
+      window.location.assign(dedupeReloadUrl(null, 'all'));
+    } catch (error) {
+      button.disabled = false;
+      window.showAppNotice(error.message, '规则筛选未完成');
     }
-    catch (error) { window.showAppNotice(error.message, 'AI 分析未完成'); }
-    finally { button.disabled = false; }
   }
-  async function humanReview(leftId, rightId, decision, canonicalId) {
-    const labels = { duplicate: '确认这两条定义重复并归并', similar_but_distinct: '标记为相似但不归并', unrelated: '标记为无关', uncertain: '标记为待进一步确认' };
-    if (!await window.confirmAppAction(`${labels[decision]}？`, '确认人工复核结论')) return;
+  async function definitionAiReview(button) {
+    button.disabled = true;
+    try {
+      const job = await dedupeSend('/api/dedupe/ai-review', { leftId: button.dataset.left, rightId: button.dataset.right });
+      document.getElementById('definitionAiResultBody').textContent = JSON.stringify(job.result || job, null, 2);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('definitionAiResultModal')).show();
+    } catch (error) {
+      window.showAppNotice(error.message, 'AI 分析未完成');
+    } finally {
+      button.disabled = false;
+    }
+  }
+  function renderDefinitionAiProgress({ status, bar, success = 0, failed = 0, total, batch, error = '' }) {
+    document.getElementById('definitionAiProgressStatus').textContent = status;
+    document.getElementById('definitionAiProgressCount').textContent = `成功 ${success} / ${total} 组${failed ? `，失败 ${failed} 组` : ''}`;
+    document.getElementById('definitionAiProgressBatch').textContent = `批次 ${batch}`;
+    const percentage = total > 0 ? Math.min(100, Math.round(success * 100 / total)) : 0;
+    const progressBar = document.getElementById('definitionAiProgressBar');
+    progressBar.style.width = `${bar ?? percentage}%`;
+    progressBar.parentElement.setAttribute('aria-valuenow', String(bar ?? percentage));
+    const errorBox = document.getElementById('definitionAiProgressError');
+    errorBox.textContent = error;
+    errorBox.classList.toggle('d-none', !error);
+    document.getElementById('definitionAiProgressSpinner').classList.toggle('d-none', Boolean(error));
+    document.getElementById('definitionAiProgressClose').disabled = !error;
+  }
+  async function runDefinitionAiScreen(button) {
+    button.disabled = true;
+    const total = Number(button.dataset.pending) || 0;
+    let processed = 0;
+    let errors = 0;
+    let batchNumber = 0;
+    renderDefinitionAiProgress({ status: '正在准备提交第一批 AI 语义复核...', success: 0, total, batch: 0 });
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('definitionAiProgressModal')).show();
+    try {
+      const threshold = currentDefinitionThreshold();
+      while (true) {
+        batchNumber += 1;
+        renderDefinitionAiProgress({ status: `正在提交第 ${batchNumber} 批（每批最多 4 组）...`, success: processed, failed: errors, total, batch: batchNumber });
+        const result = await dedupeSend('/api/dedupe/ai-screen', { batchSize: 4, threshold });
+        processed += Number(result.processedCount || 0);
+        errors += Number(result.errorCount || 0);
+        const handled = processed + errors;
+        const effectiveTotal = Math.max(total, Number(result.totalCount || 0), handled);
+        renderDefinitionAiProgress({
+          status: result.errorCount ? `第 ${batchNumber} 批 AI 复核失败` : `第 ${batchNumber} 批已完成，继续处理剩余候选...`,
+          success: processed,
+          failed: errors,
+          total: effectiveTotal,
+          batch: batchNumber,
+        });
+        if (result.errorCount) {
+          const message = result.errors?.[0]?.message || 'AI 服务请求失败';
+          renderDefinitionAiProgress({
+            status: '检查方案 AI 复核已停止',
+            success: processed,
+            failed: errors,
+            total: effectiveTotal,
+            batch: batchNumber,
+            error: `${String(message).replace(/[。；]+$/, '')}。已完成判断会保留；修复 AI 服务后可继续重试。`,
+          });
+          window.showAppNotice(message, '可选 AI 复核未完成');
+          return;
+        }
+        if (result.done || Number(result.submittedCount || 0) === 0) {
+          renderDefinitionAiProgress({ status: 'AI 语义复核完成，正在刷新结果...', bar: 100, success: Math.max(effectiveTotal, processed), total: Math.max(effectiveTotal, processed), batch: batchNumber });
+          window.setTimeout(() => window.location.assign(dedupeReloadUrl(null, 'all')), 700);
+          return;
+        }
+      }
+    } catch (error) {
+      renderDefinitionAiProgress({ status: '检查方案 AI 复核已停止', success: processed, failed: errors + 1, total, batch: batchNumber, error: `${String(error.message || 'AI 服务请求失败').replace(/[。；]+$/, '')}。请检查 AI 服务配置和网络后重试。` });
+      window.showAppNotice(error.message, '可选 AI 复核未完成');
+    }
+  }
+  async function definitionReview(leftId, rightId, decision, canonicalId) {
+    const labels = {
+      duplicate: `确认这两条检查方案重复，并保留${canonicalId === leftId ? '方案 A' : '方案 B'}？`,
+      similar_but_distinct: '标记为相似但不归并？',
+      unrelated: '标记为无关？',
+      uncertain: '标记为待进一步确认？',
+    };
+    if (!await window.confirmAppAction(labels[decision], '确认人工复核结论')) return;
     const body = { leftId, rightId, decision, canonicalId, confirmConflicts: false };
-    try { await send('/api/dedupe/reviews', body); window.location.assign('/dedupe?notice=' + encodeURIComponent('人工复核结论已保存')); }
-    catch (error) {
+    try {
+      await dedupeSend('/api/dedupe/reviews', body);
+      window.location.assign(dedupeReloadUrl('人工复核结论已保存'));
+    } catch (error) {
       if (decision === 'duplicate' && error.message.includes('字段冲突')) {
         const confirmed = await window.confirmAppAction(`${error.message}。仍要归并并保留所选主定义吗？`, '归并字段冲突');
         if (!confirmed) return;
-        try { body.confirmConflicts = true; await send('/api/dedupe/reviews', body); window.location.assign('/dedupe?notice=' + encodeURIComponent('定义已按确认归并')); }
-        catch (retryError) { window.showAppNotice(retryError.message, '归并失败'); }
+        try {
+          body.confirmConflicts = true;
+          await dedupeSend('/api/dedupe/reviews', body);
+          window.location.assign(dedupeReloadUrl('定义已按确认归并'));
+        } catch (retryError) {
+          window.showAppNotice(retryError.message, '归并失败');
+        }
         return;
       }
       window.showAppNotice(error.message, '复核未完成');

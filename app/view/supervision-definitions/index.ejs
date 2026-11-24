@@ -21,7 +21,7 @@
 %>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <p class="text-secondary mb-0">检查方案是系统级可复用定义；选择具体项目后，在“检查记录”中按该项目纳入的标准项执行并记录结果。</p>
-  <% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><div class="ms-auto d-flex gap-2"><a class="btn btn-outline-secondary" href="/supervision-definitions/import-template">下载导入模板</a><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#planImportModal">导入检查方案</button><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createDefinitionModal">新增检查方案</button></div><% } %>
+  <div class="ms-auto d-flex gap-2"><a class="btn btn-outline-primary" href="/dedupe">检查方案去重复核</a><% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %><a class="btn btn-outline-secondary" href="/supervision-definitions/import-template">下载导入模板</a><button class="btn btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#planImportModal">导入检查方案</button><button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createDefinitionModal">新增检查方案</button><% } %></div>
 </div>
 
 <div class="card mb-3">

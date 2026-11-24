@@ -3,11 +3,204 @@
 const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { definitionConflicts, normalizeDefinition, scoreDefinition, normalizeText } = require('../lib/dedupe');
+const { friendlyAiError } = require('../lib/aiProvider');
 const SupervisionDefinitionRepository = require('../repository/supervisionDefinition');
 
+function definitionPairKey(leftId, rightId) {
+  return [ String(leftId), String(rightId) ].sort().join(':');
+}
+
 class DedupeService extends Service {
-  async listCandidates({ limit = 50 } = {}) {
-    return new SupervisionDefinitionRepository(this.ctx.app.db).listCandidates(limit);
+  get repository() {
+    return new SupervisionDefinitionRepository(this.ctx.app.db);
+  }
+
+  definitionFingerprint(definition) {
+    return JSON.stringify([
+      definition.id,
+      normalizeDefinition(definition).normalizedHash,
+      definition.scope,
+      definition.centers || [],
+      definition.recognized_object,
+      definition.priority,
+      normalizeText(definition.access_mode),
+      normalizeText(definition.reference_result),
+      normalizeText(definition.reference_materials),
+    ]);
+  }
+
+  async listCandidates({ threshold = 0.35, limit = 1000 } = {}) {
+    const [ candidates, aiJobs ] = await Promise.all([
+      this.repository.listCandidates({ threshold, limit }),
+      this.repository.listDefinitionAiJobs(),
+    ]);
+    const aiByPair = new Map(aiJobs.map(job => [
+      definitionPairKey(job.left_definition_id, job.right_definition_id),
+      job,
+    ]));
+    return candidates.map(candidate => {
+      const aiJob = aiByPair.get(definitionPairKey(candidate.id, candidate.candidate_id));
+      return {
+        ...candidate,
+        ai: aiJob?.status === 'completed' ? aiJob.result : null,
+        ai_status: aiJob?.status || 'pending',
+        ai_error: aiJob?.status === 'failed' ? aiJob.error_message : null,
+      };
+    });
+  }
+
+  async listReviews() {
+    return this.repository.listDefinitionReviews();
+  }
+
+  async listDefinitionDedupe({ threshold = null, scanned = false, filter = 'all' } = {}) {
+    const allowedFilters = new Set([ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ]);
+    const activeFilter = allowedFilters.has(filter) ? filter : 'all';
+    const reviews = await this.listReviews();
+    if (!scanned) {
+      return {
+        threshold,
+        scanned: false,
+        filter: 'all',
+        candidates: [],
+        reviews,
+        summary: {
+          candidateCount: 0,
+          aiDuplicateCount: 0,
+          aiExcludedCount: 0,
+          aiPendingCount: 0,
+          reviewedCount: reviews.length,
+        },
+      };
+    }
+    const candidates = await this.listCandidates({ threshold });
+    const excluded = candidate => [ 'similar_but_distinct', 'unrelated' ].includes(candidate.ai?.relation);
+    const pending = candidate => !candidate.ai || candidate.ai_status === 'failed';
+    const filtered = {
+      all: candidates,
+      ai_duplicate: candidates.filter(candidate => candidate.ai?.relation === 'duplicate'),
+      ai_excluded: candidates.filter(excluded),
+      ai_pending: candidates.filter(pending),
+    }[activeFilter];
+    return {
+      threshold,
+      scanned: true,
+      filter: activeFilter,
+      candidates: filtered,
+      reviews,
+      summary: {
+        candidateCount: candidates.length,
+        aiDuplicateCount: candidates.filter(candidate => candidate.ai?.relation === 'duplicate').length,
+        aiExcludedCount: candidates.filter(excluded).length,
+        aiPendingCount: candidates.filter(pending).length,
+        reviewedCount: reviews.length,
+      },
+    };
+  }
+
+  async aiScreenDefinitionCandidates({ limit = 4, threshold = 0.35 } = {}) {
+    const candidates = await this.listCandidates({ threshold });
+    const pending = candidates.filter(candidate => !candidate.ai || candidate.ai_status === 'failed');
+    const batch = pending.slice(0, Math.max(1, Math.min(Number(limit) || 4, 8)));
+    if (!batch.length) {
+      return {
+        totalCount: 0,
+        submittedCount: 0,
+        processedCount: 0,
+        errorCount: 0,
+        remainingCount: 0,
+        done: true,
+        results: [],
+        errors: [],
+      };
+    }
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
+    const modelName = aiConfig.model || 'unconfigured';
+    const promptVersion = 'dedupe-batch-v1';
+    const prepared = [];
+    const errors = [];
+    for (const candidate of batch) {
+      try {
+        const [ left, right ] = await Promise.all([
+          this.repository.findById(candidate.id),
+          this.repository.findById(candidate.candidate_id),
+        ]);
+        if (!left || !right) throw new Error('检查方案已发生变化，请刷新后重试');
+        const inputHash = crypto.createHash('sha256')
+          .update(JSON.stringify([ this.definitionFingerprint(left), this.definitionFingerprint(right) ].sort()))
+          .digest('hex');
+        const job = await this.repository.createAiJob({
+          leftId: left.id,
+          rightId: right.id,
+          inputHash,
+          algorithmVersion: 'trigram-weighted-v1',
+          promptVersion,
+          modelName,
+        });
+        prepared.push({ candidate, left, right, job });
+      } catch (error) {
+        errors.push({
+          leftId: candidate.id,
+          rightId: candidate.candidate_id,
+          message: error.message,
+        });
+      }
+    }
+    let response;
+    if (prepared.length) {
+      try {
+        response = await this.ctx.service.aiProvider.classifyDefinitionPairs(prepared.map(item => ({
+          id: definitionPairKey(item.left.id, item.right.id),
+          left: item.left,
+          right: item.right,
+        })));
+      } catch (error) {
+        const friendly = friendlyAiError(error, error.baseUrl);
+        for (const item of prepared) {
+          await this.repository.failAiJob(item.job.id, error);
+          errors.push({
+            leftId: item.left.id,
+            rightId: item.right.id,
+            message: friendly.message,
+            code: friendly.code,
+          });
+        }
+      }
+    }
+    const resultById = new Map((response?.results || []).map(result => [ String(result.id), result ]));
+    const results = [];
+    for (const item of prepared) {
+      const result = resultById.get(definitionPairKey(item.left.id, item.right.id));
+      if (!result) {
+        if (response) {
+          const error = new Error('AI 未返回该检查方案候选的判断结果');
+          await this.repository.failAiJob(item.job.id, error);
+          errors.push({ leftId: item.left.id, rightId: item.right.id, message: error.message });
+        }
+        continue;
+      }
+      await this.repository.completeAiJob(item.job.id, {
+        result,
+        providerStatus: response.providerStatus,
+        durationMs: response.durationMs,
+      });
+      results.push({
+        leftId: item.left.id,
+        rightId: item.right.id,
+        relation: result.relation,
+        confidence: result.confidence,
+      });
+    }
+    return {
+      totalCount: pending.length,
+      submittedCount: batch.length,
+      processedCount: results.length,
+      errorCount: errors.length,
+      remainingCount: Math.max(0, pending.length - batch.length),
+      done: pending.length <= batch.length,
+      results,
+      errors,
+    };
   }
 
   async aiReview({ leftId, rightId }) {

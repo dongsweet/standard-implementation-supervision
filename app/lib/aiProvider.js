@@ -163,6 +163,41 @@ class AiProvider {
     return { result, providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
+  async classifyDefinitionPairs(items) {
+    if (!this.enabled) {
+      return {
+        results: items.map(item => ({
+          id: item.id,
+          relation: 'uncertain',
+          confidence: 0,
+          differences: [],
+          reason: 'AI 服务未配置',
+          recommendedCanonicalId: null,
+        })),
+        providerStatus: null,
+        durationMs: 0,
+      };
+    }
+    if (!Array.isArray(items) || !items.length) return { results: [], providerStatus: null, durationMs: 0 };
+    const response = await this.request([
+      {
+        role: 'system',
+        content: [
+          '你是监督检查方案去重助手。一次会给你一组方案候选对，请逐对判断两条检查方案是否语义等价，不修改数据。',
+          '只有检查对象、检查内容和执行要求实质相同才可判为 duplicate；检查对象不同、用途或方向不同、步骤存在实质差异时必须判为 similar_but_distinct。',
+          '适用检查中心属于适用范围，不应单独作为不重复理由；但检查对象名称必须相同。',
+          'relation 只能是 duplicate、similar_but_distinct、unrelated、uncertain。',
+          'recommendedCanonicalId 必须是该对的 left.id 或 right.id；不确定时为 null。',
+          '必须为每个输入 id 返回一条结果，不得遗漏或新增 id。',
+          '只返回 JSON：{"results":[{"id":"输入id","relation":"duplicate|similar_but_distinct|unrelated|uncertain","confidence":0到1,"differences":["..."],"reason":"不超过120字","recommendedCanonicalId":"left.id或right.id或null"}]}。',
+        ].join('\n'),
+      },
+      { role: 'user', content: JSON.stringify({ items }) },
+    ]);
+    const results = parseDefinitionAiResults(response.content, items);
+    return { results, providerStatus: response.providerStatus, durationMs: response.durationMs };
+  }
+
   async classifyCenterObjectPairs(items) {
     if (!this.enabled) {
       return {
@@ -314,6 +349,40 @@ function parseObjectAiResult(content) {
   };
 }
 
+function parseDefinitionAiResults(content, items) {
+  if (!content) throw new Error('AI 返回内容为空');
+  const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
+  const rawResults = Array.isArray(json) ? json : json.results;
+  if (!Array.isArray(rawResults)) throw new Error('AI 批量结果缺少 results 数组');
+  const itemById = new Map(items.map(item => [ String(item.id), item ]));
+  const relations = new Set([ 'duplicate', 'similar_but_distinct', 'unrelated', 'uncertain' ]);
+  const seen = new Set();
+  const results = [];
+  for (const raw of rawResults) {
+    const id = String(raw?.id || '');
+    const item = itemById.get(id);
+    if (!item || seen.has(id) || !relations.has(raw.relation)) continue;
+    const confidence = Number(raw.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) continue;
+    const recommendedCanonicalId = raw.recommendedCanonicalId
+      ? String(raw.recommendedCanonicalId)
+      : null;
+    results.push({
+      id,
+      relation: raw.relation,
+      confidence,
+      differences: Array.isArray(raw.differences) ? raw.differences.map(String).slice(0, 20) : [],
+      reason: String(raw.reason || '').slice(0, 500),
+      recommendedCanonicalId: [ item.left?.id, item.right?.id ].includes(recommendedCanonicalId)
+        ? recommendedCanonicalId
+        : null,
+    });
+    seen.add(id);
+  }
+  if (!results.length) throw new Error('AI 批量结果没有有效方案判断');
+  return results;
+}
+
 function parseObjectAiResults(content, items) {
   if (!content) throw new Error('AI 返回内容为空');
   const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
@@ -369,6 +438,7 @@ module.exports = {
   AiProvider,
   friendlyAiError,
   parseAiResult,
+  parseDefinitionAiResults,
   parseObjectAiResult,
   parseObjectAiResults,
   parseStandardReviewSuggestions,

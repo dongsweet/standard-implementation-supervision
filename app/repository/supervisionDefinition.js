@@ -7,9 +7,10 @@ class SupervisionDefinitionRepository {
     this.pool = pool;
   }
 
-  async listCandidates(limit = 50) {
+  async listCandidates({ threshold = 0.35, limit = 1000 } = {}) {
     const result = await this.pool.query(`
-      SELECT v.id, v.candidate_id, v.object_name, v.object_category, v.check_layer,
+      SELECT v.id, v.candidate_id, d.plan_number, c.plan_number AS candidate_plan_number,
+             v.object_name, v.object_category, v.check_layer,
              v.check_method, v.description, v.steps, v.frequency, v.access_mode, v.status,
              v.merged_into_id, v.normalized_hash, v.similarity_score,
              CASE WHEN v.candidate_type = 'exact_duplicate_candidate'
@@ -30,15 +31,44 @@ class SupervisionDefinitionRepository {
       FROM supervision_definition_candidates v
       JOIN supervision_definitions d ON d.id = v.id
       JOIN supervision_definitions c ON c.id = v.candidate_id
-      WHERE NOT EXISTS (
-        SELECT 1 FROM supervision_definition_reviews r
-        WHERE r.decision IN ('similar_but_distinct', 'unrelated')
-          AND ((r.left_definition_id = v.id AND r.right_definition_id = v.candidate_id)
-            OR (r.left_definition_id = v.candidate_id AND r.right_definition_id = v.id))
-      )
+      WHERE (v.candidate_type = 'exact_duplicate_candidate' OR v.similarity_score >= $1)
+        AND NOT EXISTS (
+          SELECT 1 FROM supervision_definition_reviews r
+          WHERE r.decision IN ('similar_but_distinct', 'unrelated')
+            AND ((r.left_definition_id = v.id AND r.right_definition_id = v.candidate_id)
+              OR (r.left_definition_id = v.candidate_id AND r.right_definition_id = v.id))
+        )
       ORDER BY candidate_type = 'exact_duplicate_candidate' DESC,
                v.similarity_score DESC NULLS LAST, v.created_at DESC
-      LIMIT $1`, [ limit ]);
+      LIMIT $2`, [ threshold, limit ]);
+    return result.rows;
+  }
+
+  async listDefinitionAiJobs() {
+    const result = await this.pool.query(`
+      SELECT DISTINCT ON (least(left_definition_id::text, right_definition_id::text),
+                          greatest(left_definition_id::text, right_definition_id::text))
+             id, left_definition_id, right_definition_id, status, result, error_message,
+             model_name, prompt_version, created_at, completed_at
+      FROM ai_dedupe_jobs
+      WHERE status IN ('completed', 'failed')
+      ORDER BY least(left_definition_id::text, right_definition_id::text),
+               greatest(left_definition_id::text, right_definition_id::text),
+               created_at DESC`);
+    return result.rows;
+  }
+
+  async listDefinitionReviews() {
+    const result = await this.pool.query(`
+      SELECT r.id, r.left_definition_id, r.right_definition_id, r.decision,
+             r.canonical_definition_id, r.notes, r.created_at,
+             l.object_name AS left_object_name, c.object_name AS right_object_name,
+             canonical.object_name AS canonical_object_name
+      FROM supervision_definition_reviews r
+      JOIN supervision_definitions l ON l.id = r.left_definition_id
+      JOIN supervision_definitions c ON c.id = r.right_definition_id
+      LEFT JOIN supervision_definitions canonical ON canonical.id = r.canonical_definition_id
+      ORDER BY r.created_at DESC`);
     return result.rows;
   }
 

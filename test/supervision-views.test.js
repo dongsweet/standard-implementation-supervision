@@ -87,6 +87,23 @@ test('escapes standard content before placing supervision definitions in script 
   assert.match(html, /heading\.textContent = \[item\.code, item\.title\]/);
 });
 
+test('links the plan page to manual threshold and optional AI deduplication', () => {
+  const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
+  const dedupeView = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
+  const historyView = fs.readFileSync(path.join(viewRoot, 'dedupe/history.ejs'), 'utf8');
+  assert.match(planView, /href="\/dedupe"/);
+  assert.match(planView, /检查方案去重复核/);
+  assert.match(dedupeView, /id="definitionThreshold"/);
+  assert.match(dedupeView, /运行规则筛选/);
+  assert.match(dedupeView, /可选 AI 语义复核/);
+  assert.match(dedupeView, /每批最多 4 组/);
+  assert.match(dedupeView, /definitionAiProgressModal/);
+  assert.match(dedupeView, /保留 A 并合并/);
+  assert.match(dedupeView, /保留 B 并合并/);
+  assert.match(dedupeView, /definitions?\/history|\/dedupe\/history/);
+  assert.match(historyView, /检查方案去重复核历史/);
+});
+
 test('links the center object page to manual object deduplication', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
   assert.match(html, /\/supervision-center-objects\/dedupe/);

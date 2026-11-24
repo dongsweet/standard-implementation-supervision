@@ -3,7 +3,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { AiProvider, friendlyAiError, parseObjectAiResult, parseObjectAiResults } = require('../app/lib/aiProvider');
+const {
+  AiProvider,
+  friendlyAiError,
+  parseDefinitionAiResults,
+  parseObjectAiResult,
+  parseObjectAiResults,
+} = require('../app/lib/aiProvider');
 let AiProviderService;
 try {
   AiProviderService = require('../app/service/aiProvider');
@@ -70,6 +76,26 @@ test('validates and aligns batched center object AI results by candidate id', ()
   assert.throws(
     () => parseObjectAiResults(JSON.stringify({ results: [] }), items),
     /没有有效对象判断/
+  );
+});
+
+test('validates batched check-plan AI results and canonical ids', () => {
+  const items = [
+    { id: 'pair-1', left: { id: 'plan-a' }, right: { id: 'plan-b' } },
+    { id: 'pair-2', left: { id: 'plan-c' }, right: { id: 'plan-d' } },
+  ];
+  const results = parseDefinitionAiResults(JSON.stringify({
+    results: [
+      { id: 'pair-2', relation: 'duplicate', confidence: 0.91, reason: '同一方案', recommendedCanonicalId: 'plan-d' },
+      { id: 'pair-1', relation: 'similar_but_distinct', confidence: 0.88, reason: '对象不同', recommendedCanonicalId: 'not-a-plan' },
+    ],
+  }), items);
+  assert.equal(results[0].id, 'pair-2');
+  assert.equal(results[0].recommendedCanonicalId, 'plan-d');
+  assert.equal(results[1].recommendedCanonicalId, null);
+  assert.throws(
+    () => parseDefinitionAiResults(JSON.stringify({ results: [] }), items),
+    /没有有效方案判断/
   );
 });
 
@@ -161,6 +187,51 @@ test('exposes center object semantic review through the Egg AI service', { skip:
     assert.deepEqual(batch.results.map(item => item.id), [ 'a', 'b' ]);
   } finally {
     AiProviderService.prototype.getProvider = original;
+  }
+});
+
+test('submits a check-plan AI batch in one model request', async () => {
+  const requests = [];
+  const server = await createServer((request, response) => {
+    let body = '';
+    request.on('data', chunk => { body += chunk; });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      requests.push(payload);
+      const items = JSON.parse(payload.messages[1].content).items;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        choices: [ { message: { content: JSON.stringify({
+          results: items.map(item => ({
+            id: item.id,
+            relation: 'duplicate',
+            confidence: 0.9,
+            differences: [],
+            reason: '测试批量方案判断',
+            recommendedCanonicalId: item.left.id,
+          })),
+        }) } } ],
+      }));
+    });
+  });
+  try {
+    const address = server.address();
+    const provider = new AiProvider({
+      enabled: true,
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      apiKey: 'test-key',
+      model: 'test-model',
+      timeoutMs: 5000,
+    });
+    const result = await provider.classifyDefinitionPairs([
+      { id: 'a:b', left: { id: 'a', object_name: '对象' }, right: { id: 'b', object_name: '对象' } },
+      { id: 'c:d', left: { id: 'c', object_name: '对象' }, right: { id: 'd', object_name: '对象' } },
+    ]);
+    assert.equal(requests.length, 1);
+    assert.equal(result.results.length, 2);
+    assert.equal(result.results[0].recommendedCanonicalId, 'a');
+  } finally {
+    await new Promise(resolve => server.close(resolve));
   }
 });
 

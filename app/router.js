@@ -9,6 +9,7 @@ module.exports = app => {
   router.get('/', controller.home.index);
   router.get('/health', controller.home.health);
   router.get('/dedupe', controller.dedupe.index);
+  router.get('/dedupe/history', controller.dedupe.history);
   router.get('/cloud-centers', controller.cloudCenter.index);
   router.post('/cloud-centers', controller.cloudCenter.create);
   router.post('/cloud-centers/:cloudCenterId', controller.cloudCenter.update);
@@ -76,5 +77,6 @@ module.exports = app => {
   router.post('/users/:userId/roles', controller.user.replaceRoles);
   router.get('/api/dedupe/candidates', controller.dedupe.candidates);
   router.post('/api/dedupe/ai-review', controller.dedupe.aiReview);
+  router.post('/api/dedupe/ai-screen', controller.dedupe.aiScreen);
   router.post('/api/dedupe/reviews', controller.dedupe.review);
 };
