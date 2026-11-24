@@ -38,6 +38,79 @@ test('does not scan object candidates until explicitly requested', { skip: !Serv
   assert.deepEqual(calls, [ 'reviews' ]);
 });
 
+test('submits AI screening candidates in bounded batches and reports remaining progress', { skip: !Service }, async () => {
+  const candidates = Array.from({ length: 5 }, (_, index) => ({
+    id: `pair-${index + 1}`,
+    center_name: '云中心',
+    left_object_name: `对象A${index + 1}`,
+    right_object_name: `对象B${index + 1}`,
+    candidate_type: 'similar',
+    ai: null,
+    ai_status: 'pending',
+    left: { plan_count: 1 },
+    right: { plan_count: 1 },
+  }));
+  const createdJobs = [];
+  const completedJobs = [];
+  let submittedItems = [];
+  const repository = {
+    async createObjectAiJob({ centerName, leftObjectName, rightObjectName }) {
+      const job = { id: `job-${createdJobs.length + 1}`, centerName, leftObjectName, rightObjectName };
+      createdJobs.push(job);
+      return job;
+    },
+    async completeObjectAiJob(id, response) {
+      completedJobs.push({ id, response });
+      return { id };
+    },
+    async failObjectAiJob() {
+      throw new Error('unexpected failure');
+    },
+  };
+  const service = createService(repository);
+  service.listCenterObjectCandidates = async () => candidates;
+  service.objectCandidateContext = async (centerName, leftObjectName, rightObjectName) => ({
+    left: { plan_count: 1, check_methods: [ '测试方法' ] },
+    right: { plan_count: 1, check_methods: [ '测试方法' ] },
+    leftPlans: [ { id: `${leftObjectName}-plan`, check_method: '测试方法', description: leftObjectName } ],
+    rightPlans: [ { id: `${rightObjectName}-plan`, check_method: '测试方法', description: rightObjectName } ],
+  });
+  Object.defineProperty(service, 'ctx', {
+    value: {
+      service: {
+        systemSetting: { getAiConfig: async () => ({ model: 'test-model' }) },
+        aiProvider: {
+          async classifyCenterObjectPairs(items) {
+            submittedItems = items;
+            return {
+              results: items.map(item => ({
+                id: item.id,
+                relation: 'similar_but_distinct',
+                confidence: 0.9,
+                differences: [ '测试' ],
+                reason: '批量测试',
+                recommendedCanonicalName: null,
+              })),
+              providerStatus: 200,
+              durationMs: 10,
+            };
+          },
+        },
+      },
+    },
+  });
+  const result = await service.aiScreenCenterObjectCandidates({ limit: 2, threshold: 0.6 });
+  assert.equal(submittedItems.length, 2);
+  assert.equal(createdJobs.length, 2);
+  assert.equal(completedJobs.length, 2);
+  assert.equal(result.totalCount, 5);
+  assert.equal(result.submittedCount, 2);
+  assert.equal(result.processedCount, 2);
+  assert.equal(result.errorCount, 0);
+  assert.equal(result.remainingCount, 3);
+  assert.equal(result.done, false);
+});
+
 test('keeps all rule candidates available for manual review with optional AI annotations', { skip: !Service }, async () => {
   const baseEntries = [
     { center_name: '云中心', object_name: '安全信息对内发布记录', plan_count: 1 },

@@ -19,6 +19,11 @@ class AiProviderService extends Service {
     return provider.classifyCenterObjectPair(payload);
   }
 
+  async classifyCenterObjectPairs(items) {
+    const provider = await this.getProvider();
+    return provider.classifyCenterObjectPairs(items);
+  }
+
   async testConnection() {
     const provider = await this.getProvider();
     return provider.testConnection();

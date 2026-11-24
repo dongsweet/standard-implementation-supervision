@@ -84,7 +84,7 @@ class SupervisionDefinitionController extends Controller {
     }
     this.ctx.body = {
       data: await this.ctx.service.supervisionDefinition.aiScreenCenterObjectCandidates({
-        limit: this.ctx.request.body?.limit,
+        limit: this.ctx.request.body?.batchSize || this.ctx.request.body?.limit || 4,
         threshold,
       }),
     };

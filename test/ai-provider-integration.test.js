@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { AiProvider, friendlyAiError, parseObjectAiResult } = require('../app/lib/aiProvider');
+const { AiProvider, friendlyAiError, parseObjectAiResult, parseObjectAiResults } = require('../app/lib/aiProvider');
 let AiProviderService;
 try {
   AiProviderService = require('../app/service/aiProvider');
@@ -51,6 +51,79 @@ test('validates center object semantic dedupe responses', () => {
   );
 });
 
+test('validates and aligns batched center object AI results by candidate id', () => {
+  const items = [
+    { id: 'pair-a', left: { name: '安全信息对内发布记录' }, right: { name: '安全信息对外发布记录' } },
+    { id: 'pair-b', left: { name: '《采购合同或协议》' }, right: { name: '采购合同或协议' } },
+  ];
+  const results = parseObjectAiResults(JSON.stringify({
+    results: [
+      { id: 'pair-b', relation: 'duplicate', confidence: 0.98, reason: '同一对象', recommendedCanonicalName: '采购合同或协议' },
+      { id: 'pair-a', relation: 'similar_but_distinct', confidence: 0.97, reason: '方向不同', recommendedCanonicalName: '不存在' },
+    ],
+  }), items);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].id, 'pair-b');
+  assert.equal(results[0].recommendedCanonicalName, '采购合同或协议');
+  assert.equal(results[1].relation, 'similar_but_distinct');
+  assert.equal(results[1].recommendedCanonicalName, null);
+  assert.throws(
+    () => parseObjectAiResults(JSON.stringify({ results: [] }), items),
+    /没有有效对象判断/
+  );
+});
+
+test('submits a center object AI batch in one model request', async () => {
+  const requests = [];
+  const server = await createServer((request, response) => {
+    let body = '';
+    request.on('data', chunk => { body += chunk; });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      requests.push(payload);
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({
+        choices: [ {
+          message: {
+            content: JSON.stringify({
+              results: payload.messages[1].content
+                ? JSON.parse(payload.messages[1].content).items.map(item => ({
+                  id: item.id,
+                  relation: 'similar_but_distinct',
+                  confidence: 0.9,
+                  differences: [ '方向不同' ],
+                  reason: '测试批处理',
+                  recommendedCanonicalName: null,
+                }))
+                : [],
+            }),
+          },
+        } ],
+      }));
+    });
+  });
+  try {
+    const address = server.address();
+    const provider = new AiProvider({
+      enabled: true,
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      apiKey: 'test-key',
+      model: 'test-model',
+      timeoutMs: 5000,
+    });
+    const items = [
+      { id: 'a', left: { name: '对内发布' }, right: { name: '对外发布' } },
+      { id: 'b', left: { name: '更换记录' }, right: { name: '盘点记录' } },
+    ];
+    const result = await provider.classifyCenterObjectPairs(items);
+    assert.equal(requests.length, 1);
+    assert.equal(JSON.parse(requests[0].messages[1].content).items.length, 2);
+    assert.deepEqual(result.results.map(item => item.id), [ 'a', 'b' ]);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
 test('exposes center object semantic review through the Egg AI service', { skip: !AiProviderService }, async () => {
   const original = AiProviderService.prototype.getProvider;
   let received;
@@ -59,6 +132,10 @@ test('exposes center object semantic review through the Egg AI service', { skip:
       async classifyCenterObjectPair(payload) {
         received = payload;
         return { result: { relation: 'duplicate', confidence: 0.9 } };
+      },
+      async classifyCenterObjectPairs(items) {
+        received = items;
+        return { results: items.map(item => ({ id: item.id, relation: 'uncertain', confidence: 0.5 })) };
       },
     };
   };
@@ -77,6 +154,11 @@ test('exposes center object semantic review through the Egg AI service', { skip:
     );
     assert.equal(result.result.relation, 'duplicate');
     assert.equal(received.centerName, '总部');
+    const batch = await AiProviderService.prototype.classifyCenterObjectPairs.call(
+      context,
+      [ { id: 'a' }, { id: 'b' } ]
+    );
+    assert.deepEqual(batch.results.map(item => item.id), [ 'a', 'b' ]);
   } finally {
     AiProviderService.prototype.getProvider = original;
   }

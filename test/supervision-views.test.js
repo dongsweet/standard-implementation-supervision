@@ -107,6 +107,11 @@ test('keeps rule scanning manual, AI optional, and manual review always availabl
   assert.match(html, /不是重复/);
   assert.match(html, /暂不确定/);
   assert.match(html, /可选 AI 分析/);
+  assert.match(html, /objectAiProgressModal/);
+  assert.match(html, /AI 语义复核进度/);
+  assert.match(html, /每批最多 4 组/);
+  assert.match(html, /batchSize: 4/);
+  assert.match(html, /objectAiProgressBar/);
   assert.match(html, /object-review-actions/);
   assert.match(html, /该中心下.*检查方案会更新到保留对象/);
   assert.match(html, /所有合并都必须人工确认/);

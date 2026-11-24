@@ -25,15 +25,12 @@
       </div>
       <div class="col-12 col-md-7 d-flex flex-wrap gap-2">
         <button class="btn btn-primary" type="button" id="runRuleScreen" onclick="runRuleScreen(this)">运行规则筛选</button>
-        <% if (hasResults && summary.pendingCount) { %><button class="btn btn-outline-primary" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">可选 AI 语义复核（<%= summary.pendingCount %>）</button><% } %>
-        <% if (hasResults && summary.failedCount) { %><button class="btn btn-outline-danger" type="button" id="runObjectAiScreen" onclick="runObjectAiScreen(this)">重试可选 AI 复核</button><% } %>
+        <% if (hasResults && (summary.pendingCount || summary.failedCount)) { %><button class="btn btn-outline-primary" type="button" id="runObjectAiScreen" data-pending="<%= summary.pendingCount + summary.failedCount %>" onclick="runObjectAiScreen(this)"><%= summary.failedCount ? '重试可选 AI 语义复核' : '可选 AI 语义复核' %>（<%= summary.pendingCount + summary.failedCount %>）</button><% } %>
       </div>
     </div>
     <div class="form-text mt-2">门限可自行填写（0～1）。进入页面不会自动扫描；点击“运行规则筛选”后才查询候选。AI 不是合并前置条件，可以完全不运行。</div>
   </div>
 </div>
-
-<div id="objectAiProgress" class="alert alert-info py-2 d-none"></div>
 
 <% if (!hasResults) { %>
 <div class="card mb-3"><div class="card-body text-center text-secondary py-5">
@@ -94,6 +91,18 @@
 </section>
 <% } %>
 
+<div class="modal fade" id="objectAiProgressModal" tabindex="-1" aria-labelledby="objectAiProgressTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="objectAiProgressTitle">AI 语义复核进度</h2></div>
+  <div class="modal-body">
+    <div class="d-flex align-items-center gap-2 mb-2"><span class="spinner-border spinner-border-sm text-primary" id="objectAiProgressSpinner" aria-hidden="true"></span><strong id="objectAiProgressStatus" aria-live="polite">正在准备提交第一批...</strong></div>
+    <div class="progress mb-2" role="progressbar" aria-label="AI 语义复核进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-bar progress-bar-striped progress-bar-animated" id="objectAiProgressBar" style="width:0%"></div></div>
+    <div class="d-flex justify-content-between small text-secondary"><span id="objectAiProgressCount">已处理 0 / 0 组</span><span id="objectAiProgressBatch">批次 0</span></div>
+    <div class="alert alert-danger mt-3 mb-0 d-none" id="objectAiProgressError"></div>
+    <div class="form-text mt-2">每批最多 4 组。请保持页面打开，完成前不会自动合并任何对象。</div>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" id="objectAiProgressClose" type="button" data-bs-dismiss="modal" disabled>关闭</button></div>
+</div></div></div>
+
 <div class="modal fade" id="objectAiResultModal" tabindex="-1" aria-labelledby="objectAiResultTitle" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
   <div class="modal-header"><h2 class="modal-title fs-5" id="objectAiResultTitle">AI 对象去重建议</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
   <div class="modal-body"><pre class="mb-0 text-wrap" id="objectAiResultBody"></pre></div>
@@ -149,31 +158,93 @@
       button.disabled = false;
     }
   }
+  function renderObjectAiProgress({ status, bar, current, total, batch, error = '' }) {
+    document.getElementById('objectAiProgressStatus').textContent = status;
+    document.getElementById('objectAiProgressCount').textContent = `已处理 ${current} / ${total} 组`;
+    document.getElementById('objectAiProgressBatch').textContent = `批次 ${batch}`;
+    const percentage = total > 0 ? Math.min(100, Math.round(current * 100 / total)) : 0;
+    const progressBar = document.getElementById('objectAiProgressBar');
+    progressBar.style.width = `${bar ?? percentage}%`;
+    progressBar.parentElement.setAttribute('aria-valuenow', String(bar ?? percentage));
+    const errorBox = document.getElementById('objectAiProgressError');
+    errorBox.textContent = error;
+    errorBox.classList.toggle('d-none', !error);
+    document.getElementById('objectAiProgressSpinner').classList.toggle('d-none', Boolean(error));
+    document.getElementById('objectAiProgressClose').disabled = !error;
+  }
   async function runObjectAiScreen(button) {
     button.disabled = true;
-    const progress = document.getElementById('objectAiProgress');
-    progress.classList.remove('d-none');
+    const total = Number(button.dataset.pending) || 0;
     let processed = 0;
     let errors = 0;
-    let lastError = '';
+    let batchNumber = 0;
+    renderObjectAiProgress({
+      status: '正在准备提交第一批 AI 语义复核...',
+      current: 0,
+      total,
+      batch: 0,
+    });
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('objectAiProgressModal'));
+    modal.show();
     try {
       const threshold = currentThreshold();
       while (true) {
-        progress.textContent = `可选 AI 语义复核进行中：已完成 ${processed} 组${errors ? `，失败 ${errors} 组` : ''}`;
-        const result = await objectSend('/api/supervision-center-objects/ai-screen', { limit: 6, threshold });
-        processed += result.processedCount;
-        errors += result.errorCount;
-        if (result.errorCount) lastError = result.errors?.[0]?.message || 'AI 服务请求失败';
-        if (result.errorCount || result.processedCount === 0) break;
+        batchNumber += 1;
+        renderObjectAiProgress({
+          status: `正在提交第 ${batchNumber} 批（每批最多 4 组）...`,
+          bar: total ? Math.min(99, Math.round((processed + errors) * 100 / total)) : 0,
+          current: processed + errors,
+          total,
+          batch: batchNumber,
+        });
+        const result = await objectSend('/api/supervision-center-objects/ai-screen', {
+          batchSize: 4,
+          threshold,
+        });
+        processed += Number(result.processedCount || 0);
+        errors += Number(result.errorCount || 0);
+        const handled = processed + errors;
+        const effectiveTotal = Math.max(total, Number(result.totalCount || 0), handled);
+        renderObjectAiProgress({
+          status: result.errorCount
+            ? `第 ${batchNumber} 批 AI 复核失败`
+            : `第 ${batchNumber} 批已完成，继续处理剩余候选...`,
+          current: handled,
+          total: effectiveTotal,
+          batch: batchNumber,
+        });
+        if (result.errorCount) {
+          const message = result.errors?.[0]?.message || 'AI 服务请求失败';
+          renderObjectAiProgress({
+            status: 'AI 语义复核已停止',
+            current: handled,
+            total: effectiveTotal,
+            batch: batchNumber,
+            error: `${message}。已完成的判断会保留；修复 AI 服务后可继续重试。`,
+          });
+          window.showAppNotice(message, '可选 AI 复核未完成');
+          return;
+        }
+        if (result.done || Number(result.submittedCount || 0) === 0) {
+          renderObjectAiProgress({
+            status: 'AI 语义复核完成，正在刷新结果...',
+            bar: 100,
+            current: Math.max(effectiveTotal, processed),
+            total: Math.max(effectiveTotal, processed),
+            batch: batchNumber,
+          });
+          window.setTimeout(() => window.location.assign(reloadUrl()), 700);
+          return;
+        }
       }
-      if (errors) {
-        button.disabled = false;
-        window.showAppNotice(`${lastError}。已完成的判断会保留，修复 AI 服务后可继续重试。`, '可选 AI 复核未全部完成');
-        return;
-      }
-      window.location.assign(reloadUrl());
     } catch (error) {
-      button.disabled = false;
+      renderObjectAiProgress({
+        status: 'AI 语义复核已停止',
+        current: processed + errors,
+        total,
+        batch: batchNumber,
+        error: `${error.message}。请检查 AI 服务配置和网络后重试。`,
+      });
       window.showAppNotice(error.message, '可选 AI 复核未完成');
     }
   }

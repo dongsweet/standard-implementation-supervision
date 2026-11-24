@@ -114,29 +114,82 @@ class SupervisionDefinitionService extends Service {
     });
   }
 
-  async aiScreenCenterObjectCandidates({ limit = 6, threshold = 0.6 } = {}) {
+  async aiScreenCenterObjectCandidates({ limit = 4, threshold = 0.6 } = {}) {
     const candidates = await this.listCenterObjectCandidates({ threshold });
     const pending = candidates.filter(candidate =>
       candidate.candidate_type === 'similar' && !candidate.ai
     );
-    const batch = pending.slice(0, Math.max(1, Math.min(Number(limit) || 6, 12)));
-    const results = [];
-    const errors = [];
+    const batchSize = Math.max(1, Math.min(Number(limit) || 4, 8));
+    const batch = pending.slice(0, batchSize);
+    if (!batch.length) {
+      return {
+        totalCount: 0,
+        submittedCount: 0,
+        processedCount: 0,
+        errorCount: 0,
+        remainingCount: 0,
+        done: true,
+        results: [],
+        errors: [],
+      };
+    }
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
+    const modelName = aiConfig.model || 'unconfigured';
+    const promptVersion = 'center-object-dedupe-batch-v1';
+    const prepared = [];
+    const preparationErrors = [];
     for (const candidate of batch) {
       try {
-        const job = await this.aiReviewCenterObjectCandidate({
+        const context = await this.objectCandidateContext(
+          candidate.center_name,
+          candidate.left_object_name,
+          candidate.right_object_name
+        );
+        const inputHash = crypto.createHash('sha256').update(JSON.stringify([
+          candidate.center_name,
+          [ candidate.left_object_name, candidate.right_object_name ].sort(),
+          context.leftPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+          context.rightPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+          modelName,
+          promptVersion,
+        ])).digest('hex');
+        const job = await this.repository.createObjectAiJob({
           centerName: candidate.center_name,
           leftObjectName: candidate.left_object_name,
           rightObjectName: candidate.right_object_name,
+          inputHash,
+          algorithmVersion: 'object-normalized-trigram-v1',
+          promptVersion,
+          modelName,
         });
-        results.push({
-          centerName: candidate.center_name,
-          leftObjectName: candidate.left_object_name,
-          rightObjectName: candidate.right_object_name,
-          relation: job.result?.relation || 'uncertain',
+        const compactPlans = plans => plans.slice(0, 3).map(plan => ({
+          description: String(plan.description || '').slice(0, 500),
+          steps: String(plan.steps || '').slice(0, 300),
+          frequency: String(plan.frequency || '').slice(0, 100),
+          accessMode: String(plan.access_mode || '').slice(0, 50),
+        }));
+        prepared.push({
+          candidate,
+          job,
+          payload: {
+            id: candidate.id,
+            centerName: candidate.center_name,
+            left: {
+              name: candidate.left_object_name,
+              planCount: context.left.plan_count,
+              methods: context.left.check_methods || [],
+              plans: compactPlans(context.leftPlans),
+            },
+            right: {
+              name: candidate.right_object_name,
+              planCount: context.right.plan_count,
+              methods: context.right.check_methods || [],
+              plans: compactPlans(context.rightPlans),
+            },
+          },
         });
       } catch (error) {
-        errors.push({
+        preparationErrors.push({
           centerName: candidate.center_name,
           leftObjectName: candidate.left_object_name,
           rightObjectName: candidate.right_object_name,
@@ -144,10 +197,64 @@ class SupervisionDefinitionService extends Service {
         });
       }
     }
+
+    let aiResponse;
+    if (prepared.length) {
+      try {
+        aiResponse = await this.ctx.service.aiProvider.classifyCenterObjectPairs(
+          prepared.map(item => item.payload)
+        );
+      } catch (error) {
+        for (const item of prepared) {
+          await this.repository.failObjectAiJob(item.job.id, error);
+          preparationErrors.push({
+            centerName: item.candidate.center_name,
+            leftObjectName: item.candidate.left_object_name,
+            rightObjectName: item.candidate.right_object_name,
+            message: error.message,
+          });
+        }
+      }
+    }
+
+    const resultById = new Map((aiResponse?.results || []).map(result => [ String(result.id), result ]));
+    const results = [];
+    const errors = [ ...preparationErrors ];
+    for (const item of prepared) {
+      const result = resultById.get(String(item.payload.id));
+      if (!result) {
+        if (aiResponse) {
+          const error = new Error('AI 未返回该对象候选的判断结果');
+          await this.repository.failObjectAiJob(item.job.id, error);
+          errors.push({
+            centerName: item.candidate.center_name,
+            leftObjectName: item.candidate.left_object_name,
+            rightObjectName: item.candidate.right_object_name,
+            message: error.message,
+          });
+        }
+        continue;
+      }
+      await this.repository.completeObjectAiJob(item.job.id, {
+        result,
+        providerStatus: aiResponse.providerStatus,
+        durationMs: aiResponse.durationMs,
+      });
+      results.push({
+        centerName: item.candidate.center_name,
+        leftObjectName: item.candidate.left_object_name,
+        rightObjectName: item.candidate.right_object_name,
+        relation: result.relation,
+        confidence: result.confidence,
+      });
+    }
     return {
+      totalCount: pending.length,
+      submittedCount: batch.length,
       processedCount: results.length,
       errorCount: errors.length,
-      remainingCount: Math.max(0, pending.length - results.length - errors.length),
+      remainingCount: Math.max(0, pending.length - batch.length),
+      done: pending.length <= batch.length,
       results,
       errors,
     };
