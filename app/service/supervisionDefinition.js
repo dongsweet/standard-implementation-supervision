@@ -267,12 +267,15 @@ class SupervisionDefinitionService extends Service {
     return this.repository.listCenterObjectReviews();
   }
 
-  async listCenterObjectDedupe({ threshold = null, scanned = false } = {}) {
+  async listCenterObjectDedupe({ threshold = null, scanned = false, filter = 'all' } = {}) {
+    const allowedFilters = new Set([ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ]);
+    const activeFilter = allowedFilters.has(filter) ? filter : 'all';
     const reviews = await this.repository.listCenterObjectReviews();
     if (!scanned) {
       return {
         threshold,
         scanned: false,
+        filter: 'all',
         candidates: [],
         excludedCandidates: [],
         pendingCandidates: [],
@@ -292,10 +295,17 @@ class SupervisionDefinitionService extends Service {
     }
     const candidates = await this.listCenterObjectCandidates({ threshold });
     const partitioned = partitionSemanticCandidates(candidates);
+    const filteredCandidates = {
+      all: partitioned.ruleCandidates,
+      ai_duplicate: partitioned.aiDuplicate,
+      ai_excluded: partitioned.aiExcluded,
+      ai_pending: [ ...partitioned.aiPending, ...partitioned.aiFailed ],
+    }[activeFilter];
     return {
       threshold,
       scanned: true,
-      candidates: partitioned.ruleCandidates,
+      filter: activeFilter,
+      candidates: filteredCandidates,
       excludedCandidates: partitioned.aiExcluded,
       pendingCandidates: partitioned.aiPending,
       failedCandidates: partitioned.aiFailed,

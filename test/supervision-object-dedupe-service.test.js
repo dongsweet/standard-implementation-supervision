@@ -155,6 +155,32 @@ test('reports actionable AI connection errors for a failed object batch', { skip
   assert.match(result.errors[0].message, /连接AI服务/);
 });
 
+test('filters object rows by AI duplicate, excluded, and pending categories', { skip: !Service }, async () => {
+  const candidates = [
+    { id: 'all', candidate_type: 'similar', ai: null, ai_status: 'pending' },
+    { id: 'duplicate', candidate_type: 'similar', ai: { relation: 'duplicate' }, ai_status: 'completed' },
+    { id: 'excluded', candidate_type: 'similar', ai: { relation: 'similar_but_distinct' }, ai_status: 'completed' },
+    { id: 'pending', candidate_type: 'similar', ai: null, ai_status: 'pending' },
+    { id: 'failed', candidate_type: 'similar', ai: null, ai_status: 'failed' },
+  ];
+  const service = createService({
+    async listCenterObjectReviews() {
+      return [];
+    },
+  });
+  service.listCenterObjectCandidates = async () => candidates;
+  const all = await service.listCenterObjectDedupe({ scanned: true, filter: 'all' });
+  const duplicate = await service.listCenterObjectDedupe({ scanned: true, filter: 'ai_duplicate' });
+  const excluded = await service.listCenterObjectDedupe({ scanned: true, filter: 'ai_excluded' });
+  const pending = await service.listCenterObjectDedupe({ scanned: true, filter: 'ai_pending' });
+  assert.deepEqual(all.candidates.map(item => item.id), [ 'all', 'duplicate', 'excluded', 'pending', 'failed' ]);
+  assert.deepEqual(duplicate.candidates.map(item => item.id), [ 'duplicate' ]);
+  assert.deepEqual(excluded.candidates.map(item => item.id), [ 'excluded' ]);
+  assert.deepEqual(pending.candidates.map(item => item.id), [ 'all', 'pending', 'failed' ]);
+  assert.equal(duplicate.filter, 'ai_duplicate');
+  assert.equal(duplicate.summary.candidateCount, 5);
+});
+
 test('keeps all rule candidates available for manual review with optional AI annotations', { skip: !Service }, async () => {
   const baseEntries = [
     { center_name: '云中心', object_name: '安全信息对内发布记录', plan_count: 1 },

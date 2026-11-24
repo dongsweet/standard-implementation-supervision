@@ -1,7 +1,20 @@
 <%
   const thresholdValue = typeof queryThreshold === 'number' && Number.isFinite(queryThreshold) ? queryThreshold : 0.6;
   const hasResults = typeof scanned !== 'undefined' && scanned;
+  const activeFilter = [ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ].includes(filter) ? filter : 'all';
+  const filterLabels = {
+    all: '规则候选',
+    ai_duplicate: 'AI 判重',
+    ai_excluded: 'AI 排除',
+    ai_pending: '未做 AI',
+  };
+  const filterUrl = value => `/supervision-center-objects/dedupe?run=1&threshold=${encodeURIComponent(thresholdValue)}&filter=${value}`;
 %>
+<style>
+  .object-filter-cards a.card { transition: border-color 120ms ease, box-shadow 120ms ease; }
+  .object-filter-cards a.card:hover { border-color: var(--bs-primary); box-shadow: 0 .25rem .75rem rgba(13, 110, 253, .12); }
+  .object-filter-cards a.card:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+</style>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div>
     <h2 class="h4 mb-1">中心检查对象去重</h2>
@@ -38,15 +51,15 @@
   <div>填写门限后点击“运行规则筛选”。页面不会自动查找候选，也不会自动调用 AI。</div>
 </div></div>
 <% } else { %>
-<div class="row g-3 mb-3">
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">规则候选</div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div><div class="small text-secondary">名称相似度 ≥ <%= thresholdValue %></div></div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 判重</div><div class="fs-3 fw-semibold text-danger"><%= summary.aiDuplicateCount %></div><div class="small text-secondary">可选复核结果</div></div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 排除</div><div class="fs-3 fw-semibold text-success"><%= summary.excludedCount %></div><div class="small text-secondary">相似但不同或无关</div></div></div></div>
-  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="small text-secondary">未做 AI</div><div class="fs-3 fw-semibold text-warning"><%= summary.pendingCount + summary.failedCount %></div><div class="small text-secondary">不影响人工判断</div></div></div></div>
+<div class="row g-3 mb-3 object-filter-cards">
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'all' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('all') %>" <%= activeFilter === 'all' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">规则候选</div><% if (activeFilter === 'all') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold"><%= summary.candidateCount %></div><div class="small text-secondary">名称相似度 ≥ <%= thresholdValue %></div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_duplicate' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_duplicate') %>" <%= activeFilter === 'ai_duplicate' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">AI 判重</div><% if (activeFilter === 'ai_duplicate') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-danger"><%= summary.aiDuplicateCount %></div><div class="small text-secondary">可选复核结果</div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_excluded' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_excluded') %>" <%= activeFilter === 'ai_excluded' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">AI 排除</div><% if (activeFilter === 'ai_excluded') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-success"><%= summary.excludedCount %></div><div class="small text-secondary">相似但不同或无关</div></div></a></div>
+  <div class="col-6 col-lg-3"><a class="card h-100 text-reset text-decoration-none <%= activeFilter === 'ai_pending' ? 'border-primary shadow-sm' : '' %>" href="<%= filterUrl('ai_pending') %>" <%= activeFilter === 'ai_pending' ? 'aria-current="page"' : '' %>><div class="card-body"><div class="d-flex align-items-center justify-content-between"><div class="small text-secondary">未做 AI</div><% if (activeFilter === 'ai_pending') { %><span class="badge text-bg-primary">当前</span><% } %></div><div class="fs-3 fw-semibold text-warning"><%= summary.pendingCount + summary.failedCount %></div><div class="small text-secondary">不影响人工判断</div></div></a></div>
 </div>
 
 <section class="card mb-3">
-  <div class="card-header d-flex align-items-center"><h3 class="card-title">规则筛选结果</h3><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
+  <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">规则筛选结果</h3><span class="badge text-bg-primary">当前：<%= filterLabels[activeFilter] %></span><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
     <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:14rem">筛选结论</th><th style="width:24rem">人工复核</th></tr></thead>
     <tbody>
@@ -85,7 +98,7 @@
           </td>
         </tr>
       <% }) %>
-      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">当前门限下没有规则候选。</td></tr><% } %>
+      <% if (!candidates.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">当前门限和筛选条件下没有对象候选。</td></tr><% } %>
     </tbody>
   </table></div>
 </section>
@@ -111,6 +124,7 @@
 
 <script>
   const objectCsrfToken = '<%= csrf %>';
+  const currentFilter = '<%= activeFilter %>';
   const currentThreshold = () => {
     const threshold = Number(document.getElementById('objectThreshold').value);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
@@ -118,8 +132,12 @@
     }
     return threshold;
   };
-  const reloadUrl = notice => {
-    const params = new URLSearchParams({ run: '1', threshold: currentThreshold() });
+  const reloadUrl = (notice, filterOverride = currentFilter) => {
+    const params = new URLSearchParams({
+      run: '1',
+      threshold: currentThreshold(),
+      filter: filterOverride,
+    });
     if (notice) params.set('notice', notice);
     return `/supervision-center-objects/dedupe?${params.toString()}`;
   };
@@ -235,7 +253,7 @@
             total: Math.max(effectiveTotal, processed),
             batch: batchNumber,
           });
-          window.setTimeout(() => window.location.assign(reloadUrl()), 700);
+          window.setTimeout(() => window.location.assign(reloadUrl(null, 'all')), 700);
           return;
         }
       }

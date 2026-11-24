@@ -112,6 +112,11 @@ test('keeps rule scanning manual, AI optional, and manual review always availabl
   assert.match(html, /每批最多 4 组/);
   assert.match(html, /batchSize: 4/);
   assert.match(html, /objectAiProgressBar/);
+  assert.match(html, /object-filter-cards/);
+  assert.match(html, /filterUrl\('ai_duplicate'\)/);
+  assert.match(html, /filterUrl\('ai_excluded'\)/);
+  assert.match(html, /filterUrl\('ai_pending'\)/);
+  assert.match(html, /当前：/);
   assert.match(html, /object-review-actions/);
   assert.match(html, /该中心下.*检查方案会更新到保留对象/);
   assert.match(html, /所有合并都必须人工确认/);

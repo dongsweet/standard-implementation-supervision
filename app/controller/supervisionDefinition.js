@@ -42,11 +42,16 @@ class SupervisionDefinitionController extends Controller {
       : Number(rawThreshold);
     const scanned = this.ctx.query.run === '1' && Number.isFinite(threshold)
       && threshold >= 0 && threshold <= 1;
+    const requestedFilter = String(this.ctx.query.filter || 'all');
+    const filter = scanned && [ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ].includes(requestedFilter)
+      ? requestedFilter
+      : 'all';
     await this.ctx.render('supervision-center-objects/dedupe', {
       title: '中心检查对象去重',
       ...await this.ctx.service.supervisionDefinition.listCenterObjectDedupe({
         threshold: scanned ? threshold : null,
         scanned,
+        filter,
       }),
       queryThreshold: threshold === null || !Number.isFinite(threshold)
         ? 0.6
