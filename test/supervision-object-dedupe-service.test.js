@@ -111,6 +111,50 @@ test('submits AI screening candidates in bounded batches and reports remaining p
   assert.equal(result.done, false);
 });
 
+test('reports actionable AI connection errors for a failed object batch', { skip: !Service }, async () => {
+  const repository = {
+    async createObjectAiJob() {
+      return { id: 'job-connection-failure' };
+    },
+    async failObjectAiJob(id, error) {
+      assert.equal(id, 'job-connection-failure');
+      return { id, error: error.message };
+    },
+  };
+  const service = createService(repository);
+  service.listCenterObjectCandidates = async () => [ {
+    id: 'pair-network',
+    center_name: '云中心',
+    left_object_name: '对象A',
+    right_object_name: '对象B',
+    candidate_type: 'similar',
+    ai: null,
+    ai_status: 'pending',
+  } ];
+  service.objectCandidateContext = async () => ({
+    left: { plan_count: 1, check_methods: [] },
+    right: { plan_count: 1, check_methods: [] },
+    leftPlans: [],
+    rightPlans: [],
+  });
+  const failure = new Error('fetch failed');
+  failure.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' };
+  failure.baseUrl = 'https://ai.example.com/v1';
+  Object.defineProperty(service, 'ctx', {
+    value: {
+      service: {
+        systemSetting: { getAiConfig: async () => ({ model: 'test-model' }) },
+        aiProvider: { async classifyCenterObjectPairs() { throw failure; } },
+      },
+    },
+  });
+  const result = await service.aiScreenCenterObjectCandidates({ limit: 4, threshold: 0.6 });
+  assert.equal(result.processedCount, 0);
+  assert.equal(result.errorCount, 1);
+  assert.equal(result.errors[0].code, 'AI_CONNECT_TIMEOUT');
+  assert.match(result.errors[0].message, /连接AI服务/);
+});
+
 test('keeps all rule candidates available for manual review with optional AI annotations', { skip: !Service }, async () => {
   const baseEntries = [
     { center_name: '云中心', object_name: '安全信息对内发布记录', plan_count: 1 },

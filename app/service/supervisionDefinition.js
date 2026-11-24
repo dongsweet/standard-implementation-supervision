@@ -3,6 +3,7 @@
 const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
+const { friendlyAiError } = require('../lib/aiProvider');
 const {
   buildObjectCandidates,
   objectCandidate,
@@ -205,13 +206,15 @@ class SupervisionDefinitionService extends Service {
           prepared.map(item => item.payload)
         );
       } catch (error) {
+        const friendly = friendlyAiError(error, error.baseUrl);
         for (const item of prepared) {
           await this.repository.failObjectAiJob(item.job.id, error);
           preparationErrors.push({
             centerName: item.candidate.center_name,
             leftObjectName: item.candidate.left_object_name,
             rightObjectName: item.candidate.right_object_name,
-            message: error.message,
+            message: friendly.message,
+            code: friendly.code,
           });
         }
       }
