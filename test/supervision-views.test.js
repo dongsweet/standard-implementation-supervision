@@ -28,6 +28,10 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   assert.match(planView, /buildPageUrl\(pageValue - 1\)/);
   assert.match(planView, /definitionDetailModal/);
   assert.match(planView, /padStart\(3, '0'\)/);
+  assert.match(planView, /\['检查范围', definition\.scope \|\| '未指定'\]/);
+  assert.match(planView, /\['对象分类', definition\.object_category \|\| '未指定'\]/);
+  assert.match(planView, /\['检查层面', definition\.check_layer \|\| '未指定'\]/);
+  assert.doesNotMatch(planView, /范围 \/ 分类 \/ 层面/);
   assert.match(executionView, /当前项目：/);
   assert.match(executionView, /方案编号/);
 });
