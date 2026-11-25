@@ -115,7 +115,7 @@ function optionalBoolean(value, label, sourceRow, errors) {
 
 function findHeader(rows) {
   const aliases = {
-    standardNumbers: [ '标准化编号', '标准编号' ],
+    standardNumbers: [ '标准化编号', '标准编号', '对应标准号' ],
     recognizedObject: [ '是否公认对象' ],
     scope: [ '检查范围', '检查项位于' ],
     centers: [ '适用检查中心', '检查中心' ],
@@ -125,11 +125,11 @@ function findHeader(rows) {
     checkMethod: [ '检查方法' ],
     description: [ '检查项描述', '检查描述' ],
     steps: [ '检查步骤' ],
-    frequency: [ '检查频率', '频率' ],
-    priority: [ '重点项' ],
-    accessMode: [ '执行方式', '远程现场方式' ],
-    referenceResult: [ '参考判定描述', '检查结果参考描述' ],
-    referenceMaterials: [ '参考材料', '证明材料' ],
+    frequency: [ '检查频率', '频率', '中心执行频率' ],
+    priority: [ '重点项', '是否重点检查项' ],
+    accessMode: [ '执行方式', '远程现场方式', '远程/现场查看' ],
+    referenceResult: [ '参考判定描述', '检查结果参考描述', '检查结果-参考描述' ],
+    referenceMaterials: [ '参考材料', '证明材料', '证明材料（文档3参考）' ],
   };
   for (let rowIndex = 0; rowIndex < Math.min(20, rows.length); rowIndex += 1) {
     const row = rows[rowIndex] || [];

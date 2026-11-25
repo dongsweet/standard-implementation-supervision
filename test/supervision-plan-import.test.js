@@ -53,6 +53,22 @@ test('parses plan fields and keeps multiple standard links on one definition row
   assert.equal(parsed.skippedSheetCount, 1);
 });
 
+test('maps original workbook headers into the editable plan fields', () => {
+  const parsed = parseSupervisionPlanRows([ { name: '监督检查记录总表', rows: [
+    [ '对应标准号', '是否公认对象', '检查项位于', '对象分类', '检查对象', '检查层面', '检查方法', '检查项描述', '检查步骤', '中心执行频率', '是否重点检查项', '远程/现场查看', '检查结果-参考描述', '证明材料（文档3参考）' ],
+    [ '31168-2023-06008', '是', '统一运维中心', '内部统计', '下云用户数据删除记录', '管理层面', '证据材料核查', '检查记录是否完整', '核对删除记录', '每季度', '重点项', '现场', '记录应完整', '删除审批单及截图' ],
+  ] } ]);
+  assert.equal(parsed.rows.length, 1);
+  assert.deepEqual(parsed.rows[0].centers, [ '统一运维中心' ]);
+  assert.equal(parsed.rows[0].scope, '');
+  assert.equal(parsed.rows[0].recognizedObject, true);
+  assert.equal(parsed.rows[0].frequency, '每季度');
+  assert.equal(parsed.rows[0].priority, '重点项');
+  assert.equal(parsed.rows[0].accessMode, '现场');
+  assert.equal(parsed.rows[0].referenceResult, '记录应完整');
+  assert.equal(parsed.rows[0].referenceMaterials, '删除审批单及截图');
+});
+
 test('merges center names from repeated import rows into one definition with multiple centers', () => {
   const parsed = parseSupervisionPlanRows([ { name: '检查方案', rows: [
     [ '标准化编号', '检查范围', '适用检查中心', '检查对象', '检查方法', '检查项描述' ],

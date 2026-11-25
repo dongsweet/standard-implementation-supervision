@@ -72,55 +72,99 @@
 </div></div></div>
 
 <div class="modal fade" id="createDefinitionModal" tabindex="-1" aria-labelledby="createDefinitionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-  <form id="createDefinitionForm" method="post" action="/supervision-definitions"><input type="hidden" name="_csrf" value="<%= csrf %>">
+  <form id="createDefinitionForm" method="post" action="/supervision-definitions"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="scope" value="">
     <div class="modal-header"><h2 class="modal-title fs-5" id="createDefinitionModalLabel">新增检查方案</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
-    <div class="modal-body row g-3">
-      <div class="col-md-4"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" required maxlength="500" placeholder="例如：云平台账号管理"></div>
-      <div class="col-md-4"><label class="form-label" for="createScope">检查范围</label><input class="form-control" id="createScope" name="scope" placeholder="描述适用范围或位置"></div>
-      <div class="col-md-8"><label class="form-label" for="createCenters">适用检查中心（可多选）</label><select class="form-select" id="createCenters" name="centers" multiple size="3" required><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>"><%= centerOption %></option><% }) %></select><div class="form-text">同一检查对象和内容可同时适用于多个中心；执行时按中心分别记录。</div></div>
-      <div class="col-md-2"><label class="form-label" for="createRecognizedObject">公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
-      <div class="col-md-2"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
-      <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" placeholder="例如：制度、技术、现场"></div>
-      <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" placeholder="例如：管理、配置、运行"></div>
-      <div class="col-md-6"><label class="form-label" for="createCheckMethods">检查方法（可多选）</label><select class="form-select" id="createCheckMethods" name="checkMethods" multiple size="6"><% checkMethodOptions.forEach(method => { %><option value="<%= method %>"><%= method %></option><% }) %></select><div class="form-text">按住 Ctrl/⌘ 可多选；也可在右侧填写其他方法。</div></div>
-      <div class="col-md-6"><label class="form-label" for="createAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="createAdditionalCheckMethods" name="additionalCheckMethods" placeholder="如有多个，用逗号分隔"></div>
-      <div class="col-md-3"><label class="form-label" for="createFrequency">频率</label><input class="form-control" id="createFrequency" name="frequency" placeholder="例如：每季度"></div>
-      <div class="col-md-3"><label class="form-label" for="createAccessMode">远程/现场方式</label><select class="form-select" id="createAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
-      <div class="col-12"><label class="form-label" for="createDescription">检查描述</label><textarea class="form-control" id="createDescription" name="description" rows="3" required maxlength="5000"></textarea></div>
-      <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="3" placeholder="按顺序填写检查步骤"></textarea></div>
-      <div class="col-md-6"><label class="form-label" for="createReferenceResult">参考判定描述</label><textarea class="form-control" id="createReferenceResult" name="referenceResult" rows="3"></textarea></div>
-      <div class="col-md-6"><label class="form-label" for="createReferenceMaterials">参考材料</label><textarea class="form-control" id="createReferenceMaterials" name="referenceMaterials" rows="3"></textarea></div>
-      <div class="col-12"><label class="form-label" for="createStandardItems">关联标准项（可多选）</label><select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="8" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select><div class="form-text">一条监督定义可以覆盖多个标准项；按住 Ctrl/⌘ 可多选。</div></div>
+    <div class="modal-body p-0">
+      <ul class="nav nav-tabs px-4 pt-3" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active" id="createBasicTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#createBasicPane" aria-controls="createBasicPane" aria-selected="true">基本信息</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" id="createRequirementTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#createRequirementPane" aria-controls="createRequirementPane" aria-selected="false">检查要求</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" id="createStandardsTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#createStandardsPane" aria-controls="createStandardsPane" aria-selected="false">关联标准项 <span class="badge text-bg-light border ms-1" id="createStandardItemCount">0</span></button></li>
+      </ul>
+      <div class="tab-content px-4 py-3">
+        <section class="tab-pane fade show active" id="createBasicPane" role="tabpanel" aria-labelledby="createBasicTab" tabindex="0">
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" required maxlength="500" placeholder="例如：云平台账号管理"></div>
+            <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" placeholder="例如：管理制度、执行计划"></div>
+            <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" placeholder="例如：管理层面、技术层面"></div>
+            <div class="col-md-4"><label class="form-label" for="createRecognizedObject">是否公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
+            <div class="col-md-4"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
+            <div class="col-12"><label class="form-label d-block">适用检查中心</label><div class="d-flex flex-wrap gap-2" id="createCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="createCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">来自原表“检查项位于”；可多选，执行时按中心分别记录。</div></div>
+          </div>
+        </section>
+        <section class="tab-pane fade" id="createRequirementPane" role="tabpanel" aria-labelledby="createRequirementTab" tabindex="0">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label d-block">检查方法</label><div class="d-flex flex-wrap gap-2" id="createCheckMethods"><% checkMethodOptions.forEach((method, index) => { %><input class="btn-check" type="checkbox" name="checkMethods" id="createMethod<%= index %>" value="<%= method %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createMethod<%= index %>"><%= method %></label><% }) %></div></div>
+            <div class="col-md-6"><label class="form-label" for="createAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="createAdditionalCheckMethods" name="additionalCheckMethods" placeholder="多个方法用逗号分隔"></div>
+            <div class="col-md-3"><label class="form-label" for="createFrequency">中心执行频率</label><input class="form-control" id="createFrequency" name="frequency" placeholder="例如：每季度"></div>
+            <div class="col-md-3"><label class="form-label" for="createAccessMode">远程/现场查看</label><select class="form-select" id="createAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
+            <div class="col-12"><label class="form-label" for="createDescription">检查项描述</label><textarea class="form-control" id="createDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
+            <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="4"></textarea></div>
+            <div class="col-12"><details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）</summary><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label" for="createReferenceResult">检查结果参考描述</label><textarea class="form-control" id="createReferenceResult" name="referenceResult" rows="2"></textarea></div><div class="col-md-6"><label class="form-label" for="createReferenceMaterials">参考材料</label><textarea class="form-control" id="createReferenceMaterials" name="referenceMaterials" rows="2"></textarea></div></div></details></div>
+          </div>
+        </section>
+        <section class="tab-pane fade" id="createStandardsPane" role="tabpanel" aria-labelledby="createStandardsTab" tabindex="0">
+          <label class="form-label" for="createStandardItems">关联标准项</label>
+          <select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="12" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select>
+          <div class="form-text">一条检查方案可以关联多个标准项。</div>
+        </section>
+      </div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存检查方案</button></div>
   </form>
 </div></div></div>
 
 <div class="modal fade" id="editDefinitionModal" tabindex="-1" aria-labelledby="editDefinitionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-  <form id="editDefinitionForm" method="post" action=""><input type="hidden" name="_csrf" value="<%= csrf %>">
+  <form id="editDefinitionForm" method="post" action=""><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" id="editScope" name="scope">
     <div class="modal-header"><h2 class="modal-title fs-5" id="editDefinitionModalLabel">编辑检查方案</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
-    <div class="modal-body row g-3">
-      <div class="col-md-4"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" required maxlength="500"></div>
-      <div class="col-md-4"><label class="form-label" for="editScope">检查范围</label><input class="form-control" id="editScope" name="scope"></div>
-      <div class="col-md-8"><label class="form-label" for="editCenters">适用检查中心（可多选）</label><select class="form-select" id="editCenters" name="centers" multiple size="3" required><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>"><%= centerOption %></option><% }) %></select><div class="form-text">同一检查对象和内容可同时适用于多个中心；执行时按中心分别记录。</div></div>
-      <div class="col-md-2"><label class="form-label" for="editRecognizedObject">公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
-      <div class="col-md-2"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
-      <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory"></div>
-      <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer"></div>
-      <div class="col-md-6"><label class="form-label" for="editCheckMethods">检查方法（可多选）</label><select class="form-select" id="editCheckMethods" name="checkMethods" multiple size="6"><% checkMethodOptions.forEach(method => { %><option value="<%= method %>"><%= method %></option><% }) %></select><div class="form-text">按住 Ctrl/⌘ 可多选；也可在右侧填写其他方法。</div></div>
-      <div class="col-md-6"><label class="form-label" for="editAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="editAdditionalCheckMethods" name="additionalCheckMethods" placeholder="如有多个，用逗号分隔"></div>
-      <div class="col-md-3"><label class="form-label" for="editFrequency">频率</label><input class="form-control" id="editFrequency" name="frequency"></div>
-      <div class="col-md-3"><label class="form-label" for="editAccessMode">远程/现场方式</label><select class="form-select" id="editAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
-      <div class="col-12"><label class="form-label" for="editDescription">检查描述</label><textarea class="form-control" id="editDescription" name="description" rows="3" required maxlength="5000"></textarea></div>
-      <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="3"></textarea></div>
-      <div class="col-md-6"><label class="form-label" for="editReferenceResult">参考判定描述</label><textarea class="form-control" id="editReferenceResult" name="referenceResult" rows="3"></textarea></div>
-      <div class="col-md-6"><label class="form-label" for="editReferenceMaterials">参考材料</label><textarea class="form-control" id="editReferenceMaterials" name="referenceMaterials" rows="3"></textarea></div>
-      <div class="col-12"><label class="form-label" for="editStandardItems">关联标准项（可多选）</label><select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="8" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select></div>
+    <div class="modal-body p-0">
+      <ul class="nav nav-tabs px-4 pt-3" role="tablist">
+        <li class="nav-item" role="presentation"><button class="nav-link active" id="editBasicTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#editBasicPane" aria-controls="editBasicPane" aria-selected="true">基本信息</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" id="editRequirementTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#editRequirementPane" aria-controls="editRequirementPane" aria-selected="false">检查要求</button></li>
+        <li class="nav-item" role="presentation"><button class="nav-link" id="editStandardsTab" type="button" role="tab" data-bs-toggle="tab" data-bs-target="#editStandardsPane" aria-controls="editStandardsPane" aria-selected="false">关联标准项 <span class="badge text-bg-light border ms-1" id="editStandardItemCount">0</span></button></li>
+      </ul>
+      <div class="tab-content px-4 py-3">
+        <section class="tab-pane fade show active" id="editBasicPane" role="tabpanel" aria-labelledby="editBasicTab" tabindex="0">
+          <div class="row g-3">
+            <div class="col-md-8"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" required maxlength="500"></div>
+            <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory"></div>
+            <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer"></div>
+            <div class="col-md-4"><label class="form-label" for="editRecognizedObject">是否公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
+            <div class="col-md-4"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
+            <div class="col-12"><label class="form-label d-block">适用检查中心</label><div class="d-flex flex-wrap gap-2" id="editCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="editCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">来自原表“检查项位于”；执行时按中心分别记录。</div></div>
+          </div>
+        </section>
+        <section class="tab-pane fade" id="editRequirementPane" role="tabpanel" aria-labelledby="editRequirementTab" tabindex="0">
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label d-block">检查方法</label><div class="d-flex flex-wrap gap-2" id="editCheckMethods"><% checkMethodOptions.forEach((method, index) => { %><input class="btn-check" type="checkbox" name="checkMethods" id="editMethod<%= index %>" value="<%= method %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editMethod<%= index %>"><%= method %></label><% }) %></div></div>
+            <div class="col-md-6"><label class="form-label" for="editAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="editAdditionalCheckMethods" name="additionalCheckMethods" placeholder="多个方法用逗号分隔"></div>
+            <div class="col-md-3"><label class="form-label" for="editFrequency">中心执行频率</label><input class="form-control" id="editFrequency" name="frequency"></div>
+            <div class="col-md-3"><label class="form-label" for="editAccessMode">远程/现场查看</label><select class="form-select" id="editAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
+            <div class="col-12"><label class="form-label" for="editDescription">检查项描述</label><textarea class="form-control" id="editDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
+            <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="4"></textarea></div>
+            <div class="col-12"><details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）</summary><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label" for="editReferenceResult">检查结果参考描述</label><textarea class="form-control" id="editReferenceResult" name="referenceResult" rows="2"></textarea></div><div class="col-md-6"><label class="form-label" for="editReferenceMaterials">参考材料</label><textarea class="form-control" id="editReferenceMaterials" name="referenceMaterials" rows="2"></textarea></div></div></details></div>
+          </div>
+        </section>
+        <section class="tab-pane fade" id="editStandardsPane" role="tabpanel" aria-labelledby="editStandardsTab" tabindex="0">
+          <label class="form-label" for="editStandardItems">关联标准项</label>
+          <select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="12" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select>
+          <div class="form-text">修改关联不会删除既有执行记录。</div>
+        </section>
+      </div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
   </form>
 </div></div></div>
 <script>
+  function updateStandardItemCount(selectId, badgeId) {
+    const count = document.getElementById(selectId).selectedOptions.length;
+    document.getElementById(badgeId).textContent = String(count);
+  }
+  function showPlanFormTab(element) {
+    const pane = element.closest('.tab-pane');
+    if (!pane) return;
+    const trigger = document.querySelector(`[data-bs-target="#${pane.id}"]`);
+    if (trigger) bootstrap.Tab.getOrCreateInstance(trigger).show();
+  }
   document.getElementById('definitionDetailModal').addEventListener('show.bs.modal', event => {
     const definition = JSON.parse(event.relatedTarget.dataset.definition);
     const body = document.getElementById('definitionDetailBody');
@@ -156,6 +200,7 @@
     const definition = JSON.parse(event.relatedTarget.dataset.definition);
     const form = document.getElementById('editDefinitionForm');
     form.action = '/supervision-definitions/' + definition.id;
+    bootstrap.Tab.getOrCreateInstance(document.getElementById('editBasicTab')).show();
     const fields = {
       editObjectName: definition.object_name,
       editScope: definition.scope || '',
@@ -168,33 +213,42 @@
       editReferenceMaterials: definition.reference_materials || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
-    Array.from(document.getElementById('editCenters').options).forEach(option => { option.selected = (definition.centers || []).includes(option.value); });
+    const centers = new Set(definition.centers || []);
+    form.querySelectorAll('input[name="centers"]').forEach(input => { input.checked = centers.has(input.value); });
     const methods = new Set((definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean));
-    const methodSelect = document.getElementById('editCheckMethods');
-    const knownMethods = new Set(Array.from(methodSelect.options).map(option => option.value));
-    Array.from(methodSelect.options).forEach(option => { option.selected = methods.has(option.value); });
+    const methodInputs = Array.from(form.querySelectorAll('input[name="checkMethods"]'));
+    const knownMethods = new Set(methodInputs.map(input => input.value));
+    methodInputs.forEach(input => { input.checked = methods.has(input.value); });
     document.getElementById('editAdditionalCheckMethods').value = Array.from(methods).filter(method => !knownMethods.has(method)).join(',');
     document.getElementById('editAccessMode').value = definition.access_mode || '';
     document.getElementById('editRecognizedObject').value = definition.recognized_object === null ? '' : String(definition.recognized_object);
     document.getElementById('editPriority').value = definition.priority || '';
     const selected = new Set((definition.standard_items || []).map(item => item.id));
     Array.from(document.getElementById('editStandardItems').options).forEach(option => { option.selected = selected.has(option.value); });
+    updateStandardItemCount('editStandardItems', 'editStandardItemCount');
   });
   [
-    ['createDefinitionForm', 'createCheckMethods', 'createAdditionalCheckMethods'],
-    ['editDefinitionForm', 'editCheckMethods', 'editAdditionalCheckMethods'],
-  ].forEach(([formId, selectId, otherId]) => {
+    { formId: 'createDefinitionForm', standardItemsId: 'createStandardItems', standardCountId: 'createStandardItemCount' },
+    { formId: 'editDefinitionForm', standardItemsId: 'editStandardItems', standardCountId: 'editStandardItemCount' },
+  ].forEach(({ formId, standardItemsId, standardCountId }) => {
     const form = document.getElementById(formId);
-    const select = document.getElementById(selectId);
-    const other = document.getElementById(otherId);
-    const clearError = () => select.setCustomValidity('');
-    select.addEventListener('change', clearError);
-    other.addEventListener('input', clearError);
+    const standardItems = document.getElementById(standardItemsId);
+    standardItems.addEventListener('change', () => updateStandardItemCount(standardItemsId, standardCountId));
+    form.addEventListener('invalid', event => showPlanFormTab(event.target), true);
     form.addEventListener('submit', event => {
-      if (select.selectedOptions.length || other.value.trim()) return;
-      event.preventDefault();
-      select.setCustomValidity('请选择或填写至少一种检查方法。');
-      select.reportValidity();
+      const centerCount = form.querySelectorAll('input[name="centers"]:checked').length;
+      if (!centerCount) {
+        event.preventDefault();
+        showPlanFormTab(form.querySelector('input[name="centers"]'));
+        window.showAppNotice('请至少选择一个适用检查中心。', '检查方案未保存');
+        return;
+      }
+      const methodCount = form.querySelectorAll('input[name="checkMethods"]:checked').length;
+      if (!methodCount && !document.getElementById(formId === 'createDefinitionForm' ? 'createAdditionalCheckMethods' : 'editAdditionalCheckMethods').value.trim()) {
+        event.preventDefault();
+        showPlanFormTab(form.querySelector('input[name="checkMethods"]'));
+        window.showAppNotice('请选择或填写至少一种检查方法。', '检查方案未保存');
+      }
     });
   });
 </script>

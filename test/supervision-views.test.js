@@ -91,6 +91,23 @@ test('escapes standard content before placing supervision definitions in script 
   assert.match(html, /heading\.textContent = \[item\.code, item\.title\]/);
 });
 
+test('groups the plan editor into three compact source-aligned tabs', () => {
+  const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
+  assert.match(planView, /id="editBasicTab"/);
+  assert.match(planView, /id="editRequirementTab"/);
+  assert.match(planView, /id="editStandardsTab"/);
+  assert.match(planView, /id="editCenters"[\s\S]*name="centers"/);
+  assert.match(planView, /id="editCheckMethods"[\s\S]*name="checkMethods"/);
+  assert.match(planView, /<input type="hidden" id="editScope" name="scope">/);
+  assert.doesNotMatch(planView, /id="editScope"[^>]*type="text"/);
+  assert.match(planView, />中心执行频率</);
+  assert.match(planView, />远程\/现场查看</);
+  assert.match(planView, />检查项描述</);
+  assert.match(planView, /<details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）<\/summary>/);
+  assert.match(planView, /editStandardItemCount/);
+  assert.match(planView, /showPlanFormTab/);
+});
+
 test('links the plan page to manual threshold and optional AI deduplication', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   const dedupeView = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
