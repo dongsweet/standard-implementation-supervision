@@ -435,6 +435,103 @@ class SupervisionDefinitionRepository {
     }
   }
 
+  async mergeObject(sourceId, targetId, actorId) {
+    if (sourceId === targetId) {
+      const error = new Error('来源对象和保留对象不能相同');
+      error.code = 'INVALID_OBJECT_MERGE';
+      throw error;
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const objects = await client.query(`
+        SELECT id, canonical_name, category_id, status
+        FROM supervision_objects
+        WHERE id = ANY($1::uuid[])
+        FOR UPDATE`, [ [ sourceId, targetId ] ]);
+      const source = objects.rows.find(row => row.id === sourceId);
+      const target = objects.rows.find(row => row.id === targetId);
+      if (!source || !target || source.status !== 'active' || target.status !== 'active') {
+        const error = new Error('来源对象或保留对象不存在');
+        error.code = 'INVALID_OBJECT_MERGE';
+        throw error;
+      }
+      const plans = await client.query(`
+        SELECT d.id, d.object_name, d.object_category, d.check_layer, d.check_method,
+               d.description, d.steps, d.frequency, d.plan_number
+        FROM supervision_definitions d
+        WHERE d.canonical_object_id = $1 AND d.status = 'active'
+        ORDER BY d.plan_number
+        FOR UPDATE`, [ sourceId ]);
+      for (const plan of plans.rows) {
+        const normalizedHash = normalizeDefinition({
+          object_name: target.canonical_name,
+          object_category: plan.object_category,
+          check_layer: plan.check_layer,
+          check_method: plan.check_method,
+          description: plan.description,
+          steps: plan.steps,
+          frequency: plan.frequency,
+        }).normalizedHash;
+        await client.query(`
+          UPDATE supervision_definitions
+          SET object_name = $2, canonical_object_id = $3, normalized_hash = $4, updated_at = now()
+          WHERE id = $1`, [ plan.id, target.canonical_name, targetId, normalizedHash ]);
+      }
+      const aliases = await client.query(`
+        SELECT alias_name, normalized_name, center_name
+        FROM supervision_object_aliases
+        WHERE object_id = $1`, [ sourceId ]);
+      const aliasRows = [
+        ...aliases.rows,
+        { alias_name: source.canonical_name, normalized_name: normalizeText(source.canonical_name).replace(/\s+/g, ''), center_name: null },
+        ...plans.rows.map(plan => ({
+          alias_name: plan.object_name,
+          normalized_name: normalizeText(plan.object_name).replace(/\s+/g, ''),
+          center_name: null,
+        })),
+      ];
+      for (const alias of aliasRows) {
+        if (!alias.alias_name) continue;
+        await client.query(`
+          INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, center_name, source)
+          VALUES ($1, $2, $3, $4, 'merge')
+          ON CONFLICT DO NOTHING`, [ targetId, alias.alias_name, alias.normalized_name, alias.center_name || null ]);
+      }
+      await client.query(`DELETE FROM supervision_object_aliases WHERE object_id = $1`, [ sourceId ]);
+      await client.query(`
+        UPDATE supervision_objects
+        SET status = 'merged', merged_into_id = $2, updated_at = now()
+        WHERE id = $1`, [ sourceId, targetId ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'merge_supervision_object', 'supervision_object', $2, $3)`, [
+        actorId || null, targetId,
+        JSON.stringify({
+          sourceId,
+          sourceName: source.canonical_name,
+          targetId,
+          targetName: target.canonical_name,
+          affectedPlanIds: plans.rows.map(plan => plan.id),
+          affectedPlanNumbers: plans.rows.map(plan => plan.plan_number),
+        }),
+      ]);
+      await client.query('COMMIT');
+      return {
+        sourceId,
+        targetId,
+        targetName: target.canonical_name,
+        affectedPlanCount: plans.rows.length,
+        affectedPlanNumbers: plans.rows.map(plan => plan.plan_number),
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async createObjectCategory({ name, description }, actorId) {
     const result = await this.pool.query(`
       INSERT INTO supervision_object_categories (name, description)

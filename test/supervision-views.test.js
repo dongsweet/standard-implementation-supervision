@@ -265,6 +265,13 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /新增对象分类/);
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /id="editObjectCategoryCombobox"/);
+  assert.match(html, /id="objectMergeModal"/);
+  assert.match(html, /id="mergeTargetObject"/);
+  assert.match(html, /id="mergeTargetObjectMenu"/);
+  assert.match(html, /mergeObjectPicker/);
+  assert.match(html, /onclick="openMergeObject\(this\)"/);
+  assert.match(html, /来源对象的检查方案会迁移到保留对象/);
+  assert.match(html, /确认合并规范对象/);
   assert.match(html, /object-category-combobox-menu \{ position: absolute; z-index: 1050; top: calc\(100% \+ 4px\); left: 0; right: 0; max-height: 180px;/);
   assert.match(html, /data-categories="<%= encodeURIComponent\(JSON\.stringify\(Array\.from\(new Set\(\(row\.plans \|\| \[\]\)\.map\(plan => plan\.objectCategory\)\.filter\(Boolean\)\)\)\)\) %>"/);
   assert.match(html, /const objectEditCategories =/);

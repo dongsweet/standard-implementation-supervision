@@ -114,6 +114,17 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async mergeCenterObject() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.mergeCenterObject(
+        this.ctx.params.objectId,
+        this.ctx.request.body || {},
+        this.ctx.session.userId
+      ),
+    };
+  }
+
   async createCenterObjectCategory() {
     requireGlobalWrite(this.ctx);
     this.ctx.body = {

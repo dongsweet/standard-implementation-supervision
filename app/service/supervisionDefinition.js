@@ -312,6 +312,19 @@ class SupervisionDefinitionService extends Service {
     }
   }
 
+  async mergeCenterObject(id, payload, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '对象编号格式无效');
+    const targetId = String(payload.targetId || '').trim();
+    if (!UUID_RE.test(targetId)) this.ctx.throw(400, '请选择要保留的规范对象');
+    try {
+      return await this.repository.mergeObject(id, targetId, actorId);
+    } catch (error) {
+      if (error.code === 'INVALID_OBJECT_MERGE') this.ctx.throw(400, error.message);
+      if (error.code === '23505') this.ctx.throw(409, '对象别名或名称合并冲突，请刷新后重试');
+      throw error;
+    }
+  }
+
   async createCenterObjectCategory(payload, actorId) {
     const name = String(payload.name || '').trim();
     const description = String(payload.description || '').trim();
