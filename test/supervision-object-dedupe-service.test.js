@@ -16,6 +16,31 @@ function createService(repository) {
   return service;
 }
 
+test('loads the complete canonical object catalog for the workbench merge picker', { skip: !Service }, async () => {
+  const calls = [];
+  const service = createService({
+    async listObjectWorkbench(query) {
+      calls.push([ 'workbench', query ]);
+      return { rows: [ { id: 'source', canonical_name: '《开发商安全管理规范》' } ], total: 1, page: 1, pageCount: 1 };
+    },
+    async listObjectCategories() {
+      calls.push([ 'categories' ]);
+      return [];
+    },
+    async listObjectPickerOptions() {
+      calls.push([ 'options' ]);
+      return [
+        { id: 'source', canonical_name: '《开发商安全管理规范》', object_category: '管理制度' },
+        { id: 'target', canonical_name: '云平台软件开发安全管理规范', object_category: '管理制度' },
+      ];
+    },
+  });
+  const result = await service.listCenterObjects();
+  assert.deepEqual(calls.map(call => call[0]), [ 'workbench', 'categories', 'options' ]);
+  assert.equal(result.objectOptions.length, 2);
+  assert.equal(result.objectOptions[1].canonical_name, '云平台软件开发安全管理规范');
+});
+
 test('does not scan object candidates until explicitly requested', { skip: !Service }, async () => {
   const calls = [];
   const service = createService({
