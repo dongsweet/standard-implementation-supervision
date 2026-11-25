@@ -227,6 +227,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /popover\.showPopover\(\)/);
   assert.match(html, /addEventListener\('mouseover'[\s\S]*object-plan-number/);
   assert.match(html, /addEventListener\('focusin'[\s\S]*object-plan-number/);
+  assert.match(html, /addEventListener\('pointerdown'[\s\S]*objectPopover\.hidePopover\(\)[\s\S]*\}, true\)/);
   assert.match(html, /const resetUrl = targetView => buildUrl\(targetView, 1, \{[\s\S]*center: '',[\s\S]*search: '',[\s\S]*categoryInput: ''/);
   assert.match(html, /href="<%= resetUrl\(viewValue\) %>">重置<\/a>/);
   assert.doesNotMatch(html, /href="<%= buildUrl\(viewValue\) %>">重置<\/a>/);

@@ -120,13 +120,13 @@
     const trigger = event.target.closest('.object-plan-number');
     if (trigger) showObjectPlanPreview(event, trigger);
   });
-  document.addEventListener('click', event => {
+  document.addEventListener('pointerdown', event => {
     if (objectPopover?.matches(':popover-open')
       && !event.target.closest('.object-plan-number')
       && !event.target.closest('#objectPlanPopover')) {
       objectPopover.hidePopover();
     }
-  });
+  }, true);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && objectPopover?.matches(':popover-open')) objectPopover.hidePopover();
   });
