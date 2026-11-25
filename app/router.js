@@ -8,6 +8,10 @@ module.exports = app => {
   router.post('/current-project', controller.project.switchProject);
   router.get('/', controller.home.index);
   router.get('/health', controller.home.health);
+  router.get('/joint-reviews', controller.jointReview.index);
+  router.post('/joint-reviews/scan', controller.jointReview.scan);
+  router.post('/api/joint-reviews/:reviewId/ai', controller.jointReview.aiReview);
+  router.post('/api/joint-reviews/:reviewId/human', controller.jointReview.saveHumanDecision);
   router.get('/dedupe', controller.dedupe.index);
   router.get('/dedupe/history', controller.dedupe.history);
   router.get('/cloud-centers', controller.cloudCenter.index);

@@ -120,6 +120,24 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /showPlanFormTab/);
 });
 
+test('provides context links to the joint review workbench from plans, objects, and standard items', () => {
+  const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
+  const objectView = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
+  const standardView = fs.readFileSync(path.join(viewRoot, 'standards/version.ejs'), 'utf8');
+  const jointView = fs.readFileSync(path.join(viewRoot, 'joint-reviews/index.ejs'), 'utf8');
+  assert.match(planView, /detailJointReviewLink/);
+  assert.match(planView, /\/joint-reviews\?definitionId=/);
+  assert.match(objectView, /\/joint-reviews\?objectId=/);
+  assert.match(standardView, /\/joint-reviews\?standardItemId=/);
+  assert.match(jointView, /规则先生成候选/);
+  assert.match(jointView, /AI 提供辅助判断/);
+  assert.match(jointView, /所有结论由人工确认/);
+  assert.match(jointView, /不会自动修改标准、项目应答、检查方案或规范对象/);
+  assert.match(jointView, /runJointAiReview/);
+  assert.match(jointView, /jointHumanDecision/);
+  assert.match(jointView, /confirmed problem|确认不匹配/);
+});
+
 test('links the plan page to manual threshold and optional AI deduplication', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   const dedupeView = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');

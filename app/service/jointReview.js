@@ -1,0 +1,216 @@
+'use strict';
+
+const Service = require('egg').Service;
+const crypto = require('node:crypto');
+const { friendlyAiError } = require('../lib/aiProvider');
+const { coverageIssue, definitionIssues, issueContextHash, objectCategoryIssue } = require('../lib/jointReviewRules');
+const Repository = require('../repository/jointReview');
+
+const REVIEW_TYPES = new Set([ 'object_content', 'plan_standard', 'frequency_answer', 'coverage', 'category_consistency' ]);
+const HUMAN_DECISIONS = new Set([ 'no_issue', 'mismatch_confirmed', 'corrected', 'insufficient_information' ]);
+
+function compactDefinition(definition) {
+  return {
+    id: definition.id,
+    planNumber: definition.plan_number,
+    objectName: definition.object_name,
+    objectCategory: definition.object_category,
+    masterObjectName: definition.master_object_name,
+    masterCategory: definition.master_category,
+    checkLayer: definition.check_layer,
+    checkMethod: definition.check_method,
+    description: definition.description,
+    steps: definition.steps,
+    frequency: definition.frequency,
+    accessMode: definition.access_mode,
+    centers: definition.centers || [],
+  };
+}
+
+function compactStandards(standards) {
+  return (standards || []).map(item => ({
+    id: item.id,
+    standardNumber: item.standardNumber,
+    code: item.code,
+    title: item.title,
+    content: String(item.content || '').slice(0, 3000),
+    explanation: item.explanation,
+  }));
+}
+
+class JointReviewService extends Service {
+  get repository() {
+    return new Repository(this.ctx.app.db);
+  }
+
+  normalizeScope(query = {}) {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const scope = {};
+    for (const field of [ 'definitionId', 'objectId', 'standardItemId', 'projectId' ]) {
+      const value = String(query[field] || '').trim();
+      if (value && uuid.test(value)) scope[field] = value;
+    }
+    return scope;
+  }
+
+  async scan(query = {}) {
+    const scope = this.normalizeScope(query);
+    const [ definitions, objects, coverage ] = await Promise.all([
+      this.repository.listDefinitionContexts(scope),
+      this.repository.listObjectContexts(scope),
+      this.repository.listCoverageContexts(scope),
+    ]);
+    const candidates = [];
+    const push = (issue, context, refs) => {
+      const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
+        issue.reviewType,
+        refs.definitionId || '',
+        refs.objectId || '',
+        refs.standardItemId || '',
+        refs.projectId || '',
+      ])).digest('hex');
+      candidates.push({
+        ...issue,
+        fingerprint,
+        contextHash: issueContextHash(issue, context),
+        context,
+        ...refs,
+      });
+    };
+
+    for (const definition of definitions) {
+      for (const issue of definitionIssues(definition)) {
+        const context = {
+          issueType: issue.reviewType,
+          ruleReason: issue.ruleReason,
+          definition: compactDefinition(definition),
+          standardItems: compactStandards(definition.standard_items),
+          projectAnswers: (definition.project_answers || []).slice(0, 5).map(answer => ({
+            projectName: answer.projectName,
+            status: answer.status,
+            applicability: answer.applicability,
+            clauseAssignment: answer.clauseAssignment,
+            assignmentDetails: answer.assignmentDetails,
+            complianceDescription: answer.complianceDescription,
+            actualEvidence: answer.actualEvidence,
+          })),
+        };
+        push(issue, context, {
+          definitionId: definition.id,
+          objectId: definition.object_id || null,
+          standardItemId: issue.reviewType === 'plan_standard' && definition.standard_items?.length === 1
+            ? definition.standard_items[0].id
+            : null,
+        });
+      }
+    }
+    for (const object of objects) {
+      const issue = objectCategoryIssue(object);
+      if (!issue) continue;
+      push(issue, {
+        issueType: issue.reviewType,
+        ruleReason: issue.ruleReason,
+        object: {
+          id: object.id,
+          canonicalName: object.canonical_name,
+          masterCategory: object.master_category,
+          planCategories: object.plan_categories,
+          planCount: object.plan_count,
+        },
+      }, { objectId: object.id });
+    }
+    for (const item of coverage) {
+      const issue = coverageIssue(item);
+      if (!issue) continue;
+      push(issue, {
+        issueType: issue.reviewType,
+        ruleReason: issue.ruleReason,
+        project: { id: item.project_id, name: item.project_name },
+        standardItem: {
+          id: item.standard_item_id,
+          code: item.item_code,
+          standardNumber: item.standard_number,
+          title: item.title,
+          content: String(item.content || '').slice(0, 3000),
+        },
+        projectAnswer: {
+          status: item.status,
+          applicability: item.applicability,
+          clauseAssignment: item.clause_assignment,
+          assignmentDetails: item.assignment_details,
+          complianceDescription: item.compliance_description,
+          actualEvidence: item.actual_evidence,
+        },
+        linkedPlanCount: Number(item.linked_plan_count),
+      }, {
+        objectId: null,
+        projectId: item.project_id,
+        standardItemId: item.standard_item_id,
+      });
+    }
+
+    const saved = await this.repository.upsertCandidates(candidates);
+    return { scope, candidateCount: candidates.length, ...saved };
+  }
+
+  async list(query = {}) {
+    const scope = this.normalizeScope(query);
+    const reviewType = REVIEW_TYPES.has(String(query.reviewType || '')) ? String(query.reviewType) : '';
+    const humanDecision = [ 'pending', ...HUMAN_DECISIONS ].includes(String(query.humanDecision || ''))
+      ? String(query.humanDecision)
+      : '';
+    const reviews = await this.repository.listReviews({ ...scope, reviewType, humanDecision });
+    return {
+      ...scope,
+      reviewType,
+      humanDecision,
+      reviews,
+      summary: {
+        total: reviews.length,
+        error: reviews.filter(item => item.severity === 'error').length,
+        warning: reviews.filter(item => item.severity === 'warning').length,
+        pending: reviews.filter(item => !item.human_decision).length,
+        completed: reviews.filter(item => item.human_decision).length,
+        aiCompleted: reviews.filter(item => item.ai_status === 'completed').length,
+      },
+    };
+  }
+
+  async aiReview(id) {
+    const review = await this.repository.findById(id);
+    if (!review) this.ctx.throw(404, '联合复核记录不存在');
+    const inputHash = crypto.createHash('sha256').update(JSON.stringify(review.context)).digest('hex');
+    if (review.ai_result && review.ai_input_hash === inputHash) return review;
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
+    try {
+      const response = await this.ctx.service.aiProvider.reviewJointIssue({
+        title: review.title,
+        summary: review.summary,
+        ruleReason: review.rule_reason,
+        context: review.context,
+      });
+      return this.repository.saveAiResult(id, {
+        result: response.result,
+        model: aiConfig.model || null,
+        promptVersion: 'joint-review-v1',
+        inputHash,
+      });
+    } catch (error) {
+      await this.repository.saveAiError(id, error);
+      error.friendly = friendlyAiError(error, error.baseUrl);
+      throw error;
+    }
+  }
+
+  async saveHumanDecision(id, payload, reviewerId) {
+    const review = await this.repository.findById(id);
+    if (!review) this.ctx.throw(404, '联合复核记录不存在');
+    const decision = String(payload.decision || '').trim();
+    if (!HUMAN_DECISIONS.has(decision)) this.ctx.throw(400, '无效的人工复核结论');
+    const notes = String(payload.notes || '').trim().slice(0, 2000);
+    if (decision !== 'no_issue' && !notes) this.ctx.throw(400, '确认问题或标记已修正时请填写复核备注');
+    return this.repository.saveHumanDecision(id, { decision, notes, reviewerId });
+  }
+}
+
+module.exports = JointReviewService;

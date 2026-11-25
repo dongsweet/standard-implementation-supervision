@@ -234,6 +234,29 @@ class AiProvider {
     return { results, providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
+  async reviewJointIssue(context) {
+    if (!this.enabled) throw aiError('AI服务未配置或未启用', 'AI_CONFIG_ERROR');
+    const response = await this.request([
+      {
+        role: 'system',
+        content: [
+          '你是规范、项目应答与持续监督联合复核助手。只提供判断建议，不能修改标准、项目应答、检查方案或规范对象。',
+          '结合检查对象、对象分类、标准正文、项目应答赋值、检查描述、步骤、频率和执行方式判断。',
+          '“对象 + 制度/记录/报告/文档”可能是合理关系，不能仅凭名称判定错误。',
+          'verdict 只能是 possible_match、possible_mismatch、insufficient_information、multiple_objects。',
+          '重点判断：对象与内容是否匹配；方案与标准项是否讲同一要求；标准/应答/方案频率是否一致；项目适用项是否被方案覆盖；对象分类是否混入证据材料。',
+          '只返回 JSON：{"verdict":"possible_match|possible_mismatch|insufficient_information|multiple_objects","confidence":0到1,"severity":"error|warning|info","summary":"不超过120字","evidence":["..."],"suggestedActions":["..."],"reason":"不超过240字"}。',
+        ].join('\n'),
+      },
+      { role: 'user', content: JSON.stringify(context) },
+    ]);
+    return {
+      result: parseJointReviewResult(response.content),
+      providerStatus: response.providerStatus,
+      durationMs: response.durationMs,
+    };
+  }
+
   async testConnection() {
     if (!this.enabled) throw aiError('AI服务未完整配置', 'AI_CONFIG_ERROR');
     const response = await this.request([
@@ -418,6 +441,25 @@ function parseObjectAiResults(content, items) {
   return results;
 }
 
+function parseJointReviewResult(content) {
+  if (!content) throw new Error('AI 返回内容为空');
+  const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
+  const verdicts = new Set([ 'possible_match', 'possible_mismatch', 'insufficient_information', 'multiple_objects' ]);
+  if (!verdicts.has(json.verdict)) throw new Error('AI verdict 无效');
+  const confidence = Number(json.confidence);
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error('AI confidence 无效');
+  const severity = [ 'error', 'warning', 'info' ].includes(json.severity) ? json.severity : 'warning';
+  return {
+    verdict: json.verdict,
+    confidence,
+    severity,
+    summary: String(json.summary || '').slice(0, 500),
+    evidence: Array.isArray(json.evidence) ? json.evidence.map(String).slice(0, 20) : [],
+    suggestedActions: Array.isArray(json.suggestedActions) ? json.suggestedActions.map(String).slice(0, 20) : [],
+    reason: String(json.reason || '').slice(0, 1000),
+  };
+}
+
 function parseAiResult(content) {
   if (!content) throw new Error('AI 返回内容为空');
   const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
@@ -439,6 +481,7 @@ module.exports = {
   friendlyAiError,
   parseAiResult,
   parseDefinitionAiResults,
+  parseJointReviewResult,
   parseObjectAiResult,
   parseObjectAiResults,
   parseStandardReviewSuggestions,

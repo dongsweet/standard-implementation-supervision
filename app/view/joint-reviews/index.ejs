@@ -1,0 +1,164 @@
+<%
+  const reviewTypeLabels = {
+    object_content: '对象与内容',
+    plan_standard: '方案与标准',
+    frequency_answer: '频率一致性',
+    coverage: '项目应答覆盖',
+    category_consistency: '对象分类一致性',
+  };
+  const humanLabels = {
+    no_issue: '人工确认无问题',
+    mismatch_confirmed: '确认不匹配',
+    corrected: '已修正',
+    insufficient_information: '信息不足',
+  };
+  const verdictLabels = {
+    possible_match: '可能匹配',
+    possible_mismatch: '可能不匹配',
+    insufficient_information: '信息不足',
+    multiple_objects: '疑似多个对象混写',
+  };
+  const scopeLabels = [];
+  if (definitionId) scopeLabels.push(`检查方案 ${definitionId}`);
+  if (objectId) scopeLabels.push(`规范对象 ${objectId}`);
+  if (standardItemId) scopeLabels.push(`标准项 ${standardItemId}`);
+  if (projectId) scopeLabels.push(`项目 ${projectId}`);
+%>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">联合复核</h2>
+    <p class="text-secondary mb-0">规则先生成候选，AI 提供辅助判断，所有结论由人工确认；系统不会自动修改标准、项目应答、检查方案或规范对象。</p>
+  </div>
+  <a class="btn btn-outline-secondary ms-auto" href="/joint-reviews">查看全部联合复核</a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="post" action="/joint-reviews/scan" class="row g-2 align-items-end">
+      <input type="hidden" name="_csrf" value="<%= csrf %>">
+      <input type="hidden" name="definitionId" value="<%= definitionId || '' %>">
+      <input type="hidden" name="objectId" value="<%= objectId || '' %>">
+      <input type="hidden" name="standardItemId" value="<%= standardItemId || '' %>">
+      <input type="hidden" name="projectId" value="<%= projectId || '' %>">
+      <div class="col-12 col-lg-9">
+        <div class="small text-secondary">当前复核范围</div>
+        <div class="mt-1 d-flex flex-wrap gap-2"><% if (scopeLabels.length) { %><% scopeLabels.forEach(label => { %><span class="badge text-bg-light border"><%= label %></span><% }) %><% } else { %><span class="badge text-bg-light border">全部有效检查方案、项目应答和规范对象</span><% } %></div>
+      </div>
+      <div class="col-12 col-lg-3 text-lg-end"><button class="btn btn-primary" type="submit">重新生成规则候选</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">候选总数</div><div class="fs-3 fw-semibold"><%= summary.total %></div></div></div></div>
+  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">严重问题</div><div class="fs-3 fw-semibold text-danger"><%= summary.error %></div></div></div></div>
+  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">需关注</div><div class="fs-3 fw-semibold text-warning"><%= summary.warning %></div></div></div></div>
+  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">待人工结论</div><div class="fs-3 fw-semibold"><%= summary.pending %></div></div></div></div>
+  <div class="col-6 col-lg"><div class="card h-100"><div class="card-body"><div class="small text-secondary">AI 已判断</div><div class="fs-3 fw-semibold text-success"><%= summary.aiCompleted %></div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="get" action="/joint-reviews" class="row g-2 align-items-end">
+      <% if (definitionId) { %><input type="hidden" name="definitionId" value="<%= definitionId %>"><% } %>
+      <% if (objectId) { %><input type="hidden" name="objectId" value="<%= objectId %>"><% } %>
+      <% if (standardItemId) { %><input type="hidden" name="standardItemId" value="<%= standardItemId %>"><% } %>
+      <% if (projectId) { %><input type="hidden" name="projectId" value="<%= projectId %>"><% } %>
+      <div class="col-6 col-lg-3"><label class="form-label" for="reviewType">复核类型</label><select class="form-select" id="reviewType" name="reviewType"><option value="">全部类型</option><% Object.entries(reviewTypeLabels).forEach(([value, label]) => { %><option value="<%= value %>" <%= reviewType === value ? 'selected' : '' %>><%= label %></option><% }) %></select></div>
+      <div class="col-6 col-lg-3"><label class="form-label" for="humanDecision">人工状态</label><select class="form-select" id="humanDecision" name="humanDecision"><option value="">全部状态</option><option value="pending" <%= humanDecision === 'pending' ? 'selected' : '' %>>待人工结论</option><% Object.entries(humanLabels).forEach(([value, label]) => { %><option value="<%= value %>" <%= humanDecision === value ? 'selected' : '' %>><%= label %></option><% }) %></select></div>
+      <div class="col-12 col-lg-6 d-flex justify-content-end gap-2"><button class="btn btn-outline-primary" type="submit">筛选</button><a class="btn btn-outline-secondary" href="/joint-reviews">清除筛选</a></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">候选与复核记录</h3><span class="badge text-bg-secondary ms-auto"><%= reviews.length %> 条</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th style="width:8rem">类型</th><th>问题与规则依据</th><th style="width:18rem">关联上下文</th><th style="width:18rem">AI 建议</th><th style="width:18rem">人工结论</th><th style="width:12rem">操作</th></tr></thead>
+    <tbody>
+      <% reviews.forEach(review => { %>
+        <tr>
+          <td><span class="badge <%= review.severity === 'error' ? 'text-bg-danger' : review.severity === 'warning' ? 'text-bg-warning' : 'text-bg-info' %>"><%= reviewTypeLabels[review.review_type] || review.review_type %></span></td>
+          <td>
+            <strong><%= review.title %></strong>
+            <div class="small text-secondary mt-1"><%= review.summary %></div>
+            <details class="small mt-2"><summary>查看规则依据与上下文</summary><div class="mt-2"><b>规则：</b><%= review.rule_reason || '-' %></div><pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0 text-wrap"><%= JSON.stringify(review.context, null, 2) %></pre></div></details>
+          </td>
+          <td class="small">
+            <% if (review.plan_number) { %><div>方案：<span class="badge text-bg-light border"><%= String(review.plan_number).padStart(3, '0') %></span></div><% } %>
+            <% if (review.object_name_master) { %><div>对象：<%= review.object_name_master %></div><% } %>
+            <% if (review.standard_number) { %><div>标准项：<%= review.standard_number %></div><% } %>
+            <% if (review.project_name) { %><div>项目：<%= review.project_name %></div><% } %>
+          </td>
+          <td>
+            <% if (review.ai_result) { %><span class="badge text-bg-primary"><%= verdictLabels[review.ai_result.verdict] || review.ai_result.verdict %></span><div class="small text-secondary mt-1">置信度 <%= Number(review.ai_result.confidence || 0).toFixed(2) %> · <%= review.ai_model || '-' %></div><div class="small mt-1"><%= review.ai_result.summary || '-' %></div><% if ((review.ai_result.suggestedActions || []).length) { %><details class="small mt-1"><summary>建议动作</summary><ul class="mb-0"><% review.ai_result.suggestedActions.forEach(action => { %><li><%= action %></li><% }) %></ul></details><% } %><% } else if (review.ai_status === 'failed') { %><span class="badge text-bg-danger">AI 失败</span><div class="small text-danger mt-1"><%= review.ai_error || '-' %></div><% } else { %><span class="text-secondary">未调用 AI</span><% } %>
+          </td>
+          <td>
+            <% if (review.human_decision) { %><span class="badge text-bg-success"><%= humanLabels[review.human_decision] || review.human_decision %></span><div class="small text-secondary mt-1"><%= review.human_notes || '-' %></div><% } else { %><span class="badge text-bg-warning">待人工结论</span><% } %>
+          </td>
+          <td>
+            <div class="d-flex flex-column gap-1">
+              <button class="btn btn-sm btn-outline-primary" type="button" data-review-id="<%= review.id %>" onclick="runJointAiReview(this)">AI 辅助判断</button>
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-review-id="<%= review.id %>" data-review-title="<%= review.title %>" onclick="openJointHumanReview(this)">记录人工结论</button>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+      <% if (!reviews.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">当前范围还没有候选。点击“重新生成规则候选”后再复核。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>
+
+<div class="modal fade" id="jointHumanReviewModal" tabindex="-1" aria-labelledby="jointHumanReviewTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+  <div class="modal-header"><h2 class="modal-title fs-5" id="jointHumanReviewTitle">记录人工复核结论</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+  <div class="modal-body">
+    <div class="small text-secondary mb-3" id="jointHumanReviewContext"></div>
+    <label class="form-label" for="jointHumanDecision">人工结论</label>
+    <select class="form-select mb-3" id="jointHumanDecision"><option value="">请选择</option><% Object.entries(humanLabels).forEach(([value, label]) => { %><option value="<%= value %>"><%= label %></option><% }) %></select>
+    <label class="form-label" for="jointHumanNotes">复核备注</label>
+    <textarea class="form-control" id="jointHumanNotes" rows="4" placeholder="确认不匹配、已修正或信息不足时请填写依据"></textarea>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="button" id="jointHumanSubmit">保存结论</button></div>
+</div></div></div>
+
+<script>
+  const jointCsrf = '<%= csrf %>';
+  let jointReviewId = '';
+  async function jointSend(path, body) {
+    const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': jointCsrf }, body: JSON.stringify(body) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || '请求失败');
+    return data.data;
+  }
+  async function runJointAiReview(button) {
+    button.disabled = true;
+    button.textContent = 'AI 判断中...';
+    try {
+      await jointSend(`/api/joint-reviews/${encodeURIComponent(button.dataset.reviewId)}/ai`, {});
+      window.location.reload();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'AI 辅助判断';
+      window.showAppNotice(error.message, 'AI 辅助判断未完成');
+    }
+  }
+  function openJointHumanReview(button) {
+    jointReviewId = button.dataset.reviewId;
+    document.getElementById('jointHumanReviewContext').textContent = button.dataset.reviewTitle || '';
+    document.getElementById('jointHumanDecision').value = '';
+    document.getElementById('jointHumanNotes').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('jointHumanReviewModal')).show();
+  }
+  document.getElementById('jointHumanSubmit').addEventListener('click', async () => {
+    const decision = document.getElementById('jointHumanDecision').value;
+    const notes = document.getElementById('jointHumanNotes').value.trim();
+    if (!decision) return window.showAppNotice('请选择人工复核结论。', '结论未保存');
+    if (decision !== 'no_issue' && !notes) return window.showAppNotice('确认问题、已修正或信息不足时请填写备注。', '结论未保存');
+    try {
+      await jointSend(`/api/joint-reviews/${encodeURIComponent(jointReviewId)}/human`, { decision, notes });
+      window.location.reload();
+    } catch (error) {
+      window.showAppNotice(error.message, '结论未保存');
+    }
+  });
+</script>

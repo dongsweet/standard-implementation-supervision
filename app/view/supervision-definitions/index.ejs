@@ -65,7 +65,7 @@
   <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto" aria-label="检查方案分页"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildPageUrl(pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildPageUrl(number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildPageUrl(pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %>
 </div>
 
-<div class="modal fade" id="definitionDetailModal" tabindex="-1" aria-labelledby="definitionDetailModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="definitionDetailModalLabel">检查方案详情</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body" id="definitionDetailBody"></div><div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
+<div class="modal fade" id="definitionDetailModal" tabindex="-1" aria-labelledby="definitionDetailModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="definitionDetailModalLabel">检查方案详情</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body" id="definitionDetailBody"></div><div class="modal-footer"><a class="btn btn-outline-primary ms-auto" id="detailJointReviewLink" href="/joint-reviews">联合复核此方案</a><button type="button" class="btn btn-primary" data-bs-dismiss="modal">关闭</button></div></div></div></div>
 
 <div class="modal fade" id="planImportModal" tabindex="-1" aria-labelledby="planImportModalLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <form method="post" action="/supervision-plan-imports" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrf %>">
@@ -427,6 +427,7 @@
   document.getElementById('definitionDetailModal').addEventListener('show.bs.modal', event => {
     const definition = JSON.parse(event.relatedTarget.dataset.definition);
     const body = document.getElementById('definitionDetailBody');
+    document.getElementById('detailJointReviewLink').href = '/joint-reviews?definitionId=' + encodeURIComponent(definition.id || '');
     const rows = [
       ['方案编号', String(definition.plan_number || '').padStart(3, '0')],
       ['检查对象', definition.object_name],
