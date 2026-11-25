@@ -303,7 +303,12 @@ class SupervisionDefinitionRepository {
                'id', d.id, 'planNumber', d.plan_number, 'objectName', d.object_name,
                'objectCategory', d.object_category, 'checkLayer', d.check_layer,
                'checkMethod', d.check_method, 'description', d.description,
-               'steps', d.steps, 'frequency', d.frequency, 'accessMode', d.access_mode
+               'steps', d.steps, 'frequency', d.frequency, 'accessMode', d.access_mode,
+               'centers', COALESCE((
+                 SELECT array_agg(plan_center.center_name ORDER BY plan_center.center_name)
+                 FROM supervision_definition_centers plan_center
+                 WHERE plan_center.definition_id = d.id
+               ), ARRAY[]::varchar[])
              )) FILTER (WHERE d.id IS NOT NULL), '[]'::jsonb) AS plans
       FROM supervision_objects o
       LEFT JOIN supervision_object_categories c ON c.id = o.category_id

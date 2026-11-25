@@ -138,6 +138,7 @@ test('lists canonical supervision objects with category and center filters', asy
   assert.match(calls[1].statement, /GROUP BY o\.id, c\.name/);
   assert.match(calls[1].statement, /jsonb_build_object\([\s\S]*'planNumber', d\.plan_number/);
   assert.match(calls[1].statement, /'description', d\.description/);
+  assert.match(calls[1].statement, /'centers', COALESCE\(\([\s\S]*supervision_definition_centers plan_center[\s\S]*plan_center\.definition_id = d\.id/);
 });
 
 test('merges center object names and updates plans only within the selected center', async () => {

@@ -233,9 +233,14 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="objectPlanPopover"/);
   assert.match(html, /showObjectPlanPreview/);
   assert.match(html, /检查方案 /);
+  assert.match(html, /\[ '检查中心', \(plan\.centers \|\| \[\]\)\.join\('、'\) \]/);
   assert.match(html, /检查描述/);
   assert.match(html, /检查步骤/);
   assert.match(html, /频率 \/ 方式/);
+  assert.match(html, /#objectPlanPopover \{ position: fixed; inset: auto;[\s\S]*margin: 0;/);
+  assert.match(html, /popover\.getBoundingClientRect\(\)/);
+  assert.match(html, /triggerRect\.bottom \+ horizontalGap/);
+  assert.match(html, /triggerRect\.top - popoverRect\.height - horizontalGap/);
   assert.match(html, /popover\.showPopover\(\)/);
   assert.match(html, /addEventListener\('mouseover'[\s\S]*object-plan-number/);
   assert.match(html, /addEventListener\('focusin'[\s\S]*object-plan-number/);
