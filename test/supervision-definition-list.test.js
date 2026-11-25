@@ -210,3 +210,43 @@ test('lists center and object combinations with independent filters and paginati
   assert.match(calls[0].statement, /GROUP BY dc\.center_name, d\.object_name/);
   assert.match(calls[1].statement, /ORDER BY dc\.center_name, d\.object_name LIMIT \$3 OFFSET \$4/);
 });
+
+test('deletes an unused object category and records the action', async () => {
+  const calls = [];
+  const client = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push({ statement, values });
+      if (statement === 'BEGIN' || statement === 'COMMIT' || statement === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT id, name FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '业务平台' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT count(*)::integer AS object_count')) return { rows: [ { object_count: 0 } ], rowCount: 1 };
+      if (statement.startsWith('DELETE FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '业务平台' } ], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  const result = await new Repository({ connect: async () => client }).deleteObjectCategory('category-1', 'user-1');
+  assert.equal(result.name, '业务平台');
+  assert.ok(calls.some(call => call.statement === 'COMMIT'));
+  assert.ok(calls.some(call => call.statement.startsWith('INSERT INTO audit_logs')));
+});
+
+test('refuses to delete an object category that is still assigned', async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if (statement === 'BEGIN' || statement === 'ROLLBACK') return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT id, name FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '业务平台' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT count(*)::integer AS object_count')) return { rows: [ { object_count: 2 } ], rowCount: 1 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  const repository = new Repository({ connect: async () => client });
+  await assert.rejects(repository.deleteObjectCategory('category-1', 'user-1'), error => error.code === 'CATEGORY_IN_USE');
+  assert.ok(calls.includes('ROLLBACK'));
+  assert.equal(calls.some(statement => statement.startsWith('DELETE FROM supervision_object_categories')), false);
+});

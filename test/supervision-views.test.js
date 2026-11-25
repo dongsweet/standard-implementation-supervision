@@ -151,6 +151,9 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /规范对象或原始名称/);
   assert.match(html, /适用检查中心/);
   assert.match(html, /新增对象分类/);
+  assert.match(html, /deleteObjectCategory/);
+  assert.match(html, /Number\(item\.object_count\) === 0/);
+  assert.match(html, /categories\/.*\/delete/);
   assert.match(html, /规范对象名称/);
   assert.match(html, /对象分类/);
   assert.match(html, /objectCategoriesValue = Array\.isArray\(typeof objectCategories/);

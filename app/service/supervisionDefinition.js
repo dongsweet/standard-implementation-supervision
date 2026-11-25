@@ -320,6 +320,18 @@ class SupervisionDefinitionService extends Service {
     }
   }
 
+  async deleteCenterObjectCategory(id, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '分类编号格式无效');
+    try {
+      const result = await this.repository.deleteObjectCategory(id, actorId);
+      if (!result) this.ctx.throw(404, '对象分类不存在');
+      return result;
+    } catch (error) {
+      if (error.code === 'CATEGORY_IN_USE') this.ctx.throw(409, error.message);
+      throw error;
+    }
+  }
+
   async listCenterObjectDedupe({ threshold = null, scanned = false, filter = 'all' } = {}) {
     const allowedFilters = new Set([ 'all', 'ai_duplicate', 'ai_excluded', 'ai_pending' ]);
     const activeFilter = allowedFilters.has(filter) ? filter : 'all';

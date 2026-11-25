@@ -123,6 +123,15 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async deleteCenterObjectCategory() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.deleteCenterObjectCategory(
+        this.ctx.params.categoryId, this.ctx.session.userId
+      ),
+    };
+  }
+
   async standardItemOptions() {
     requireGlobalRead(this.ctx);
     this.ctx.body = {

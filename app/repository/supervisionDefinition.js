@@ -427,6 +427,46 @@ class SupervisionDefinitionRepository {
     return result.rows[0];
   }
 
+  async deleteObjectCategory(id, actorId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const category = await client.query(`
+        SELECT id, name FROM supervision_object_categories
+        WHERE id = $1 AND status = 'active'
+        FOR UPDATE`, [ id ]);
+      if (!category.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const usage = await client.query(`
+        SELECT count(*)::integer AS object_count
+        FROM supervision_objects
+        WHERE category_id = $1`, [ id ]);
+      if (Number(usage.rows[0]?.object_count || 0) > 0) {
+        const error = new Error('该分类仍被规范对象使用，请先调整对象分类');
+        error.code = 'CATEGORY_IN_USE';
+        throw error;
+      }
+      const result = await client.query(`
+        DELETE FROM supervision_object_categories
+        WHERE id = $1 AND status = 'active'
+        RETURNING id, name`, [ id ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'delete_supervision_object_category', 'supervision_object_category', $2, $3)`, [
+        actorId || null, id, JSON.stringify({ name: category.rows[0].name }),
+      ]);
+      await client.query('COMMIT');
+      return result.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async setObjectCategory(id, categoryId, actorId) {
     const result = await this.pool.query(`
       UPDATE supervision_objects SET category_id = $2, updated_at = now()
