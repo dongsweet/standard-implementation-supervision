@@ -298,7 +298,13 @@ class SupervisionDefinitionRepository {
              COALESCE(array_agg(DISTINCT oa.alias_name ORDER BY oa.alias_name)
                FILTER (WHERE oa.alias_name IS NOT NULL), ARRAY[]::text[]) AS aliases,
              COALESCE(array_agg(DISTINCT d.plan_number ORDER BY d.plan_number)
-               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::bigint[]) AS plan_numbers
+               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::bigint[]) AS plan_numbers,
+             COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
+               'id', d.id, 'planNumber', d.plan_number, 'objectName', d.object_name,
+               'objectCategory', d.object_category, 'checkLayer', d.check_layer,
+               'checkMethod', d.check_method, 'description', d.description,
+               'steps', d.steps, 'frequency', d.frequency, 'accessMode', d.access_mode
+             )) FILTER (WHERE d.id IS NOT NULL), '[]'::jsonb) AS plans
       FROM supervision_objects o
       LEFT JOIN supervision_object_categories c ON c.id = o.category_id
       LEFT JOIN supervision_definitions d ON d.canonical_object_id = o.id AND d.status = 'active'

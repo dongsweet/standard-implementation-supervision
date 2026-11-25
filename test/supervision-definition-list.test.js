@@ -136,6 +136,8 @@ test('lists canonical supervision objects with category and center filters', asy
   assert.deepEqual(calls[1].values, [ '云中心', '%云平台%', '技术', 20, 20 ]);
   assert.match(calls[0].statement, /COALESCE\(c\.name, ''\) ILIKE \$2/);
   assert.match(calls[1].statement, /GROUP BY o\.id, c\.name/);
+  assert.match(calls[1].statement, /jsonb_build_object\([\s\S]*'planNumber', d\.plan_number/);
+  assert.match(calls[1].statement, /'description', d\.description/);
 });
 
 test('merges center object names and updates plans only within the selected center', async () => {

@@ -101,7 +101,10 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /<input type="hidden" id="editScope" name="scope">/);
   assert.doesNotMatch(planView, /id="editScope"[^>]*type="text"/);
   assert.match(planView, /id="editObjectName"[\s\S]*list="editObjectOptions"/);
-  assert.match(planView, /id="editObjectCategory"[\s\S]*list="editCategoryOptions"/);
+  assert.match(planView, /id="editObjectCategoryCombobox"/);
+  assert.match(planView, /id="editObjectCategory"[\s\S]*role="combobox"[\s\S]*aria-controls="editObjectCategoryMenu"/);
+  assert.match(planView, /id="editObjectCategoryToggle"/);
+  assert.match(planView, /id="editObjectCategoryMenu"/);
   assert.match(planView, /id="editCheckLayer"[\s\S]*list="editCheckLayerOptions"/);
   assert.match(planView, /id="editFrequency"[\s\S]*list="editFrequencyOptions"/);
   assert.match(planView, />执行频率</);
@@ -118,6 +121,28 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /class StandardItemPicker/);
   assert.match(planView, /resolvePlanObject/);
   assert.match(planView, /showPlanFormTab/);
+});
+
+test('filters plan object choices through the shared category combobox behavior', () => {
+  const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
+  for (const prefix of [ 'create', 'edit' ]) {
+    assert.match(planView, new RegExp(`id="${prefix}ObjectCategoryCombobox"`));
+    assert.match(planView, new RegExp(`id="${prefix}ObjectCategory" name="objectCategory" type="search"`));
+    assert.match(planView, new RegExp(`id="${prefix}ObjectCategoryToggle"`));
+    assert.match(planView, new RegExp(`id="${prefix}ObjectCategoryMenu"`));
+    assert.doesNotMatch(planView, new RegExp(`id="${prefix}ObjectCategory"[^>]*list="`));
+  }
+  assert.doesNotMatch(planView, /CategoryOptions"><% objectCategoriesValue/);
+  assert.match(planView, /const planCategoryCatalog =/);
+  assert.match(planView, /categoryInputMatches/);
+  assert.match(planView, /if \(categoryTerm && !matchingCategory\) \{\s*datalist\.replaceChildren\(\);/);
+  assert.match(planView, /objectInput\.value = '';\s*populateObjectOptions\(prefix, categoryValue\);/);
+  assert.match(planView, /planCategoryPickers\[prefix\]\?\.setValue/);
+  assert.match(planView, /ArrowDown/);
+  assert.match(planView, /ArrowUp/);
+  assert.match(planView, /Escape/);
+  assert.match(planView, /请从分类候选中选择一个对象分类，或清空分类筛选/);
+  assert.doesNotMatch(planView, /categoryInput\.addEventListener\('input', \(\) => \{\s*input\.value = '';/);
 });
 
 test('renders joint review page with a single optional scope filter', { skip: !ejs }, async () => {
@@ -192,6 +217,14 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /name="categoryInput"/);
   assert.match(html, /id="objectCategoryCombobox"/);
+  assert.match(html, /class="object-plan-number"/);
+  assert.match(html, /id="objectPlanPopover"/);
+  assert.match(html, /showObjectPlanPreview/);
+  assert.match(html, /检查方案 /);
+  assert.match(html, /检查描述/);
+  assert.match(html, /检查步骤/);
+  assert.match(html, /频率 \/ 方式/);
+  assert.match(html, /popover\.showPopover\(\)/);
   assert.match(html, /const resetUrl = targetView => buildUrl\(targetView, 1, \{[\s\S]*center: '',[\s\S]*search: '',[\s\S]*categoryInput: ''/);
   assert.match(html, /href="<%= resetUrl\(viewValue\) %>">重置<\/a>/);
   assert.doesNotMatch(html, /href="<%= buildUrl\(viewValue\) %>">重置<\/a>/);
