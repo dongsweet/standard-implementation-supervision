@@ -130,8 +130,8 @@
     const renderMatches = () => {
       const keyword = normalize(input.value);
       if (!keyword) {
-        paint([], '输入对象分类名称后筛选');
-        status.textContent = `共 ${options.length} 个分类，输入名称后筛选。`;
+        paint(options, '暂无可选分类');
+        status.textContent = `共 ${options.length} 个分类，可直接选择或输入名称筛选。`;
         show();
         return;
       }
@@ -190,7 +190,7 @@
       window.showAppNotice('请从分类候选中选择一个对象分类，或清空分类筛选。', '对象分类未选择');
     });
     if (input.value.trim() && matchingValue()) status.textContent = `已选择：${input.value.trim()}`;
-    else status.textContent = `共 ${options.length} 个分类，输入名称后筛选。`;
+    else status.textContent = `共 ${options.length} 个分类，可直接选择或输入名称筛选。`;
   })();
 </script>
 <% } %>
