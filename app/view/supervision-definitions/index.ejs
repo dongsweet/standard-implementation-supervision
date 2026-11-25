@@ -173,13 +173,21 @@
     }
     #createDefinitionModal .nav-tabs,
     #editDefinitionModal .nav-tabs {
-      padding-inline: 1rem !important;
+      padding-inline: 0.5rem !important;
       flex-wrap: nowrap;
-      overflow-x: auto;
+      overflow: hidden;
+    }
+    #createDefinitionModal .nav-item,
+    #editDefinitionModal .nav-item {
+      flex: 1 1 0;
+      text-align: center;
     }
     #createDefinitionModal .nav-link,
     #editDefinitionModal .nav-link {
+      width: 100%;
+      padding-inline: 0.35rem;
       white-space: nowrap;
+      font-size: 0.875rem;
     }
   }
 </style>
