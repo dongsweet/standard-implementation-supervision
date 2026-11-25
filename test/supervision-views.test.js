@@ -280,11 +280,13 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /来源对象的检查方案会迁移到保留对象/);
   assert.match(html, /确认合并规范对象/);
   assert.match(html, /object-category-combobox-menu \{ position: absolute; z-index: 1050; top: calc\(100% \+ 4px\); left: 0; right: 0; max-height: 180px;/);
-  assert.match(html, /data-categories="<%= encodeURIComponent\(JSON\.stringify\(Array\.from\(new Set\(\(row\.plans \|\| \[\]\)\.map\(plan => plan\.objectCategory\)\.filter\(Boolean\)\)\)\)\) %>"/);
+  assert.match(html, /data-categories="<%= encodeURIComponent\(JSON\.stringify\(Object\.entries\(\(row\.plans \|\| \[\]\)\.reduce\(/);
   assert.match(html, /const objectEditCategories =/);
-  assert.match(html, /原方案使用过 · 现有分类/);
-  assert.match(html, /原方案使用过 · 保存时采用为此分类/);
-  assert.match(html, /objectEditPicker\.setHistorical\(history\)/);
+  assert.match(html, /data-plan-count="<%= row\.plan_count %>"/);
+  assert.match(html, /\$\{item\.planCount\} \/ \$\{totalPlanCount\} 个检查方案/);
+  assert.match(html, /现有分类/);
+  assert.match(html, /保存时采用为此分类/);
+  assert.match(html, /objectEditPicker\.setHistorical\(history, Number\(button\.dataset\.planCount\) \|\| 0\)/);
   assert.match(html, /categoryName: exact \? '' : categoryName/);
   assert.doesNotMatch(html, /<select class="form-select" id="editCategoryId" name="categoryId">/);
   assert.match(html, /name="categoryInput"/);
