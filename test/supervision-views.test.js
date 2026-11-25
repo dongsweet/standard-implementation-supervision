@@ -269,6 +269,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="mergeTargetObject"/);
   assert.match(html, /id="mergeTargetObjectMenu"/);
   assert.match(html, /mergeObjectPicker/);
+  assert.match(html, /name: item\.canonical_name \|\| item\.name \|\| ''/);
   assert.match(html, /onclick="openMergeObject\(this\)"/);
   assert.match(html, /来源对象的检查方案会迁移到保留对象/);
   assert.match(html, /确认合并规范对象/);
