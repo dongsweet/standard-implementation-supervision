@@ -4,7 +4,11 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const JSZip = require('jszip');
 const { joinSupervisionMethods } = require('./supervisionMethods');
-const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('./supervisionCenters');
+const {
+  DEFAULT_SUPERVISION_CENTERS,
+  supervisionCenterLabel,
+  splitSupervisionCenters,
+} = require('./supervisionCenters');
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024;
 const MAX_ROWS = 12000;
@@ -13,7 +17,7 @@ const PLAN_HEADERS = [
   '标准化编号',
   '是否公认对象',
   '检查范围',
-  '适用检查中心',
+  '适用机构',
   '对象分类',
   '检查对象',
   '检查层面',
@@ -118,7 +122,7 @@ function findHeader(rows) {
     standardNumbers: [ '标准化编号', '标准编号', '对应标准号' ],
     recognizedObject: [ '是否公认对象' ],
     scope: [ '检查范围', '检查项位于' ],
-    centers: [ '适用检查中心', '检查中心' ],
+    centers: [ '适用机构', '检查机构', '适用检查中心', '检查中心' ],
     objectCategory: [ '对象分类' ],
     objectName: [ '检查对象' ],
     checkLayer: [ '检查层面' ],
@@ -185,7 +189,7 @@ function parseSupervisionPlanRows(sheets) {
       const lengthLimits = [
         [ '检查对象', objectName, 500 ],
         [ '检查范围', readCell(source, header.map.scope), 200 ],
-        [ '适用检查中心', readCell(source, header.map.centers), 200 ],
+        [ '适用机构', readCell(source, header.map.centers), 200 ],
         [ '对象分类', readCell(source, header.map.objectCategory), 200 ],
         [ '检查层面', readCell(source, header.map.checkLayer), 200 ],
         [ '检查方法', checkMethod, 2000 ],
@@ -216,9 +220,9 @@ function parseSupervisionPlanRows(sheets) {
           scope = '';
         }
       }
-      if (!centers.length && header.map.centers >= 0) errors.push(`工作表“${sheet.name}”第${sourceRow}行缺少适用检查中心`);
+      if (!centers.length && header.map.centers >= 0) errors.push(`工作表“${sheet.name}”第${sourceRow}行缺少适用机构`);
       const unknownCenters = centers.filter(center => !DEFAULT_SUPERVISION_CENTERS.includes(center));
-      if (unknownCenters.length) errors.push(`工作表“${sheet.name}”第${sourceRow}行包含未知检查中心：${unknownCenters.join('、')}`);
+      if (unknownCenters.length) errors.push(`工作表“${sheet.name}”第${sourceRow}行包含未知机构：${unknownCenters.map(supervisionCenterLabel).join('、')}`);
       rows.push({
         sourceSheet: sheet.name,
         sourceRow,
@@ -293,8 +297,8 @@ function addInstructions(workbook) {
   const rows = [
     [ '字段', '填写规则' ],
     [ '标准化编号', '填写系统标准化编号；一条检查方案关联多个标准项时，在同一格内每行填写一个编号。' ],
-    [ '适用检查中心', '可多选：云中心、统一运维中心、总部；多个中心用顿号或逗号分隔。中心不同但对象、检查内容和方法相同的项目可以合并为一行。' ],
-    [ '检查范围', '描述检查内容适用的范围或位置；检查中心请填写在“适用检查中心”列。' ],
+    [ '适用机构', '可多选：分支机构、统一运维机构、总部；多个机构用顿号或逗号分隔。机构不同但对象、检查内容和方法相同的项目可以合并为一行。' ],
+    [ '检查范围', '描述检查内容适用的范围或位置；适用机构请填写在“适用机构”列。' ],
     [ 'X编号', '以X开头的编号会忽略；一格内混有X编号和有效系统标准化编号时，仅保留有效编号。' ],
     [ '检查方法', '可填写一种或多种；多项用逗号分隔，例如“证据材料核查,上机查看”。' ],
     [ '是否公认对象', '可填“是”或“否”；留空表示未指定。' ],
@@ -302,7 +306,7 @@ function addInstructions(workbook) {
     [ '执行方式', '填写远程、现场或远程+现场。' ],
     [ '参考判定描述', '填写方案采用的判定参考，不填写某次检查的实际结论或执行结果。' ],
     [ '参考材料', '填写可用于方案设计的参考材料名称，不填写本次执行产生的证据。' ],
-    [ '不导入字段', '不填写旧内部编号、安评中心抽查序号、检查人、检查时间、实际检查结果、整改结果或执行证据。' ],
+    [ '不导入字段', '不填写旧内部编号、原抽查序号、检查人、检查时间、实际检查结果、整改结果或执行证据。' ],
     [ '必填项', '标准化编号、检查对象、检查方法、检查项描述为必填。' ],
     [ '空白行', '没有填写任何内容的行会被忽略。其他未完成的行会报错，不会静默跳过。' ],
   ];
@@ -327,7 +331,7 @@ async function buildSupervisionPlanTemplate() {
   PLAN_WIDTHS.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
   sheet.autoFilter = `A1:${String.fromCharCode(64 + PLAN_HEADERS.length)}1`;
   sheet.dataValidations.add('B2:B5000', { type: 'list', allowBlank: true, formulae: [ '"是,否"' ] });
-  sheet.dataValidations.add('G2:G5000', { type: 'list', allowBlank: true, formulae: [ '"云中心,统一运维中心,总部"' ] });
+  sheet.dataValidations.add('G2:G5000', { type: 'list', allowBlank: true, formulae: [ '"分支机构,统一运维机构,总部"' ] });
   sheet.dataValidations.add('K2:K5000', { type: 'list', allowBlank: true, formulae: [ '"重点项,非重点项"' ] });
   sheet.dataValidations.add('L2:L5000', { type: 'list', allowBlank: true, formulae: [ '"远程,现场,远程+现场"' ] });
   return Buffer.from(await workbook.xlsx.writeBuffer());

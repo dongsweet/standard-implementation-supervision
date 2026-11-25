@@ -124,7 +124,7 @@ class AiProvider {
   async classifyPair(left, right) {
     if (!this.enabled) return { result: { relation: 'uncertain', confidence: 0, differences: [], reason: 'AI 服务未配置', recommendedCanonicalId: null }, providerStatus: null, durationMs: 0 };
     const response = await this.request([
-      { role: 'system', content: '你是监督检查定义去重助手。只判断语义是否等价，不修改数据。检查对象必须相同才可建议 duplicate；适用检查中心列表属于方案适用范围元数据，中心不同不代表检查定义不同，也不得单独作为不重复理由。必须返回 JSON：relation、confidence、differences、reason、recommendedCanonicalId。' },
+      { role: 'system', content: '你是监督检查定义去重助手。只判断语义是否等价，不修改数据。检查对象必须相同才可建议 duplicate；适用机构列表属于方案适用范围元数据，机构不同不代表检查定义不同，也不得单独作为不重复理由。必须返回 JSON：relation、confidence、differences、reason、recommendedCanonicalId。' },
       { role: 'user', content: JSON.stringify({ left, right }) },
     ]);
     return { result: parseAiResult(response.content), providerStatus: response.providerStatus, durationMs: response.durationMs };
@@ -148,7 +148,7 @@ class AiProvider {
       {
         role: 'system',
         content: [
-          '你是检查中心“检查对象”去重助手。只判断两个对象名称是否表示同一个可检查对象，不修改数据。',
+          '你是“检查对象”去重助手。只判断两个对象名称是否表示同一个可检查对象，不修改数据。',
           '必须结合对象名称、关联检查方案的方法、描述、步骤、频率和执行方式判断；不能只看字面相似。',
       '“对内发布/对外发布”“更换记录/盘点记录”等方向、用途或管理动作不同的对象，不算重复。',
           '如果只是同一类检查应用到不同设备或不同对象，必须判为 similar_but_distinct；如果只是名称包含附加材料或列表，必须判为 similar_but_distinct。',
@@ -185,7 +185,7 @@ class AiProvider {
         content: [
           '你是监督检查方案去重助手。一次会给你一组方案候选对，请逐对判断两条检查方案是否语义等价，不修改数据。',
           '只有检查对象、检查内容和执行要求实质相同才可判为 duplicate；检查对象不同、用途或方向不同、步骤存在实质差异时必须判为 similar_but_distinct。',
-          '适用检查中心属于适用范围，不应单独作为不重复理由；但检查对象名称必须相同。',
+          '适用机构属于适用范围，不应单独作为不重复理由；但检查对象名称必须相同。',
           'relation 只能是 duplicate、similar_but_distinct、unrelated、uncertain。',
           'recommendedCanonicalId 必须是该对的 left.id 或 right.id；不确定时为 null。',
           '必须为每个输入 id 返回一条结果，不得遗漏或新增 id。',
@@ -218,7 +218,7 @@ class AiProvider {
       {
         role: 'system',
         content: [
-          '你是检查中心“检查对象”去重助手。一次会给你一组候选对，请逐对判断两个对象名称是否表示同一个可检查对象，不修改数据。',
+          '你是“检查对象”去重助手。一次会给你一组候选对，请逐对判断两个对象名称是否表示同一个可检查对象，不修改数据。',
           '必须结合对象名称、关联检查方案的方法、描述、步骤、频率和执行方式判断；不能只看字面相似。',
           '“对内发布/对外发布”“更换记录/盘点记录”等方向、用途或管理动作不同的对象，不算重复。',
           '如果只是同一类检查应用到不同设备或不同对象，必须判为 similar_but_distinct；如果只是名称包含附加材料或列表，必须判为 similar_but_distinct。',

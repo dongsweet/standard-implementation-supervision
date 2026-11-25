@@ -17,12 +17,12 @@
 </style>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div>
-    <h2 class="h4 mb-1">中心检查对象去重</h2>
+    <h2 class="h4 mb-1">检查对象去重</h2>
     <p class="text-secondary mb-0">按名称相似度规则筛选后，可直接由人工判断是否重复。AI 语义复核为可选辅助，所有合并都必须人工确认。</p>
   </div>
   <div class="ms-auto d-flex gap-2">
     <a class="btn btn-outline-secondary" href="/supervision-center-objects/dedupe/history">查看复核历史</a>
-    <a class="btn btn-outline-secondary" href="/supervision-center-objects">返回中心检查对象</a>
+    <a class="btn btn-outline-secondary" href="/supervision-center-objects">返回检查对象</a>
   </div>
 </div>
 
@@ -61,11 +61,11 @@
 <section class="card mb-3">
   <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">规则筛选结果</h3><span class="badge text-bg-primary">当前：<%= filterLabels[activeFilter] %></span><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:7rem">检查中心</th><th>对象 A</th><th>对象 B</th><th style="width:14rem">筛选结论</th><th style="width:24rem">人工复核</th></tr></thead>
+    <thead><tr><th style="width:7rem">适用机构</th><th>对象 A</th><th>对象 B</th><th style="width:14rem">筛选结论</th><th style="width:24rem">人工复核</th></tr></thead>
     <tbody>
       <% candidates.forEach(candidate => { %>
         <tr>
-          <td><span class="badge text-bg-light border"><%= candidate.center_name %></span></td>
+          <td><span class="badge text-bg-light border"><%= supervisionCenterLabel(candidate.center_name) %></span></td>
           <td>
             <strong><%= candidate.left_object_name %></strong>
             <div class="small text-secondary mt-1"><%= candidate.left.plan_count %> 个方案 · 关联标准项 <%= candidate.left.standard_item_count || 0 %> 项</div>
@@ -86,14 +86,14 @@
           <td>
             <div class="d-flex flex-column align-items-start gap-1 object-review-actions">
               <div class="d-flex flex-nowrap gap-1">
-                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.left_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 A 并合并</button>
-                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.right_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 B 并合并</button>
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-center-label="<%= supervisionCenterLabel(candidate.center_name) %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.left_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 A 并合并</button>
+                <button class="btn btn-sm btn-danger text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-center-label="<%= supervisionCenterLabel(candidate.center_name) %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" data-canonical="<%= candidate.right_object_name %>" data-left-plans="<%= candidate.left.plan_count %>" data-right-plans="<%= candidate.right.plan_count %>" onclick="mergeObject(this)">保留 B 并合并</button>
               </div>
               <div class="d-flex flex-nowrap gap-1">
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">不是重复</button>
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'uncertain')">暂不确定</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-center-label="<%= supervisionCenterLabel(candidate.center_name) %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'distinct')">不是重复</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-center-label="<%= supervisionCenterLabel(candidate.center_name) %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="reviewObject(this, 'uncertain')">暂不确定</button>
               </div>
-              <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">可选 AI 分析</button>
+              <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-center="<%= candidate.center_name %>" data-center-label="<%= supervisionCenterLabel(candidate.center_name) %>" data-left="<%= candidate.left_object_name %>" data-right="<%= candidate.right_object_name %>" onclick="analyzeObject(this)">可选 AI 分析</button>
             </div>
           </td>
         </tr>
@@ -273,7 +273,7 @@
     const canonical = button.dataset.canonical;
     const source = canonical === button.dataset.left ? button.dataset.right : button.dataset.left;
     const plans = canonical === button.dataset.left ? button.dataset.rightPlans : button.dataset.leftPlans;
-    if (!await window.confirmAppAction(`保留“${canonical}”并合并对象“${source}”？该中心下 ${plans} 个检查方案会更新到保留对象。`, '确认合并中心检查对象')) return;
+    if (!await window.confirmAppAction(`保留“${canonical}”并合并对象“${source}”？该机构下 ${plans} 个检查方案会更新到保留对象。`, '确认合并检查对象')) return;
     try {
       await objectSend('/api/supervision-center-objects/reviews', {
         centerName: button.dataset.center,

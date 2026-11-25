@@ -560,7 +560,7 @@ function detectCloudGroups(rows, map) {
     if (normalizeHeader(second[index]).includes('满足情况')) starts.push(index);
   }
   return starts.map((start, index) => ({
-    name: DEFAULT_CLOUD_CENTERS[index] || `云中心列组${index + 1}`,
+    name: DEFAULT_CLOUD_CENTERS[index] || `分支机构列组${index + 1}`,
     slot: index,
     status: start,
     measure: start + 1,

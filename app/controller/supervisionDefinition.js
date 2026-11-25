@@ -17,7 +17,7 @@ class SupervisionDefinitionController extends Controller {
   async centerObjects() {
     requireGlobalRead(this.ctx);
     await this.ctx.render('supervision-center-objects/index', {
-      title: '中心检查对象',
+      title: '检查对象',
       ...await this.ctx.service.supervisionDefinition.listCenterObjects(this.ctx.query),
       csrf: this.ctx.csrf,
       user: this.ctx.state.user,
@@ -27,7 +27,7 @@ class SupervisionDefinitionController extends Controller {
   async centerObjectDedupeHistory() {
     requireGlobalRead(this.ctx);
     await this.ctx.render('supervision-center-objects/dedupe-history', {
-      title: '中心检查对象去重复核历史',
+      title: '检查对象去重复核历史',
       reviews: await this.ctx.service.supervisionDefinition.listCenterObjectReviews(),
       csrf: this.ctx.csrf,
       user: this.ctx.state.user,
@@ -47,7 +47,7 @@ class SupervisionDefinitionController extends Controller {
       ? requestedFilter
       : 'all';
     await this.ctx.render('supervision-center-objects/dedupe', {
-      title: '中心检查对象去重',
+      title: '检查对象去重',
       ...await this.ctx.service.supervisionDefinition.listCenterObjectDedupe({
         threshold: scanned ? threshold : null,
         scanned,

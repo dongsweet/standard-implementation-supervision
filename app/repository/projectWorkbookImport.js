@@ -304,12 +304,12 @@ class ProjectWorkbookImportRepository {
       const chosenCenters = cloudCenterIds.map(id => id || null);
       const activeCenterIds = chosenCenters.filter(Boolean);
       if (new Set(activeCenterIds).size !== activeCenterIds.length) {
-        const error = new Error('同一个云中心不能映射到多个云中心列组');
+        const error = new Error('同一个分支机构不能映射到多个分支机构列组');
         error.code = 'PROJECT_IMPORT_INVALID_CENTER_MAPPING';
         throw error;
       }
       if (activeCenterIds.some(id => !centersById.has(id))) {
-        const error = new Error('云中心列组只能映射到当前项目已纳入的云中心');
+        const error = new Error('分支机构列组只能映射到当前项目已纳入的分支机构');
         error.code = 'PROJECT_IMPORT_INVALID_CENTER_MAPPING';
         throw error;
       }

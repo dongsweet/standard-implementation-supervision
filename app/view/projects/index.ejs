@@ -1,5 +1,5 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <p class="text-secondary mb-0">项目管理独立于项目总览；规范应答、云中心、证据和持续监督都归属于当前项目。</p>
+  <p class="text-secondary mb-0">项目管理独立于项目总览；规范应答、分支机构、证据和持续监督都归属于当前项目。</p>
   <% if (user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %>
     <button class="btn btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createProjectModal">新建项目</button>
   <% } %>
@@ -8,7 +8,7 @@
 <div class="card">
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-      <thead><tr><th>项目名称</th><th>基于项目</th><th>状态</th><th>项目管理员</th><th>规范版本</th><th>云中心</th><th>操作</th></tr></thead>
+      <thead><tr><th>项目名称</th><th>基于项目</th><th>状态</th><th>项目管理员</th><th>规范版本</th><th>分支机构</th><th>操作</th></tr></thead>
       <tbody>
         <% projects.forEach(project => { %>
           <tr>

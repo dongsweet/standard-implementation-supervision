@@ -158,7 +158,7 @@ class ProjectController extends Controller {
       this.ctx.request.body.cloudCenterIds,
       this.ctx.session.userId,
     );
-    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('项目云中心已保存'));
+    this.ctx.redirect(`/projects/${this.ctx.params.projectId}/manage?notice=` + encodeURIComponent('项目分支机构已保存'));
   }
 
   async switchProject() {

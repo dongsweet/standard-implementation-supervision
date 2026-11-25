@@ -72,7 +72,7 @@
 </div></div></div>
 
 <div class="modal fade" id="importStandardModal" tabindex="-1" aria-labelledby="importStandardModalLabel" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
-  <form method="post" action="/standards/import" enctype="multipart/form-data" data-confirm="将新建一个规范及其版本，并导入章节和标准项。源工作簿中的项目应答、云中心运行情况、证据附件及监督记录不会导入。确认继续？" data-confirm-title="导入规范"><input type="hidden" name="_csrf" value="<%= csrf %>">
+  <form method="post" action="/standards/import" enctype="multipart/form-data" data-confirm="将新建一个规范及其版本，并导入章节和标准项。源工作簿中的项目应答、分支机构运行情况、证据附件及监督记录不会导入。确认继续？" data-confirm-title="导入规范"><input type="hidden" name="_csrf" value="<%= csrf %>">
     <div class="modal-header"><h2 class="modal-title fs-5" id="importStandardModalLabel">从Excel导入规范</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
     <div class="modal-body row g-3">
       <div class="col-12"><div class="alert alert-info py-2 mb-0">规范库只导入标准原文：章节、标准项编号、标题和标准内容。级别、重点项、条款赋值、统一要求、应提供证据及项目实际证据均在项目页维护。</div></div>

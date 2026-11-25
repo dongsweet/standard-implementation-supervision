@@ -69,11 +69,11 @@ test('maps original workbook headers into the editable plan fields', () => {
   assert.equal(parsed.rows[0].referenceMaterials, '删除审批单及截图');
 });
 
-test('merges center names from repeated import rows into one definition with multiple centers', () => {
+test('merges applicable branches from repeated import rows into one definition', () => {
   const parsed = parseSupervisionPlanRows([ { name: '检查方案', rows: [
-    [ '标准化编号', '检查范围', '适用检查中心', '检查对象', '检查方法', '检查项描述' ],
-    [ '31168-2023-06008', '生产', '云中心', '云平台账号', '证据材料核查', '核查高权限账号' ],
-    [ '31168-2023-06009', '生产', '统一运维', '云平台账号', '证据材料核查', '核查高权限账号' ],
+    [ '标准化编号', '检查范围', '适用机构', '检查对象', '检查方法', '检查项描述' ],
+    [ '31168-2023-06008', '生产', '分支机构', '云平台账号', '证据材料核查', '核查高权限账号' ],
+    [ '31168-2023-06009', '生产', '统一运维机构', '云平台账号', '证据材料核查', '核查高权限账号' ],
   ] } ]);
   assert.deepEqual(parsed.rows.map(row => row.centers), [ [ '云中心' ], [ '统一运维中心' ] ]);
   assert.equal(parsed.rows[0].scope, parsed.rows[1].scope);

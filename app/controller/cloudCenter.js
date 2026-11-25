@@ -7,7 +7,7 @@ class CloudCenterController extends Controller {
   async index() {
     requireGlobalRead(this.ctx);
     await this.ctx.render('cloud-centers/index', {
-      title: '云中心管理',
+      title: '分支机构管理',
       cloudCenters: await this.ctx.service.cloudCenter.listAll(),
       csrf: this.ctx.csrf,
     });
@@ -16,13 +16,13 @@ class CloudCenterController extends Controller {
   async create() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.cloudCenter.create(this.ctx.request.body || {});
-    this.ctx.redirect('/cloud-centers?notice=' + encodeURIComponent('云中心已创建'));
+    this.ctx.redirect('/cloud-centers?notice=' + encodeURIComponent('分支机构已创建'));
   }
 
   async update() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.cloudCenter.update(this.ctx.params.cloudCenterId, this.ctx.request.body || {});
-    this.ctx.redirect('/cloud-centers?notice=' + encodeURIComponent('云中心已更新'));
+    this.ctx.redirect('/cloud-centers?notice=' + encodeURIComponent('分支机构已更新'));
   }
 }
 

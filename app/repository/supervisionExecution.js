@@ -72,13 +72,13 @@ class SupervisionExecutionRepository {
         SELECT center_name FROM supervision_definition_centers
         WHERE definition_id = $1 ORDER BY center_name`, [ definitionId ]);
       if (applicableCenters.rowCount && !supervisionCenter) {
-        const error = new Error('请选择本次执行的检查中心');
+        const error = new Error('请选择本次检查机构');
         error.code = 'INVALID_SUPERVISION_CENTER';
         throw error;
       }
       if (supervisionCenter) {
         if (!applicableCenters.rows.some(row => row.center_name === supervisionCenter)) {
-          const error = new Error('所选检查中心不在该检查方案的适用范围内');
+          const error = new Error('所选机构不在该检查方案的适用范围内');
           error.code = 'INVALID_SUPERVISION_CENTER';
           throw error;
         }
@@ -92,13 +92,13 @@ class SupervisionExecutionRepository {
       }
       if (cloudCenterId) {
         if (supervisionCenter && supervisionCenter !== '云中心') {
-          const error = new Error('只有检查中心为“云中心”时才能选择具体云中心');
+          const error = new Error('只有机构类型为“分支机构”时才能选择具体分支机构');
           error.code = 'INVALID_CLOUD_CENTER';
           throw error;
         }
         const center = await client.query('SELECT 1 FROM project_cloud_centers WHERE project_id = $1 AND cloud_center_id = $2', [ projectId, cloudCenterId ]);
         if (!center.rowCount) {
-          const error = new Error('所选云中心未纳入当前项目');
+          const error = new Error('所选分支机构未纳入当前项目');
           error.code = 'INVALID_CLOUD_CENTER';
           throw error;
         }

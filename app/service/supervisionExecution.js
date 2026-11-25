@@ -50,7 +50,7 @@ class SupervisionExecutionService extends Service {
     const checkedAt = String(payload.checkedAt || '').trim();
     if (!definitionId || !checkedAt) this.ctx.throw(400, '请选择监督定义并填写检查时间');
     if (!UUID_RE.test(definitionId)) this.ctx.throw(400, '监督定义编号格式无效');
-    if (cloudCenterId && !UUID_RE.test(cloudCenterId)) this.ctx.throw(400, '云中心编号格式无效');
+    if (cloudCenterId && !UUID_RE.test(cloudCenterId)) this.ctx.throw(400, '分支机构编号格式无效');
     if (!isValidDate(checkedAt)) this.ctx.throw(400, '检查时间格式无效');
     const overallResult = String(payload.overallResult || '').trim();
     if (overallResult && !OVERALL_RESULTS.has(overallResult)) this.ctx.throw(400, '无效的总体检查结论');

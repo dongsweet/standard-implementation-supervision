@@ -81,7 +81,7 @@ class SupervisionDefinitionService extends Service {
     const view = [ 'overview', 'pending', 'categories' ].includes(String(query.view || ''))
       ? String(query.view)
       : 'overview';
-    if (center && !DEFAULT_SUPERVISION_CENTERS.includes(center)) this.ctx.throw(400, '无效的检查中心筛选');
+    if (center && !DEFAULT_SUPERVISION_CENTERS.includes(center)) this.ctx.throw(400, '无效的机构筛选');
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
@@ -472,7 +472,7 @@ class SupervisionDefinitionService extends Service {
     const rightObjectName = String(payload.rightObjectName || '').trim();
     const decision = String(payload.decision || '').trim();
     const canonicalObjectName = String(payload.canonicalObjectName || '').trim();
-    if (!DEFAULT_SUPERVISION_CENTERS.includes(centerName)) this.ctx.throw(400, '无效的检查中心');
+    if (!DEFAULT_SUPERVISION_CENTERS.includes(centerName)) this.ctx.throw(400, '无效的机构');
     if (!leftObjectName || !rightObjectName || leftObjectName === rightObjectName) this.ctx.throw(400, '请提供两个不同的检查对象');
     if (![ 'merged', 'distinct', 'uncertain' ].includes(decision)) this.ctx.throw(400, '无效的对象复核结论');
     await this.objectCandidateContext(centerName, leftObjectName, rightObjectName);
@@ -529,8 +529,8 @@ class SupervisionDefinitionService extends Service {
     if (fields.object_name.length > 500 || fields.scope.length > 200 || fields.object_category.length > 200 || fields.check_layer.length > 200
       || fields.check_method.length > 2000 || fields.description.length > 5000 || fields.frequency.length > 100
       || fields.access_mode.length > 50 || fields.priority.length > 50) this.ctx.throw(400, '监督定义字段长度超出限制');
-    if (fields.centers.some(center => !DEFAULT_SUPERVISION_CENTERS.includes(center))) this.ctx.throw(400, '适用检查中心只能选择云中心、统一运维中心或总部');
-    if (!fields.centers.length) this.ctx.throw(400, '请至少选择一个适用检查中心');
+    if (fields.centers.some(center => !DEFAULT_SUPERVISION_CENTERS.includes(center))) this.ctx.throw(400, '适用机构只能选择分支机构、统一运维机构或总部');
+    if (!fields.centers.length) this.ctx.throw(400, '请至少选择一个适用机构');
     const itemIds = Array.isArray(payload.standardItemIds) ? payload.standardItemIds : [ payload.standardItemIds ];
     const standardItemIds = [ ...new Set(itemIds.map(item => String(item || '').trim()).filter(Boolean)) ];
     if (!standardItemIds.length) this.ctx.throw(400, '请至少关联一个标准项');

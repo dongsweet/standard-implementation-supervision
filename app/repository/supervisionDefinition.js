@@ -630,7 +630,7 @@ class SupervisionDefinitionRepository {
       const leftPlans = entries.rows.filter(plan => plan.object_name === leftObjectName);
       const rightPlans = entries.rows.filter(plan => plan.object_name === rightObjectName);
       if (!leftPlans.length || !rightPlans.length) {
-        const error = new Error('待复核的中心检查对象已发生变化，请刷新后重试');
+        const error = new Error('待复核的检查对象已发生变化，请刷新后重试');
         error.code = 'OBJECT_DEDUPE_CANDIDATE_CHANGED';
         throw error;
       }
@@ -645,7 +645,7 @@ class SupervisionDefinitionRepository {
         const sourcePlans = entries.rows.filter(plan => plan.object_name === sourceObjectName);
         const canonicalObjectId = entries.rows.find(plan => plan.object_name === canonicalObjectName)?.canonical_object_id;
         if (sourcePlans.some(plan => (plan.centers || []).some(center => center !== centerName))) {
-          const error = new Error('待合并对象关联的检查方案还适用于其他检查中心；为避免跨中心串改，不能在此合并');
+          const error = new Error('待合并对象关联的检查方案还适用于其他机构；为避免跨机构串改，不能在此合并');
           error.code = 'OBJECT_DEDUPE_CROSS_CENTER';
           throw error;
         }
