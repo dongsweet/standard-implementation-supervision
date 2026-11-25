@@ -109,6 +109,7 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, />检查项描述</);
   assert.match(planView, /<details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）<\/summary>/);
   assert.match(planView, /standard-picker/);
+  assert.match(planView, /standard-picker-results \{ position: relative; z-index: 1085; width: 100%; max-height: 13rem; overflow-y: auto; \}/);
   assert.match(planView, /editStandardChips/);
   assert.match(planView, /editStandardSearch/);
   assert.match(planView, /输入标准编号、条款编号或内容搜索/);
