@@ -4,7 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { supervisionCenterLabel } = require('../app/lib/supervisionCenters');
+const {
+  SUPERVISION_CENTER_LABELS,
+  supervisionCenterLabel,
+} = require('../app/lib/supervisionCenters');
 
 let ejs;
 try {
@@ -66,11 +69,7 @@ test('keeps the supervision definition edit payload valid after HTML attribute d
     standardItems: [],
     checkMethodOptions: [],
     supervisionCenterLabel,
-    supervisionCenterLabels: {
-      云中心: '分支机构',
-      统一运维中心: '统一运维机构',
-      总部: '总部',
-    },
+    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     user: { roles: [ { code: 'security_admin', projectId: null } ] },
     csrf: 'test-token',
   });
@@ -83,6 +82,8 @@ test('escapes standard content before placing supervision definitions in script 
   const attackText = '</script><script>alert(1)</script>';
   const html = await ejs.renderFile(path.join(viewRoot, 'supervision-executions/index.ejs'), {
     project: { id: 'project-1', name: '测试项目' },
+    supervisionCenterLabel,
+    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     user: { roles: [ { projectId: 'project-1', code: 'operator' } ] },
     executions: [],
     definitions: [ {
@@ -365,6 +366,7 @@ test('renders the inspection object page with branch terminology', { skip: !ejs 
     centerObjects: [],
     centerOptions: [ '云中心' ],
     supervisionCenterLabel,
+    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     csrf: 'test-token',
     user: { display_name: '管理员', roles: [] },
     currentPath: '/supervision-center-objects',
