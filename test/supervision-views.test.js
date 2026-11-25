@@ -272,6 +272,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /data-bs-target="#createCategoryModal"/);
   assert.match(html, /包含规范对象/);
   assert.match(html, /category-object-list/);
+  assert.match(html, /\.category-object-list \{ max-height: 11rem; overflow-y: auto;/);
   assert.match(html, /展开全部 <%= categoryObjects\.length %> 个/);
   assert.match(html, /function toggleCategoryObjects/);
   assert.match(html, /function filterObjectCategory/);
