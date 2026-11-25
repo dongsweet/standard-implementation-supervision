@@ -55,11 +55,19 @@ class JointReviewService extends Service {
 
   async scan(query = {}) {
     const scope = this.normalizeScope(query);
-    const [ definitions, objects, coverage ] = await Promise.all([
+    const [ definitions, scopedObjects, allObjects, coverage ] = await Promise.all([
       this.repository.listDefinitionContexts(scope),
       this.repository.listObjectContexts(scope),
+      this.repository.listObjectContexts({}),
       this.repository.listCoverageContexts(scope),
     ]);
+    const objectIds = new Set(scopedObjects.map(object => object.id));
+    if (!scope.objectId) {
+      for (const definition of definitions) {
+        if (definition.object_id) objectIds.add(definition.object_id);
+      }
+    }
+    const objects = allObjects.filter(object => objectIds.has(object.id));
     const candidates = [];
     const push = (issue, context, refs) => {
       const fingerprint = crypto.createHash('sha256').update(JSON.stringify([

@@ -5,7 +5,7 @@ class JointReviewRepository {
     this.pool = pool;
   }
 
-  async listDefinitionContexts({ definitionId = '', objectId = '', standardItemId = '' } = {}) {
+  async listDefinitionContexts({ definitionId = '', objectId = '', standardItemId = '', projectId = '' } = {}) {
     const conditions = [ `d.status = 'active'` ];
     const values = [];
     if (definitionId) {
@@ -20,6 +20,13 @@ class JointReviewRepository {
       values.push(standardItemId);
       conditions.push(`EXISTS (SELECT 1 FROM supervision_definition_standard_items filter_dsi
         WHERE filter_dsi.definition_id = d.id AND filter_dsi.standard_item_id = $${values.length})`);
+    }
+    if (projectId) {
+      values.push(projectId);
+      conditions.push(`EXISTS (SELECT 1 FROM project_standard_items filter_psi
+        JOIN supervision_definition_standard_items filter_dsi2
+          ON filter_dsi2.standard_item_id = filter_psi.standard_item_id
+        WHERE filter_psi.project_id = $${values.length} AND filter_dsi2.definition_id = d.id)`);
     }
     const result = await this.pool.query(`
       SELECT d.id, d.plan_number, d.object_name, d.object_category, d.check_layer,

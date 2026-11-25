@@ -58,8 +58,17 @@ test('scans only the requested context and persists deterministic candidates', {
       assert.equal(scope.definitionId, definitionContext.id);
       return [ definitionContext ];
     },
-    async listObjectContexts() {
-      return [];
+    async listObjectContexts(scope) {
+      return scope.objectId ? [] : [ {
+        id: definitionContext.object_id,
+        canonical_name: definitionContext.master_object_name,
+        master_category: definitionContext.master_category,
+        plan_categories: [
+          '业务平台',
+          definitionContext.object_category,
+        ],
+        plan_count: 25,
+      } ];
     },
     async listCoverageContexts() {
       return [];
