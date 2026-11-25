@@ -28,14 +28,22 @@ test('normalizes multiple supervision methods without losing their individual va
   assert.equal(joinSupervisionMethods([ '上机查看', '证据材料核查', '证据材料核查' ]), '证据材料核查,上机查看');
 });
 
-test('builds the plan template with branch choices in the applicable organization column', { skip: !ExcelJS }, async () => {
+test('builds the plan template with branch choices in the applicable organization column', { skip: !ExcelJS || !JSZip }, async () => {
+  const buffer = await buildSupervisionPlanTemplate();
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await buildSupervisionPlanTemplate());
-  const worksheet = workbook.getWorksheet('检查方案');
-  assert.equal(worksheet.getCell('D1').value, '适用机构');
-  const validation = worksheet.dataValidations.model['D2:D5000'];
-  assert.ok(validation);
-  assert.deepEqual(validation.formulae, [ '"分支机构,统一运维机构,总部"' ]);
+  await workbook.xlsx.load(buffer);
+  assert.equal(workbook.getWorksheet('检查方案').getCell('D1').value, '适用机构');
+
+  const archive = await JSZip.loadAsync(buffer);
+  const sheetXml = await Promise.all(
+    Object.keys(archive.files)
+      .filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+      .map(name => archive.file(name).async('string'))
+  );
+  assert.ok(sheetXml.some(xml =>
+    xml.includes('sqref="D2:D5000"')
+    && xml.includes('&quot;分支机构,统一运维机构,总部&quot;')
+  ));
 });
 
 test('splits multi-standard cells without treating hyphens as separators', () => {
