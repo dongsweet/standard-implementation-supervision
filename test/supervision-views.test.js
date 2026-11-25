@@ -264,6 +264,14 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /<%= option %>/);
   assert.match(html, /新增对象分类/);
   assert.match(html, /deleteObjectCategory/);
+  assert.match(html, /id="editObjectCategoryCombobox"/);
+  assert.match(html, /data-categories="<%= encodeURIComponent\(JSON\.stringify\(Array\.from\(new Set\(\(row\.plans \|\| \[\]\)\.map\(plan => plan\.objectCategory\)\.filter\(Boolean\)\)\)\)\) %>"/);
+  assert.match(html, /const objectEditCategories =/);
+  assert.match(html, /原方案使用过 · 现有分类/);
+  assert.match(html, /原方案使用过 · 保存时采用为此分类/);
+  assert.match(html, /objectEditPicker\.setHistorical\(history\)/);
+  assert.match(html, /categoryName: exact \? '' : categoryName/);
+  assert.doesNotMatch(html, /<select class="form-select" id="editCategoryId" name="categoryId">/);
   assert.match(html, /name="categoryInput"/);
   assert.match(html, /id="objectCategoryCombobox"/);
   assert.match(html, /class="object-plan-number"/);

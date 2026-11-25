@@ -65,7 +65,7 @@
   .object-plan-popover-row:last-child { margin-bottom: 0; }
 </style>
 <div class="card mb-3"><div class="card-body"><form method="get" action="/supervision-center-objects" class="row g-2 align-items-end"><input type="hidden" name="view" value="<%= viewValue %>"><div class="col-12 col-md-4"><label class="form-label" for="objectSearch">规范对象、原始名称或分类</label><input class="form-control" id="objectSearch" name="search" value="<%= searchValue %>" placeholder="搜索对象、别名或对象分类"></div><div class="col-6 col-md-3"><label class="form-label" for="objectCenter">适用机构</label><select class="form-select" id="objectCenter" name="center"><option value="">全部机构</option><% centerOptions.forEach(option => { %><option value="<%= option %>" <%= centerValue === option ? 'selected' : '' %>><%= option %></option><% }) %></select></div><div class="col-6 col-md-3"><label class="form-label" for="objectCategory">对象分类</label><div class="object-category-combobox" id="objectCategoryCombobox"><input class="form-control object-category-combobox-input" id="objectCategory" name="categoryInput" type="search" value="<%= categoryInputValue %>" autocomplete="off" placeholder="输入对象分类名称筛选" role="combobox" aria-expanded="false" aria-controls="objectCategoryMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="objectCategoryToggle" type="button" aria-label="展开对象分类候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="objectCategoryMenu" role="listbox"></div></div><select class="d-none" id="objectCategorySource" tabindex="-1" aria-hidden="true"><option value="未分类" data-name="未分类"></option><% objectCategoriesValue.filter(item => item.name !== '未分类').forEach(item => { %><option value="<%= item.name %>" data-name="<%= item.name %>" data-count="<%= item.object_count %>"><%= item.name %></option><% }) %></select><div class="visually-hidden" id="objectCategorySearchStatus" role="status" aria-live="polite"></div></div><div class="col-12 col-md-2 d-flex gap-2"><button class="btn btn-outline-primary" type="submit">筛选</button><a class="btn btn-outline-secondary" href="<%= resetUrl(viewValue) %>">重置</a></div></form></div></div>
-<div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title"><%= viewValue === 'pending' ? '待整理对象' : '规范对象总览' %></h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 个对象</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>规范对象</th><th>对象分类</th><th>适用机构</th><th>原始名称</th><th>检查方案</th><th>关联标准项</th><th class="text-end">操作</th></tr></thead><tbody><% centerObjectsValue.forEach(row => { %><tr><td><strong><%= row.canonical_name %></strong><% if (row.notes) { %><div class="small text-secondary"><%= row.notes %></div><% } %></td><td><% if (row.object_category) { %><span class="badge text-bg-light border"><%= row.object_category %></span><% } else { %><span class="badge text-bg-warning">未分类</span><% } %></td><td><% (row.centers || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item %></span><% }) %><% if (!(row.centers || []).length) { %><span class="text-secondary">未关联</span><% } %></td><td><% (row.aliases || []).slice(0, 4).forEach(alias => { %><span class="badge text-bg-light border me-1 mb-1"><%= alias %></span><% }) %><% if ((row.aliases || []).length > 4) { %><span class="small text-secondary">另有 <%= row.aliases.length - 4 %> 个</span><% } %></td><td><span class="badge text-bg-primary"><%= row.plan_count %> 个</span><div class="small object-plan-numbers"><% (row.plan_numbers || []).forEach(number => { const plan = (row.plans || []).find(item => Number(item.planNumber) === Number(number)); %><% if (plan) { %><button class="object-plan-number" type="button" data-plan="<%= encodeURIComponent(JSON.stringify(plan)) %>" onclick="showObjectPlanPreview(event, this)"><%= String(number).padStart(3, '0') %></button><% } else { %><span><%= String(number).padStart(3, '0') %></span><% } %><% }) %><% if (!(row.plan_numbers || []).length) { %>-<% } %></div></td><td><%= row.standard_item_count %> 项</td><td class="text-end text-nowrap"><% if (canWrite) { %><button class="btn btn-sm btn-outline-primary" type="button" data-object-id="<%= row.id %>" data-object-name="<%= row.canonical_name %>" data-category="<%= row.object_category || '' %>" data-notes="<%= row.notes || '' %>" onclick="editObject(this)">整理</button><% } %><a class="btn btn-sm btn-outline-primary" href="/joint-reviews?objectId=<%= encodeURIComponent(row.id) %>">联合复核</a><a class="btn btn-sm btn-outline-secondary" href="/supervision-definitions?search=<%= encodeURIComponent(row.canonical_name) %>">查看方案</a></td></tr><% }) %><% if (!centerObjectsValue.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">没有找到匹配的对象。</td></tr><% } %></tbody></table></div>
+<div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title"><%= viewValue === 'pending' ? '待整理对象' : '规范对象总览' %></h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 个对象</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>规范对象</th><th>对象分类</th><th>适用机构</th><th>原始名称</th><th>检查方案</th><th>关联标准项</th><th class="text-end">操作</th></tr></thead><tbody><% centerObjectsValue.forEach(row => { %><tr><td><strong><%= row.canonical_name %></strong><% if (row.notes) { %><div class="small text-secondary"><%= row.notes %></div><% } %></td><td><% if (row.object_category) { %><span class="badge text-bg-light border"><%= row.object_category %></span><% } else { %><span class="badge text-bg-warning">未分类</span><% } %></td><td><% (row.centers || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item %></span><% }) %><% if (!(row.centers || []).length) { %><span class="text-secondary">未关联</span><% } %></td><td><% (row.aliases || []).slice(0, 4).forEach(alias => { %><span class="badge text-bg-light border me-1 mb-1"><%= alias %></span><% }) %><% if ((row.aliases || []).length > 4) { %><span class="small text-secondary">另有 <%= row.aliases.length - 4 %> 个</span><% } %></td><td><span class="badge text-bg-primary"><%= row.plan_count %> 个</span><div class="small object-plan-numbers"><% (row.plan_numbers || []).forEach(number => { const plan = (row.plans || []).find(item => Number(item.planNumber) === Number(number)); %><% if (plan) { %><button class="object-plan-number" type="button" data-plan="<%= encodeURIComponent(JSON.stringify(plan)) %>" onclick="showObjectPlanPreview(event, this)"><%= String(number).padStart(3, '0') %></button><% } else { %><span><%= String(number).padStart(3, '0') %></span><% } %><% }) %><% if (!(row.plan_numbers || []).length) { %>-<% } %></div></td><td><%= row.standard_item_count %> 项</td><td class="text-end text-nowrap"><% if (canWrite) { %><button class="btn btn-sm btn-outline-primary" type="button" data-object-id="<%= row.id %>" data-object-name="<%= row.canonical_name %>" data-category="<%= row.object_category || '' %>" data-categories="<%= encodeURIComponent(JSON.stringify(Array.from(new Set((row.plans || []).map(plan => plan.objectCategory).filter(Boolean))))) %>" data-notes="<%= row.notes || '' %>" onclick="editObject(this)">整理</button><% } %><a class="btn btn-sm btn-outline-primary" href="/joint-reviews?objectId=<%= encodeURIComponent(row.id) %>">联合复核</a><a class="btn btn-sm btn-outline-secondary" href="/supervision-definitions?search=<%= encodeURIComponent(row.canonical_name) %>">查看方案</a></td></tr><% }) %><% if (!centerObjectsValue.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">没有找到匹配的对象。</td></tr><% } %></tbody></table></div>
 <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildUrl(viewValue, pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildUrl(viewValue, number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildUrl(viewValue, pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %></div>
 <div id="objectPlanPopover" popover="manual" aria-labelledby="objectPlanPopoverTitle">
   <div class="object-plan-popover-head"><strong id="objectPlanPopoverTitle">检查方案</strong><button class="btn-close btn-close-sm ms-auto" type="button" aria-label="关闭" onclick="document.getElementById('objectPlanPopover').hidePopover()"></button></div>
@@ -301,18 +301,195 @@
   });
 </script><% } %>
 
-<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectEditModal" tabindex="-1" aria-labelledby="objectEditTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="objectEditForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="objectEditTitle">整理规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="editCanonicalName">规范对象名称</label><input class="form-control" id="editCanonicalName" name="canonicalName" maxlength="500" required></div><div class="mb-3"><label class="form-label" for="editCategoryId">对象分类</label><select class="form-select" id="editCategoryId" name="categoryId"><option value="">未分类</option><% objectCategoriesValue.forEach(item => { %><option value="<%= item.id %>"><%= item.name %></option><% }) %></select></div><div><label class="form-label" for="editObjectNotes">整理备注</label><textarea class="form-control" id="editObjectNotes" name="notes" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存</button></div></form></div></div></div><script>
+<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectEditModal" tabindex="-1" aria-labelledby="objectEditTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="objectEditForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="objectEditTitle">整理规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="editCanonicalName">规范对象名称</label><input class="form-control" id="editCanonicalName" name="canonicalName" maxlength="500" required></div><div class="mb-3"><label class="form-label" for="editObjectCategory">对象分类</label><div class="object-category-combobox" id="editObjectCategoryCombobox"><input class="form-control object-category-combobox-input" id="editObjectCategory" type="search" autocomplete="off" placeholder="输入分类名称搜索，或从历史分类选择" role="combobox" aria-expanded="false" aria-controls="editObjectCategoryMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="editObjectCategoryToggle" type="button" aria-label="展开对象分类候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="editObjectCategoryMenu" role="listbox"></div></div><input type="hidden" id="editCategoryId" name="categoryId"><div class="visually-hidden" id="editObjectCategoryStatus" role="status" aria-live="polite"></div><div class="small text-secondary mt-1" id="editCategoryHint">优先显示当前对象在检查方案中使用过的分类。</div></div><div><label class="form-label" for="editObjectNotes">整理备注</label><textarea class="form-control" id="editObjectNotes" name="notes" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存</button></div></form></div></div></div><script>
+  const objectEditCategories = <%- JSON.stringify(objectCategoriesValue.map(item => ({ id: item.id, name: item.name, count: Number(item.object_count) || 0 }))).replace(/</g, '\\u003c') %>;
+  const objectEditPicker = (() => {
+    const root = document.getElementById('editObjectCategoryCombobox');
+    const input = document.getElementById('editObjectCategory');
+    const hidden = document.getElementById('editCategoryId');
+    const toggle = document.getElementById('editObjectCategoryToggle');
+    const menu = document.getElementById('editObjectCategoryMenu');
+    const status = document.getElementById('editObjectCategoryStatus');
+    const hint = document.getElementById('editCategoryHint');
+    let historical = [];
+    let visible = [];
+    let activeIndex = -1;
+    let open = false;
+    const normalize = value => String(value || '').normalize('NFKC').trim().toLowerCase();
+    const close = () => {
+      open = false;
+      activeIndex = -1;
+      menu.classList.add('d-none');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const show = () => {
+      open = true;
+      menu.classList.remove('d-none');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const categoryFor = item => objectEditCategories.find(category => normalize(category.name) === normalize(item.name));
+    const options = () => {
+      const historyOptions = historical.map(name => {
+        const category = categoryFor({ name });
+        return {
+          id: category?.id || '',
+          name,
+          count: category?.count || 0,
+          historical: true,
+          known: Boolean(category),
+        };
+      });
+      const knownHistory = new Set(historyOptions.filter(item => item.known).map(item => normalize(item.name)));
+      const remaining = objectEditCategories
+        .filter(category => !knownHistory.has(normalize(category.name)))
+        .map(category => ({ ...category, historical: false, known: true }));
+      return [ ...historyOptions, ...remaining ];
+    };
+    const paint = (items, message) => {
+      visible = items;
+      activeIndex = items.length ? 0 : -1;
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'object-category-combobox-empty';
+        empty.textContent = message;
+        menu.replaceChildren(empty);
+        return;
+      }
+      menu.replaceChildren(...items.map((item, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'object-category-combobox-option' + (index === activeIndex ? ' is-active' : '');
+        button.setAttribute('role', 'option');
+        button.dataset.index = String(index);
+        const label = document.createElement('span');
+        label.textContent = item.name;
+        button.appendChild(label);
+        const subtitle = document.createElement('span');
+        subtitle.className = 'option-subtitle';
+        subtitle.textContent = item.historical
+          ? (item.known ? '原方案使用过 · 现有分类' : '原方案使用过 · 保存时采用为此分类')
+          : `${item.count} 个规范对象`;
+        button.appendChild(subtitle);
+        return button;
+      }));
+    };
+    const updateActive = next => {
+      if (!visible.length) return;
+      activeIndex = (next + visible.length) % visible.length;
+      menu.querySelectorAll('.object-category-combobox-option').forEach((option, index) => {
+        option.classList.toggle('is-active', index === activeIndex);
+        if (index === activeIndex) option.scrollIntoView({ block: 'nearest' });
+      });
+    };
+    const select = item => {
+      if (!item) return;
+      input.value = item.name;
+      hidden.value = item.id || '';
+      status.textContent = item.known ? `已选择：${item.name}` : `将采用历史分类：${item.name}`;
+      hint.textContent = item.known
+        ? '保存后会同步更新该对象下的检查方案分类。'
+        : '该历史分类尚未登记，保存时会自动加入分类主数据。';
+      close();
+    };
+    const renderMatches = () => {
+      const keyword = normalize(input.value);
+      const all = options();
+      const matches = keyword
+        ? all.filter(item => normalize(item.name).includes(keyword))
+        : all;
+      paint(matches, '没有匹配的分类');
+      show();
+    };
+    const findExact = value => options().find(item => normalize(item.name) === normalize(value));
+    const setValue = value => {
+      const exact = findExact(value);
+      input.value = value || '';
+      hidden.value = exact?.id || '';
+      hint.textContent = value
+        ? '优先显示当前对象在检查方案中使用过的分类。'
+        : '留空表示未分类。';
+    };
+    input.addEventListener('focus', renderMatches);
+    input.addEventListener('input', () => {
+      hidden.value = '';
+      renderMatches();
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex - 1);
+      } else if (event.key === 'Enter' && open && visible[activeIndex]) {
+        event.preventDefault();
+        select(visible[activeIndex]);
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+    toggle.addEventListener('click', () => {
+      input.focus();
+      if (open) close();
+      else renderMatches();
+    });
+    menu.addEventListener('mousedown', event => event.preventDefault());
+    menu.addEventListener('click', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) select(visible[Number(option.dataset.index)]);
+    });
+    menu.addEventListener('mouseover', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) updateActive(Number(option.dataset.index));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!root.contains(event.target)) close();
+    }, true);
+    return {
+      setHistorical(items) {
+        historical = Array.from(new Set((items || []).filter(Boolean)));
+      },
+      setValue,
+      close,
+      exactValue: () => input.value.trim() ? findExact(input.value) : null,
+      rawValue: () => input.value.trim(),
+    };
+  })();
   function editObject(button) {
     document.getElementById('objectEditForm').action = '/api/supervision-center-objects/objects/' + button.dataset.objectId;
     document.getElementById('editCanonicalName').value = button.dataset.objectName || '';
     document.getElementById('editObjectNotes').value = button.dataset.notes || '';
-    const category = [...document.getElementById('editCategoryId').options].find(option => option.textContent.trim() === (button.dataset.category || ''));
-    document.getElementById('editCategoryId').value = category ? category.value : '';
+    let history = [];
+    try {
+      history = JSON.parse(decodeURIComponent(button.dataset.categories || ''));
+    } catch {}
+    objectEditPicker.setHistorical(history);
+    objectEditPicker.setValue(button.dataset.category || '');
     bootstrap.Modal.getOrCreateInstance(document.getElementById('objectEditModal')).show();
   }
   document.getElementById('objectEditForm').addEventListener('submit', async event => {
-    event.preventDefault(); const form = event.currentTarget;
-    const response = await fetch(form.action, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' }, body: JSON.stringify({ canonicalName: form.canonicalName.value, categoryId: form.categoryId.value, notes: form.notes.value }) });
-    const data = await response.json(); if (!response.ok) { window.showAppNotice(data.message || '保存失败', '对象整理失败'); return; } window.location.reload();
+    event.preventDefault();
+    const form = event.currentTarget;
+    const categoryName = objectEditPicker.rawValue();
+    const exact = objectEditPicker.exactValue();
+    if (categoryName && !exact) {
+      const confirmed = await window.confirmAppAction(`分类“${categoryName}”尚未在分类主数据中，保存后会创建该分类并应用到当前对象。`, '采用历史分类');
+      if (!confirmed) return;
+    }
+    const response = await fetch(form.action, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' },
+      body: JSON.stringify({
+        canonicalName: form.canonicalName.value,
+        categoryId: exact?.id || form.categoryId.value,
+        categoryName: exact ? '' : categoryName,
+        notes: form.notes.value,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) { window.showAppNotice(data.message || '保存失败', '对象整理失败'); return; }
+    window.location.reload();
   });
 </script><% } %>

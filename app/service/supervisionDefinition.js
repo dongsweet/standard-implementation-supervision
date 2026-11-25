@@ -296,11 +296,13 @@ class SupervisionDefinitionService extends Service {
     if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '对象编号格式无效');
     const canonicalName = String(payload.canonicalName || '').trim();
     const categoryId = String(payload.categoryId || '').trim() || null;
+    const categoryName = String(payload.categoryName || '').trim();
     const notes = String(payload.notes || '').trim();
     if (!canonicalName) this.ctx.throw(400, '规范对象名称不能为空');
     if (canonicalName.length > 500) this.ctx.throw(400, '规范对象名称不能超过 500 个字符');
+    if (categoryName.length > 200) this.ctx.throw(400, '对象分类名称不能超过 200 个字符');
     try {
-      const result = await this.repository.updateObject(id, { canonicalName, categoryId, notes }, actorId);
+      const result = await this.repository.updateObject(id, { canonicalName, categoryId, categoryName, notes }, actorId);
       if (!result) this.ctx.throw(404, '规范对象不存在');
       return result;
     } catch (error) {

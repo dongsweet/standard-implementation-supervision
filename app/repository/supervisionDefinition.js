@@ -349,18 +349,26 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
-  async updateObject(id, { canonicalName, categoryId, notes }, actorId) {
+  async updateObject(id, { canonicalName, categoryId, categoryName, notes }, actorId) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const categoryResult = categoryId
-        ? await client.query('SELECT name FROM supervision_object_categories WHERE id = $1 AND status = \'active\'', [ categoryId ])
+      let categoryResult = categoryId
+        ? await client.query('SELECT id, name FROM supervision_object_categories WHERE id = $1 AND status = \'active\'', [ categoryId ])
         : { rowCount: 0, rows: [] };
+      if (!categoryResult.rowCount && categoryName) {
+        categoryResult = await client.query(`
+          INSERT INTO supervision_object_categories (name)
+          VALUES ($1)
+          ON CONFLICT (name) DO UPDATE SET updated_at = now()
+          RETURNING id, name`, [ categoryName ]);
+      }
       if (categoryId && !categoryResult.rowCount) {
         const error = new Error('对象分类不存在');
         error.code = 'INVALID_OBJECT_CATEGORY';
         throw error;
       }
+      categoryId = categoryResult.rows[0]?.id || null;
       const duplicate = await client.query(`
         SELECT id FROM supervision_objects
         WHERE id <> $1 AND status = 'active'
