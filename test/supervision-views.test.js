@@ -120,6 +120,23 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /showPlanFormTab/);
 });
 
+test('renders joint review page with a single optional scope filter', { skip: !ejs }, async () => {
+  const html = await ejs.renderFile(path.join(viewRoot, 'joint-reviews/index.ejs'), {
+    definitionId: '00000000-0000-0000-0000-000000000001',
+    objectId: '',
+    standardItemId: '',
+    projectId: '',
+    reviewType: '',
+    humanDecision: '',
+    reviews: [],
+    summary: { total: 0, error: 0, warning: 0, pending: 0, aiCompleted: 0 },
+    csrf: 'test-token',
+  });
+  assert.match(html, /联合复核/);
+  assert.match(html, /name="definitionId" value="00000000-0000-0000-0000-000000000001"/);
+  assert.doesNotMatch(html, /objectId is not defined/);
+});
+
 test('provides context links to the joint review workbench from plans, objects, and standard items', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   const objectView = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');

@@ -169,7 +169,10 @@ class JointReviewService extends Service {
       : '';
     const reviews = await this.repository.listReviews({ ...scope, reviewType, humanDecision });
     return {
-      ...scope,
+      definitionId: scope.definitionId || '',
+      objectId: scope.objectId || '',
+      standardItemId: scope.standardItemId || '',
+      projectId: scope.projectId || '',
       reviewType,
       humanDecision,
       reviews,
