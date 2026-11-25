@@ -225,6 +225,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /检查步骤/);
   assert.match(html, /频率 \/ 方式/);
   assert.match(html, /popover\.showPopover\(\)/);
+  assert.match(html, /addEventListener\('mouseover'[\s\S]*object-plan-number/);
+  assert.match(html, /addEventListener\('focusin'[\s\S]*object-plan-number/);
   assert.match(html, /const resetUrl = targetView => buildUrl\(targetView, 1, \{[\s\S]*center: '',[\s\S]*search: '',[\s\S]*categoryInput: ''/);
   assert.match(html, /href="<%= resetUrl\(viewValue\) %>">重置<\/a>/);
   assert.doesNotMatch(html, /href="<%= buildUrl\(viewValue\) %>">重置<\/a>/);

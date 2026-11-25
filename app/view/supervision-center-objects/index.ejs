@@ -112,6 +112,14 @@
     event.stopPropagation();
   }
   const objectPopover = document.getElementById('objectPlanPopover');
+  document.addEventListener('mouseover', event => {
+    const trigger = event.target.closest('.object-plan-number');
+    if (trigger) showObjectPlanPreview(event, trigger);
+  });
+  document.addEventListener('focusin', event => {
+    const trigger = event.target.closest('.object-plan-number');
+    if (trigger) showObjectPlanPreview(event, trigger);
+  });
   document.addEventListener('click', event => {
     if (objectPopover?.matches(':popover-open')
       && !event.target.closest('.object-plan-number')
