@@ -141,8 +141,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /新增对象分类/);
   assert.match(html, /规范对象名称/);
   assert.match(html, /对象分类/);
-  assert.match(html, /objectCategoriesValue = Array\.isArray\(objectCategories\)/);
-  assert.match(html, /centerObjectsValue = Array\.isArray\(centerObjects\)/);
+  assert.match(html, /objectCategoriesValue = Array\.isArray\(typeof objectCategories/);
+  assert.match(html, /centerObjectsValue = Array\.isArray\(typeof centerObjects/);
 });
 
 test('keeps rule scanning manual, AI optional, and manual review always available', () => {
