@@ -37,11 +37,53 @@
   <li class="nav-item"><a class="nav-link <%= viewValue === 'categories' ? 'active' : '' %>" href="<%= buildUrl('categories') %>">分类维护</a></li>
 </ul>
 
-<% if (viewValue === 'categories') { %>
-<div class="row g-3">
-  <% if (canWrite) { %><div class="col-12 col-lg-4"><div class="card"><div class="card-header"><h3 class="card-title">新增对象分类</h3></div><div class="card-body"><form method="post" action="/api/supervision-center-objects/categories" id="categoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="mb-3"><label class="form-label" for="categoryName">分类名称</label><input class="form-control" id="categoryName" name="name" maxlength="200" required placeholder="例如：制度、技术、人员"></div><div class="mb-3"><label class="form-label" for="categoryDescription">分类说明</label><textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea></div><button class="btn btn-primary" type="submit">保存分类</button></form></div></div></div><% } %>
-  <div class="col-12 <%= canWrite ? 'col-lg-8' : '' %>"><div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title">对象分类</h3><span class="badge text-bg-secondary ms-auto"><%= objectCategoriesValue.length %> 个</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>分类</th><th>说明</th><th>对象数量</th><th class="text-end">操作</th></tr></thead><tbody><% objectCategoriesValue.forEach(item => { %><tr><td><strong><%= item.name %></strong></td><td><%= item.description || '-' %></td><td><%= item.object_count %></td><td class="text-end"><% if (canWrite && Number(item.object_count) === 0) { %><button class="btn btn-sm btn-outline-danger" type="button" data-category-id="<%= item.id %>" data-category-name="<%= item.name %>" onclick="deleteObjectCategory(this)">删除</button><% } else if (canWrite) { %><span class="small text-secondary">有对象使用</span><% } %></td></tr><% }) %><% if (!objectCategoriesValue.length) { %><tr><td colspan="4" class="text-center text-secondary py-5">尚未建立对象分类。</td></tr><% } %></tbody></table></div></div></div>
+<% if (viewValue === 'categories') { %><script>
+  function toggleCategoryObjects(button) {
+    const list = button.closest('td').querySelector('[data-category-object-list]');
+    const extra = list?.querySelector('.category-object-extra');
+    if (!extra) return;
+    const expanding = extra.classList.contains('d-none');
+    extra.classList.toggle('d-none', !expanding);
+    button.textContent = expanding ? '收起' : `展开全部 ${list.querySelectorAll('.category-object-chip').length} 个`;
+  }
+  function filterObjectCategory(name) {
+    const url = new URL('/supervision-center-objects', window.location.origin);
+    url.searchParams.set('view', 'overview');
+    url.searchParams.set('categoryInput', name);
+    window.location.assign(url.toString());
+  }
+</script>
+<div class="card">
+  <div class="card-header d-flex flex-wrap align-items-center gap-2">
+    <div><h3 class="card-title mb-0">对象分类</h3><div class="small text-secondary mt-1">每个分类下列出当前使用的规范对象；对象较多时默认折叠。</div></div>
+    <span class="badge text-bg-secondary"><%= objectCategoriesValue.length %> 个分类</span>
+    <% if (canWrite) { %><button class="btn btn-primary btn-sm ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#createCategoryModal">新增分类</button><% } %>
+  </div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th style="width:14rem">分类</th><th>包含规范对象</th><th style="width:7rem">对象数量</th><th style="width:9rem">说明</th><th class="text-end" style="width:7rem">操作</th></tr></thead>
+    <tbody>
+      <% objectCategoriesValue.forEach(item => { const categoryObjects = Array.isArray(item.objects) ? item.objects : []; const visibleObjects = categoryObjects.slice(0, 8); const hiddenCount = Math.max(0, categoryObjects.length - visibleObjects.length); %>
+        <tr>
+          <td><strong><%= item.name %></strong></td>
+          <td>
+            <% if (categoryObjects.length) { %>
+              <div class="d-flex flex-wrap gap-1 category-object-list" data-category-object-list>
+                <% visibleObjects.forEach(object => { %><button class="btn btn-sm btn-outline-secondary category-object-chip" type="button" data-bs-toggle="tooltip" title="查看分类为“<%= item.name %>”的对象" onclick="filterObjectCategory(<%= JSON.stringify(item.name) %>)"><%= object.name %></button><% }) %>
+                <span class="d-none category-object-extra"><% categoryObjects.slice(8).forEach(object => { %><button class="btn btn-sm btn-outline-secondary category-object-chip" type="button" onclick="filterObjectCategory(<%= JSON.stringify(item.name) %>)"><%= object.name %></button><% }) %></span>
+              </div>
+              <% if (hiddenCount) { %><button class="btn btn-link btn-sm px-0 mt-1" type="button" onclick="toggleCategoryObjects(this)">展开全部 <%= categoryObjects.length %> 个</button><% } %>
+            <% } else { %><span class="text-secondary">暂无对象</span><% } %>
+          </td>
+          <td><span class="badge text-bg-light border"><%= item.object_count %> 个</span></td>
+          <td class="small text-secondary"><%= item.description || '-' %></td>
+          <td class="text-end"><% if (canWrite && Number(item.object_count) === 0) { %><button class="btn btn-sm btn-outline-danger" type="button" data-category-id="<%= item.id %>" data-category-name="<%= item.name %>" onclick="deleteObjectCategory(this)">删除</button><% } else if (canWrite) { %><span class="small text-secondary">使用中</span><% } %></td>
+        </tr>
+      <% }) %>
+      <% if (!objectCategoriesValue.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">尚未建立对象分类。</td></tr><% } %>
+    </tbody>
+  </table></div>
 </div>
+<% if (canWrite) { %><div class="modal fade" id="createCategoryModal" tabindex="-1" aria-labelledby="createCategoryTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" action="/api/supervision-center-objects/categories" id="categoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="createCategoryTitle">新增对象分类</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="categoryName">分类名称</label><input class="form-control" id="categoryName" name="name" maxlength="200" required placeholder="例如：管理制度、业务平台"></div><div><label class="form-label" for="categoryDescription">分类说明</label><textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存分类</button></div></form></div></div></div><% } %>
 <% } else { %>
 <style>
   .object-category-combobox { position: relative; }

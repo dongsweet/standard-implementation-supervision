@@ -344,7 +344,12 @@ class SupervisionDefinitionRepository {
   async listObjectCategories() {
     const result = await this.pool.query(`
       SELECT c.id, c.name, c.description, c.status,
-             count(DISTINCT o.id)::integer AS object_count
+             count(DISTINCT o.id)::integer AS object_count,
+             COALESCE(
+               jsonb_agg(DISTINCT jsonb_build_object('id', o.id, 'name', o.canonical_name))
+                 FILTER (WHERE o.id IS NOT NULL),
+               '[]'::jsonb
+             ) AS objects
       FROM supervision_object_categories c
       LEFT JOIN supervision_objects o ON o.category_id = c.id AND o.status = 'active'
       WHERE c.status = 'active'

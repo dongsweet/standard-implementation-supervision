@@ -268,7 +268,14 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /规范对象、原始名称或分类/);
   assert.match(html, /适用机构/);
   assert.match(html, /<%= option %>/);
-  assert.match(html, /新增对象分类/);
+  assert.match(html, /id="createCategoryModal"/);
+  assert.match(html, /data-bs-target="#createCategoryModal"/);
+  assert.match(html, /包含规范对象/);
+  assert.match(html, /category-object-list/);
+  assert.match(html, /展开全部 <%= categoryObjects\.length %> 个/);
+  assert.match(html, /function toggleCategoryObjects/);
+  assert.match(html, /function filterObjectCategory/);
+  assert.doesNotMatch(html, /<div class="col-12 col-lg-4"><div class="card"><div class="card-header"><h3 class="card-title">新增对象分类/);
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /id="editObjectCategoryCombobox"/);
   assert.match(html, /id="objectMergeModal"/);
