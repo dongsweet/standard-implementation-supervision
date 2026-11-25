@@ -71,10 +71,20 @@
   </div>
 </div>
 
+<style>
+  .joint-review-table { min-width: 82rem; table-layout: fixed; }
+  .joint-review-table th, .joint-review-table td { vertical-align: top; }
+  .joint-review-table .joint-col-type { width: 7rem; }
+  .joint-review-table .joint-col-context { width: 13rem; }
+  .joint-review-table .joint-col-ai { width: 18rem; }
+  .joint-review-table .joint-col-human { width: 14rem; }
+  .joint-review-table .joint-col-actions { width: 9rem; }
+  .joint-review-context-json { max-height: 15rem; overflow: auto; }
+</style>
 <div class="card">
   <div class="card-header d-flex align-items-center"><h3 class="card-title">候选与复核记录</h3><span class="badge text-bg-secondary ms-auto"><%= reviews.length %> 条</span></div>
-  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:8rem">类型</th><th>问题与规则依据</th><th style="width:18rem">关联上下文</th><th style="width:18rem">AI 建议</th><th style="width:18rem">人工结论</th><th style="width:12rem">操作</th></tr></thead>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0 joint-review-table">
+    <thead><tr><th class="joint-col-type">类型</th><th>问题与规则依据</th><th class="joint-col-context">关联上下文</th><th class="joint-col-ai">AI 建议</th><th class="joint-col-human">人工结论</th><th class="joint-col-actions">操作</th></tr></thead>
     <tbody>
       <% reviews.forEach(review => { %>
         <tr>
@@ -82,7 +92,7 @@
           <td>
             <strong><%= review.title %></strong>
             <div class="small text-secondary mt-1"><%= review.summary %></div>
-            <details class="small mt-2"><summary>查看规则依据与上下文</summary><div class="mt-2"><b>规则：</b><%= review.rule_reason || '-' %></div><pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0 text-wrap"><%= JSON.stringify(review.context, null, 2) %></pre></div></details>
+            <details class="small mt-2"><summary>查看规则依据与上下文</summary><div class="mt-2"><b>规则：</b><%= review.rule_reason || '-' %></div><pre class="small bg-body-tertiary border rounded p-2 mt-2 mb-0 text-wrap joint-review-context-json"><%= JSON.stringify(review.context, null, 2) %></pre></div></details>
           </td>
           <td class="small">
             <% if (review.plan_number) { %><div>方案：<span class="badge text-bg-light border"><%= String(review.plan_number).padStart(3, '0') %></span></div><% } %>

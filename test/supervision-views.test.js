@@ -152,6 +152,9 @@ test('provides context links to the joint review workbench from plans, objects, 
   assert.match(jointView, /不会自动修改标准、项目应答、检查方案或规范对象/);
   assert.match(jointView, /runJointAiReview/);
   assert.match(jointView, /jointHumanDecision/);
+  assert.match(jointView, /\.joint-review-table \{ min-width: 82rem; table-layout: fixed; \}/);
+  assert.match(jointView, /joint-col-context/);
+  assert.match(jointView, /joint-review-context-json/);
   assert.match(jointView, /confirmed problem|确认不匹配/);
 });
 
