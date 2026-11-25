@@ -4,6 +4,8 @@
   const priorityValue = typeof priority === 'undefined' ? '' : priority;
   const checkMethodValue = typeof checkMethod === 'undefined' ? '' : checkMethod;
   const centerValue = typeof center === 'undefined' ? '' : center;
+  const objectIdValue = typeof objectId === 'undefined' ? '' : objectId;
+  const objectNameValue = typeof objectName === 'undefined' ? '' : objectName;
   const centerOptionsValue = typeof centerOptions === 'undefined' ? [] : centerOptions;
   const objectOptionsValue = typeof objectOptions === 'undefined' ? [] : objectOptions;
   const objectCategoriesValue = typeof objectCategories === 'undefined' ? [] : objectCategories;
@@ -19,6 +21,7 @@
     if (priorityValue) params.push('priority=' + encodeURIComponent(priorityValue));
     if (checkMethodValue) params.push('checkMethod=' + encodeURIComponent(checkMethodValue));
     if (centerValue) params.push('center=' + encodeURIComponent(centerValue));
+    if (objectIdValue) params.push('objectId=' + encodeURIComponent(objectIdValue));
     params.push('page=' + targetPage);
     return '?' + params.join('&');
   };
@@ -31,7 +34,8 @@
 <div class="card mb-3">
   <div class="card-body">
     <form method="get" action="/supervision-definitions" class="row g-2 align-items-end">
-      <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="definitionSearch">查找</label><input class="form-control" id="definitionSearch" name="search" value="<%= searchValue %>" placeholder="方案编号、检查对象、描述或标准编号"></div>
+      <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="definitionSearch">查找</label><input class="form-control" id="definitionSearch" name="search" value="<%= searchValue %>" placeholder="方案编号、检查对象、描述或标准编号"></div>
+      <div class="col-12 col-md-6 col-xl-3"><label class="form-label" for="definitionObjectFilter">检查对象</label><div class="object-category-combobox" id="definitionObjectFilterCombobox"><input class="form-control object-category-combobox-input" id="definitionObjectFilter" type="search" value="<%= objectNameValue %>" autocomplete="off" placeholder="输入检查对象、别名或分类筛选" role="combobox" aria-expanded="false" aria-controls="definitionObjectFilterMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="definitionObjectFilterToggle" type="button" aria-label="展开检查对象候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="definitionObjectFilterMenu" role="listbox"></div></div><input type="hidden" id="definitionObjectId" name="objectId" value="<%= objectIdValue %>"><div class="visually-hidden" id="definitionObjectFilterStatus" role="status" aria-live="polite"></div></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionPriority">重点项</label><select class="form-select" id="definitionPriority" name="priority"><option value="">全部</option><option value="重点项" <%= priorityValue === '重点项' ? 'selected' : '' %>>重点项</option><option value="非重点项" <%= priorityValue === '非重点项' ? 'selected' : '' %>>非重点项</option><option value="未指定" <%= priorityValue === '未指定' ? 'selected' : '' %>>未指定</option></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionMethod">检查方法</label><select class="form-select" id="definitionMethod" name="checkMethod"><option value="">全部方法</option><% checkMethodOptions.forEach(method => { %><option value="<%= method %>" <%= checkMethodValue === method ? 'selected' : '' %>><%= method %></option><% }) %></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionCenter">适用机构</label><select class="form-select" id="definitionCenter" name="center"><option value="">全部机构</option><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>" <%= centerValue === centerOption ? 'selected' : '' %>><%= centerOption %></option><% }) %></select></div>
@@ -398,12 +402,148 @@
     setValue(input.value);
     return { setValue };
   }
+  function createPlanObjectFilter() {
+    const root = document.getElementById('definitionObjectFilterCombobox');
+    const input = document.getElementById('definitionObjectFilter');
+    const hidden = document.getElementById('definitionObjectId');
+    const toggle = document.getElementById('definitionObjectFilterToggle');
+    const menu = document.getElementById('definitionObjectFilterMenu');
+    const status = document.getElementById('definitionObjectFilterStatus');
+    const form = input?.closest('form');
+    if (!root || !input || !hidden || !toggle || !menu || !status || !form) return;
+    let visible = [];
+    let activeIndex = -1;
+    let open = false;
+    const close = () => {
+      open = false;
+      activeIndex = -1;
+      menu.classList.add('d-none');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const show = () => {
+      open = true;
+      menu.classList.remove('d-none');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const objectSearchText = object => [
+      object.canonical_name,
+      object.object_category,
+      ...(object.aliases || []),
+    ].filter(Boolean).join(' ');
+    const paint = (items, message) => {
+      visible = items;
+      activeIndex = items.length ? 0 : -1;
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'object-category-combobox-empty';
+        empty.textContent = message;
+        menu.replaceChildren(empty);
+        return;
+      }
+      menu.replaceChildren(...items.map((item, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'object-category-combobox-option' + (index === activeIndex ? ' is-active' : '');
+        button.setAttribute('role', 'option');
+        button.dataset.index = String(index);
+        const label = document.createElement('span');
+        label.textContent = item.canonical_name;
+        const subtitle = document.createElement('span');
+        subtitle.className = 'option-subtitle';
+        subtitle.textContent = [ item.object_category || '未分类', ...(item.aliases || []).slice(0, 2) ].join(' · ');
+        button.append(label, subtitle);
+        return button;
+      }));
+    };
+    const updateActive = next => {
+      if (!visible.length) return;
+      activeIndex = (next + visible.length) % visible.length;
+      menu.querySelectorAll('.object-category-combobox-option').forEach((option, index) => {
+        option.classList.toggle('is-active', index === activeIndex);
+        if (index === activeIndex) option.scrollIntoView({ block: 'nearest' });
+      });
+    };
+    const select = item => {
+      if (!item) return;
+      input.value = item.canonical_name;
+      hidden.value = item.id;
+      status.textContent = `已选择：${item.canonical_name}`;
+      close();
+    };
+    const renderMatches = () => {
+      const keyword = normalizedPickerText(input.value);
+      const matches = keyword
+        ? planObjectCatalog.filter(item => normalizedPickerText(objectSearchText(item)).includes(keyword))
+        : planObjectCatalog;
+      paint(matches, keyword ? '没有匹配的检查对象' : '暂无可选检查对象');
+      status.textContent = keyword ? `匹配 ${matches.length} 个检查对象。` : `共 ${planObjectCatalog.length} 个检查对象。`;
+      show();
+    };
+    input.addEventListener('focus', renderMatches);
+    input.addEventListener('input', () => {
+      hidden.value = '';
+      renderMatches();
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex - 1);
+      } else if (event.key === 'Enter' && open && visible[activeIndex]) {
+        event.preventDefault();
+        select(visible[activeIndex]);
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+    toggle.addEventListener('mousedown', event => event.preventDefault());
+    toggle.addEventListener('click', () => {
+      if (open) close();
+      else {
+        input.focus();
+        renderMatches();
+      }
+    });
+    menu.addEventListener('mousedown', event => event.preventDefault());
+    menu.addEventListener('click', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) select(visible[Number(option.dataset.index)]);
+    });
+    menu.addEventListener('mouseover', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) updateActive(Number(option.dataset.index));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!root.contains(event.target)) close();
+    }, true);
+    form.addEventListener('submit', event => {
+      if (!input.value.trim()) {
+        hidden.value = '';
+        return;
+      }
+      if (hidden.value) return;
+      event.preventDefault();
+      input.focus();
+      renderMatches();
+      window.showAppNotice('请从检查对象候选中选择，或清空该筛选项。', '检查对象未选择');
+    });
+    if (hidden.value) {
+      const selected = planObjectCatalog.find(item => item.id === hidden.value);
+      input.value = selected?.canonical_name || input.value;
+      status.textContent = selected ? `已选择：${selected.canonical_name}` : '';
+    }
+  }
   function initializeObjectPicker(prefix) {
     const objectInput = document.getElementById(prefix + 'ObjectName');
     populateObjectOptions(prefix);
     planCategoryPickers[prefix] = initializePlanCategoryPicker(prefix);
     objectInput.addEventListener('change', () => resolvePlanObject(prefix, true));
   }
+  createPlanObjectFilter();
   initializeObjectPicker('create');
   initializeObjectPicker('edit');
 

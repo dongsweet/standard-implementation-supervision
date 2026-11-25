@@ -29,15 +29,17 @@ class SupervisionDefinitionService extends Service {
     const priority = String(query.priority || '').trim();
     const checkMethod = String(query.checkMethod || '').trim().slice(0, 100);
     const center = String(query.center || '').trim();
+    const objectId = String(query.objectId || '').trim();
     const allowedStatuses = new Set([ '', 'active', 'merged' ]);
     const allowedPriorities = new Set([ '', '重点项', '非重点项', '未指定' ]);
     if (!allowedStatuses.has(status)) this.ctx.throw(400, '无效的方案状态');
     if (!allowedPriorities.has(priority)) this.ctx.throw(400, '无效的重点项筛选');
+    if (objectId && !UUID_RE.test(objectId)) this.ctx.throw(400, '无效的检查对象筛选');
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const [ definitionResult, methodRows, centers, objectCategories, objectOptions, fieldOptions ] = await Promise.all([
-      this.repository.listDefinitions({ search, status, priority, checkMethod, center, page, pageSize }),
+      this.repository.listDefinitions({ search, status, priority, checkMethod, center, objectId, page, pageSize }),
       this.repository.listDefinitionMethods(),
       this.repository.listDefinitionCenters(),
       this.repository.listObjectCategories(),
@@ -66,6 +68,8 @@ class SupervisionDefinitionService extends Service {
       priority,
       checkMethod,
       center,
+      objectId,
+      objectName: objectOptions.find(item => item.id === objectId)?.canonical_name || '',
     };
   }
 

@@ -103,7 +103,7 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
-  async listDefinitions({ search = '', status = '', priority = '', checkMethod = '', center = '', page = 1, pageSize = 20 } = {}) {
+  async listDefinitions({ search = '', status = '', priority = '', checkMethod = '', center = '', objectId = '', page = 1, pageSize = 20 } = {}) {
     const conditions = [];
     const values = [];
     if (search) {
@@ -149,6 +149,10 @@ class SupervisionDefinitionRepository {
     if (center) {
       values.push(center);
       conditions.push(`EXISTS (SELECT 1 FROM supervision_definition_centers dc WHERE dc.definition_id = d.id AND dc.center_name = $${values.length})`);
+    }
+    if (objectId) {
+      values.push(objectId);
+      conditions.push(`d.canonical_object_id = $${values.length}`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const countResult = await this.pool.query(`

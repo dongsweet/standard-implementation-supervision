@@ -18,6 +18,12 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   const executionView = fs.readFileSync(path.join(viewRoot, 'supervision-executions/index.ejs'), 'utf8');
   assert.match(planView, /检查方案是系统级可复用定义/);
   assert.match(planView, /name="search"/);
+  assert.match(planView, /id="definitionObjectFilter"/);
+  assert.match(planView, /name="objectId"/);
+  assert.match(planView, /createPlanObjectFilter/);
+  assert.match(planView, /输入检查对象、别名或分类筛选/);
+  assert.match(planView, /请从检查对象候选中选择/);
+
   assert.match(planView, /name="priority"/);
   assert.match(planView, /name="checkMethod"/);
   assert.match(planView, /name="scope"/);
