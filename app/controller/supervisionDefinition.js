@@ -114,6 +114,13 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async objectSplitPreview() {
+    requireGlobalRead(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.objectSplitPreview(this.ctx.params.objectId),
+    };
+  }
+
   async mergeCenterObject() {
     requireGlobalWrite(this.ctx);
     this.ctx.body = {

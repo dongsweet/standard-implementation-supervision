@@ -4,6 +4,7 @@ const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
 const { friendlyAiError } = require('../lib/aiProvider');
+const { buildSplitGroups } = require('../lib/objectSplit');
 const {
   OBJECT_SIMILARITY_ALGORITHM_VERSION,
   buildObjectCandidates,
@@ -318,6 +319,18 @@ class SupervisionDefinitionService extends Service {
       if (error.code === 'DUPLICATE_SUPERVISION_OBJECT') this.ctx.throw(409, error.message);
       throw error;
     }
+  }
+
+  async objectSplitPreview(id) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '对象编号格式无效');
+    const object = await this.repository.getObjectById(id);
+    if (!object || object.status !== 'active') this.ctx.throw(404, '规范对象不存在');
+    const plans = await this.repository.listObjectSplitPlans(id);
+    const groups = buildSplitGroups(plans).map(group => ({
+      ...group,
+      suggestedName: group.category === '未分类' ? '' : `${group.category}${object.canonical_name}`,
+    }));
+    return { object, plans, groups };
   }
 
   async mergeCenterObject(id, payload, actorId) {

@@ -439,6 +439,29 @@ class SupervisionDefinitionRepository {
     }
   }
 
+  async listObjectSplitPlans(sourceId) {
+    const result = await this.pool.query(`
+      SELECT d.id, d.plan_number, d.object_name, d.object_category, d.check_layer,
+             d.check_method, d.description, d.frequency,
+             COALESCE(array_agg(DISTINCT dc.center_name ORDER BY dc.center_name)
+               FILTER (WHERE dc.center_name IS NOT NULL), ARRAY[]::text[]) AS centers
+      FROM supervision_definitions d
+      LEFT JOIN supervision_definition_centers dc ON dc.definition_id = d.id
+      WHERE d.canonical_object_id = $1 AND d.status = 'active'
+      GROUP BY d.id
+      ORDER BY d.object_category, d.plan_number`, [ sourceId ]);
+    return result.rows;
+  }
+
+  async getObjectById(id) {
+    const result = await this.pool.query(`
+      SELECT o.id, o.canonical_name, o.status, c.name AS object_category
+      FROM supervision_objects o
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      WHERE o.id = $1`, [ id ]);
+    return result.rows[0] || null;
+  }
+
   async mergeObject(sourceId, targetId, actorId) {
     if (sourceId === targetId) {
       const error = new Error('来源对象和保留对象不能相同');

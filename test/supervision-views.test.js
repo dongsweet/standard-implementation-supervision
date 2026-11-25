@@ -272,6 +272,13 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /id="editObjectCategoryCombobox"/);
   assert.match(html, /id="objectMergeModal"/);
+  assert.match(html, /id="objectSplitModal"/);
+  assert.match(html, /onclick="openSplitObject\(this\)"/);
+  assert.match(html, /拆分草案/);
+  assert.match(html, /按历史分类预览/);
+  assert.match(html, /mergeSplitGroups/);
+  assert.match(html, /同一个检查方案不能出现在多个分组/);
+  assert.match(html, /业务数据尚未修改/);
   assert.match(html, /id="mergeTargetObject"/);
   assert.match(html, /id="mergeTargetObjectMenu"/);
   assert.match(html, /mergeObjectPicker/);
