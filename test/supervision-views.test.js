@@ -148,10 +148,15 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /对象总览/);
   assert.match(html, /待整理对象/);
   assert.match(html, /分类维护/);
-  assert.match(html, /规范对象或原始名称/);
+  assert.match(html, /规范对象、原始名称或分类/);
   assert.match(html, /适用检查中心/);
   assert.match(html, /新增对象分类/);
   assert.match(html, /deleteObjectCategory/);
+  assert.match(html, /name="categoryInput"/);
+  assert.match(html, /list="objectCategoryOptions"/);
+  assert.match(html, /placeholder="搜索对象、别名或对象分类"/);
+  assert.match(html, /placeholder="全部分类，可输入筛选"/);
+  assert.doesNotMatch(html, /name="category"><option value="">全部分类/);
   assert.match(html, /Number\(item\.object_count\) === 0/);
   assert.match(html, /categories\/.*\/delete/);
   assert.match(html, /规范对象名称/);

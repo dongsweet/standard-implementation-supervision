@@ -85,7 +85,9 @@ class SupervisionDefinitionService extends Service {
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-    const effectiveCategory = view === 'pending' ? '未分类' : category;
+    const categoryInput = String(query.categoryInput || '').trim().slice(0, 200);
+    const requestedCategory = categoryInput || category;
+    const effectiveCategory = view === 'pending' ? '未分类' : requestedCategory;
     const [ result, categories ] = await Promise.all([
       this.repository.listObjectWorkbench({ center, search, category: effectiveCategory, page, pageSize }),
       this.repository.listObjectCategories(),
@@ -93,7 +95,8 @@ class SupervisionDefinitionService extends Service {
     return {
       center,
       search,
-      category,
+      category: requestedCategory,
+      categoryInput,
       view,
       centerOptions: DEFAULT_SUPERVISION_CENTERS,
       centerObjects: result.rows,

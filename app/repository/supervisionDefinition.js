@@ -268,6 +268,7 @@ class SupervisionDefinitionRepository {
     if (search) {
       values.push(`%${search}%`);
       conditions.push(`(o.canonical_name ILIKE $${values.length}
+        OR COALESCE(c.name, '') ILIKE $${values.length}
         OR EXISTS (SELECT 1 FROM supervision_object_aliases fa
           WHERE fa.object_id = o.id AND fa.alias_name ILIKE $${values.length}))`);
     }

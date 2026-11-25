@@ -134,6 +134,7 @@ test('lists canonical supervision objects with category and center filters', asy
   assert.equal(result.rows[0].canonical_name, '云平台');
   assert.deepEqual(calls[0].values, [ '云中心', '%云平台%', '技术' ]);
   assert.deepEqual(calls[1].values, [ '云中心', '%云平台%', '技术', 20, 20 ]);
+  assert.match(calls[0].statement, /COALESCE\(c\.name, ''\) ILIKE \$2/);
   assert.match(calls[1].statement, /GROUP BY o\.id, c\.name/);
 });
 
