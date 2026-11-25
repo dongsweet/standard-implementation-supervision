@@ -331,7 +331,7 @@ async function buildSupervisionPlanTemplate() {
   PLAN_WIDTHS.forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
   sheet.autoFilter = `A1:${String.fromCharCode(64 + PLAN_HEADERS.length)}1`;
   sheet.dataValidations.add('B2:B5000', { type: 'list', allowBlank: true, formulae: [ '"是,否"' ] });
-  sheet.dataValidations.add('G2:G5000', { type: 'list', allowBlank: true, formulae: [ '"分支机构,统一运维机构,总部"' ] });
+  sheet.dataValidations.add('D2:D5000', { type: 'list', allowBlank: true, formulae: [ '"分支机构,统一运维机构,总部"' ] });
   sheet.dataValidations.add('K2:K5000', { type: 'list', allowBlank: true, formulae: [ '"重点项,非重点项"' ] });
   sheet.dataValidations.add('L2:L5000', { type: 'list', allowBlank: true, formulae: [ '"远程,现场,远程+现场"' ] });
   return Buffer.from(await workbook.xlsx.writeBuffer());

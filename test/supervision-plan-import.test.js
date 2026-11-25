@@ -5,7 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { parseSupervisionPlanRows, splitStandardNumbers } = require('../app/lib/supervisionPlanImport');
+const {
+  buildSupervisionPlanTemplate,
+  parseSupervisionPlanRows,
+  splitStandardNumbers,
+} = require('../app/lib/supervisionPlanImport');
 const { joinSupervisionMethods, splitSupervisionMethods } = require('../app/lib/supervisionMethods');
 const { SupervisionPlanImportRepository } = require('../app/repository/supervisionPlanImport');
 
@@ -22,6 +26,16 @@ try {
 test('normalizes multiple supervision methods without losing their individual values', () => {
   assert.deepEqual(splitSupervisionMethods('证据材料核查，上机查看/访谈'), [ '证据材料核查', '上机查看', '访谈' ]);
   assert.equal(joinSupervisionMethods([ '上机查看', '证据材料核查', '证据材料核查' ]), '证据材料核查,上机查看');
+});
+
+test('builds the plan template with branch choices in the applicable organization column', { skip: !ExcelJS }, async () => {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await buildSupervisionPlanTemplate());
+  const worksheet = workbook.getWorksheet('检查方案');
+  assert.equal(worksheet.getCell('D1').value, '适用机构');
+  const validation = worksheet.dataValidations.model['D2:D5000'];
+  assert.ok(validation);
+  assert.deepEqual(validation.formulae, [ '"分支机构,统一运维机构,总部"' ]);
 });
 
 test('splits multi-standard cells without treating hyphens as separators', () => {
