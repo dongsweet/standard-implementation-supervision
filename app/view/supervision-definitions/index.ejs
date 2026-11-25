@@ -154,6 +154,35 @@
     <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存修改</button></div>
   </form>
 </div></div></div>
+<style>
+  @media (max-width: 767.98px) {
+    #createDefinitionModal .modal-dialog,
+    #editDefinitionModal .modal-dialog {
+      width: auto;
+      max-width: none;
+      margin: .5rem;
+    }
+    #createDefinitionModal .modal-content,
+    #editDefinitionModal .modal-content {
+      width: 100%;
+      max-height: calc(100dvh - 1rem);
+    }
+    #createDefinitionModal .modal-body,
+    #editDefinitionModal .modal-body {
+      overflow-x: hidden;
+    }
+    #createDefinitionModal .nav-tabs,
+    #editDefinitionModal .nav-tabs {
+      padding-inline: 1rem !important;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+    #createDefinitionModal .nav-link,
+    #editDefinitionModal .nav-link {
+      white-space: nowrap;
+    }
+  }
+</style>
 <script>
   function updateStandardItemCount(selectId, badgeId) {
     const count = document.getElementById(selectId).selectedOptions.length;
