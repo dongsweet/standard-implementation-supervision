@@ -91,6 +91,15 @@ test('escapes standard content before placing supervision definitions in script 
   assert.match(html, /heading\.textContent = \[item\.code, item\.title\]/);
 });
 
+test('redirects after a plan update without showing a redundant success notice', () => {
+  const controller = fs.readFileSync(path.join(__dirname, '../app/controller/supervisionDefinition.js'), 'utf8');
+  const updateMethod = controller.match(/async update\(\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  assert.match(updateMethod, /this\.ctx\.redirect\('\/supervision-definitions'\);/);
+  assert.doesNotMatch(updateMethod, /notice=/);
+  assert.doesNotMatch(controller, /监督定义已更新/);
+  assert.match(controller, /监督定义已创建/);
+});
+
 test('groups the plan editor into three compact source-aligned tabs', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   assert.match(planView, /id="editBasicTab"/);
