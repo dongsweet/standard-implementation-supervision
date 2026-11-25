@@ -123,6 +123,13 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async standardItemOptions() {
+    requireGlobalRead(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.searchStandardItemOptions(this.ctx.query.q),
+    };
+  }
+
   async create() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.supervisionDefinition.create(this.ctx.request.body || {}, this.ctx.session.userId);

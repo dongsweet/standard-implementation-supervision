@@ -35,11 +35,13 @@ class SupervisionDefinitionService extends Service {
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-    const [ definitionResult, standardItems, methodRows, centers ] = await Promise.all([
+    const [ definitionResult, methodRows, centers, objectCategories, objectOptions, fieldOptions ] = await Promise.all([
       this.repository.listDefinitions({ search, status, priority, checkMethod, center, page, pageSize }),
-      this.repository.listStandardItems(),
       this.repository.listDefinitionMethods(),
       this.repository.listDefinitionCenters(),
+      this.repository.listObjectCategories(),
+      this.repository.listObjectPickerOptions(),
+      this.repository.listDefinitionFieldOptions(),
     ]);
     const checkMethodOptions = new Set(DEFAULT_SUPERVISION_METHODS);
     for (const methodValue of methodRows) {
@@ -47,10 +49,13 @@ class SupervisionDefinitionService extends Service {
     }
     return {
       definitions: definitionResult.rows,
-      standardItems,
       checkMethodOptions: [ ...checkMethodOptions ].sort((left, right) => left.localeCompare(right, 'zh-CN')),
       centers,
       centerOptions: DEFAULT_SUPERVISION_CENTERS,
+      objectCategories,
+      objectOptions,
+      checkLayerOptions: fieldOptions.checkLayerOptions,
+      frequencyOptions: fieldOptions.frequencyOptions,
       total: definitionResult.total,
       page: definitionResult.page,
       pageSize,
@@ -61,6 +66,12 @@ class SupervisionDefinitionService extends Service {
       checkMethod,
       center,
     };
+  }
+
+  async searchStandardItemOptions(search) {
+    const term = String(search || '').trim().slice(0, 200);
+    if (!term) return [];
+    return this.repository.searchStandardItems(term, 30);
   }
 
   async listCenterObjects(query = {}) {

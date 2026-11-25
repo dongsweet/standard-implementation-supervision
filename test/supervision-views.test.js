@@ -100,11 +100,22 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /id="editCheckMethods"[\s\S]*name="checkMethods"/);
   assert.match(planView, /<input type="hidden" id="editScope" name="scope">/);
   assert.doesNotMatch(planView, /id="editScope"[^>]*type="text"/);
-  assert.match(planView, />中心执行频率</);
+  assert.match(planView, /id="editObjectName"[\s\S]*list="editObjectOptions"/);
+  assert.match(planView, /id="editObjectCategory"[\s\S]*list="editCategoryOptions"/);
+  assert.match(planView, /id="editCheckLayer"[\s\S]*list="editCheckLayerOptions"/);
+  assert.match(planView, /id="editFrequency"[\s\S]*list="editFrequencyOptions"/);
+  assert.match(planView, />执行频率</);
   assert.match(planView, />远程\/现场查看</);
   assert.match(planView, />检查项描述</);
   assert.match(planView, /<details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）<\/summary>/);
+  assert.match(planView, /standard-picker/);
+  assert.match(planView, /editStandardChips/);
+  assert.match(planView, /editStandardSearch/);
+  assert.match(planView, /输入标准编号、条款编号或内容搜索/);
+  assert.doesNotMatch(planView, /<select class="form-select" id="editStandardItems" multiple size="12">/);
   assert.match(planView, /editStandardItemCount/);
+  assert.match(planView, /class StandardItemPicker/);
+  assert.match(planView, /resolvePlanObject/);
   assert.match(planView, /showPlanFormTab/);
 });
 

@@ -163,7 +163,8 @@ class SupervisionDefinitionRepository {
     const limitParameter = values.length + 1;
     const offsetParameter = values.length + 2;
     const result = await this.pool.query(`
-      SELECT d.id, d.plan_number, d.object_name, d.scope, d.recognized_object, d.object_category, d.check_layer, d.check_method,
+      SELECT d.id, d.plan_number, d.object_name, d.canonical_object_id, d.scope, d.recognized_object,
+             d.object_category, d.check_layer, d.check_method,
              d.description, d.steps, d.frequency, d.access_mode, d.priority,
              d.reference_result, d.reference_materials, d.status,
              d.merged_into_id, d.created_at, d.updated_at,
@@ -308,6 +309,20 @@ class SupervisionDefinitionRepository {
       ORDER BY o.canonical_name
       LIMIT $${limitParameter} OFFSET $${offsetParameter}`, [ ...values, pageSize, (currentPage - 1) * pageSize ]);
     return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
+  }
+
+  async listObjectPickerOptions() {
+    const result = await this.pool.query(`
+      SELECT o.id, o.canonical_name, c.id AS category_id, c.name AS object_category,
+             COALESCE(array_agg(DISTINCT oa.alias_name ORDER BY oa.alias_name)
+               FILTER (WHERE oa.alias_name IS NOT NULL), ARRAY[]::text[]) AS aliases
+      FROM supervision_objects o
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      LEFT JOIN supervision_object_aliases oa ON oa.object_id = o.id
+      WHERE o.status = 'active'
+      GROUP BY o.id, c.id, c.name
+      ORDER BY o.canonical_name`);
+    return result.rows;
   }
 
   async listObjectCategories() {
@@ -646,6 +661,47 @@ class SupervisionDefinitionRepository {
       JOIN standards s ON s.id = sv.standard_id
       ORDER BY s.code, sv.version, si.item_code`);
     return result.rows;
+  }
+
+  async searchStandardItems(search = '', limit = 30) {
+    const term = String(search || '').trim();
+    if (!term) return [];
+    const result = await this.pool.query(`
+      SELECT si.id, si.item_code AS code, si.standard_number AS "standardNumber", si.title,
+             sc.code AS "chapterCode", sc.name AS "chapterName",
+             s.code AS "standardCode", sv.version,
+             left(si.content, 260) AS preview
+      FROM standard_items si
+      JOIN standard_versions sv ON sv.id = si.standard_version_id
+      JOIN standards s ON s.id = sv.standard_id
+      JOIN standard_chapters sc ON sc.id = si.chapter_id
+      WHERE si.item_code ILIKE $1 OR si.standard_number ILIKE $1
+         OR COALESCE(si.title, '') ILIKE $1 OR si.content ILIKE $1
+         OR s.code ILIKE $1 OR sv.version ILIKE $1
+      ORDER BY
+        CASE WHEN si.standard_number ILIKE $2 OR si.item_code ILIKE $2 THEN 0 ELSE 1 END,
+        s.code, sv.version, si.item_code
+      LIMIT $3`, [ `%${term}%`, `${term}%`, limit ]);
+    return result.rows;
+  }
+
+  async listDefinitionFieldOptions() {
+    const [ layers, frequencies ] = await Promise.all([
+      this.pool.query(`
+        SELECT DISTINCT btrim(check_layer) AS value
+        FROM supervision_definitions
+        WHERE status = 'active' AND btrim(COALESCE(check_layer, '')) <> ''
+        ORDER BY value`),
+      this.pool.query(`
+        SELECT DISTINCT btrim(frequency) AS value
+        FROM supervision_definitions
+        WHERE status = 'active' AND btrim(COALESCE(frequency, '')) <> ''
+        ORDER BY value`),
+    ]);
+    return {
+      checkLayerOptions: layers.rows.map(row => row.value),
+      frequencyOptions: frequencies.rows.map(row => row.value),
+    };
   }
 
   async create({ fields, standardItemIds }, actorId) {

@@ -40,6 +40,7 @@ test('filters and paginates supervision definitions with stable readable-number 
   assert.match(calls[0].statement, /d\.check_method ILIKE \$4/);
   assert.match(calls[0].statement, /filter_si\.standard_number ILIKE \$1/);
   assert.match(calls[1].statement, /ORDER BY d\.status, d\.plan_number/);
+  assert.match(calls[1].statement, /d\.canonical_object_id/);
   assert.match(calls[0].statement, /dc\.center_name = \$5/);
   assert.match(calls[1].statement, /LIMIT \$6 OFFSET \$7/);
 });
@@ -60,6 +61,56 @@ test('clamps out-of-range supervision pages before querying rows', async () => {
   assert.equal(result.page, 3);
   assert.equal(result.pageCount, 3);
   assert.deepEqual(calls[1].values, [ 20, 40 ]);
+});
+
+test('searches standard items by number, title, and content in one query', async () => {
+  let captured;
+  const repository = new Repository({
+    async query(sql, values = []) {
+      captured = { statement: sql.replace(/\s+/g, ' ').trim(), values };
+      return {
+        rows: [ {
+          id: 'item-1',
+          code: '6.1.1',
+          standardNumber: 'GB/T 31168 / 2023 · 10.1.2',
+          title: '增强要求',
+          standardCode: 'GB/T 31168',
+          version: '2023',
+          preview: '正文内容',
+        } ],
+        rowCount: 1,
+      };
+    },
+  });
+  const result = await repository.searchStandardItems('访问控制', 30);
+  assert.equal(result.length, 1);
+  assert.deepEqual(captured.values, [ '%访问控制%', '访问控制%', 30 ]);
+  assert.match(captured.statement, /si\.item_code ILIKE \$1/);
+  assert.match(captured.statement, /si\.standard_number ILIKE \$1/);
+  assert.match(captured.statement, /si\.title, ''\) ILIKE \$1/);
+  assert.match(captured.statement, /si\.content ILIKE \$1/);
+  assert.match(captured.statement, /LIMIT \$3/);
+});
+
+test('loads compact object choices and editable layer and frequency options', async () => {
+  const calls = [];
+  const repository = new Repository({
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if (statement.startsWith('SELECT DISTINCT btrim(check_layer)')) {
+        return { rows: [ { value: '管理层面' }, { value: '技术层面' } ] };
+      }
+      if (statement.startsWith('SELECT DISTINCT btrim(frequency)')) {
+        return { rows: [ { value: '每年' }, { value: '每季度' } ] };
+      }
+      throw new Error('Unexpected query: ' + statement);
+    },
+  });
+  const options = await repository.listDefinitionFieldOptions();
+  assert.deepEqual(options.checkLayerOptions, [ '管理层面', '技术层面' ]);
+  assert.deepEqual(options.frequencyOptions, [ '每年', '每季度' ]);
+  assert.equal(calls.length, 2);
 });
 
 test('lists canonical supervision objects with category and center filters', async () => {

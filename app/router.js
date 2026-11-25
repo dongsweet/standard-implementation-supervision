@@ -26,6 +26,7 @@ module.exports = app => {
   router.post('/supervision-plan-imports', controller.supervisionPlanImport.create);
   router.get('/supervision-plan-imports/:jobId', controller.supervisionPlanImport.review);
   router.post('/supervision-plan-imports/:jobId/apply', controller.supervisionPlanImport.apply);
+  router.get('/api/supervision-definition-options/standard-items', controller.supervisionDefinition.standardItemOptions);
   router.post('/supervision-definitions', controller.supervisionDefinition.create);
   router.post('/supervision-definitions/:definitionId', controller.supervisionDefinition.update);
   router.get('/supervision-executions', controller.supervisionExecution.index);

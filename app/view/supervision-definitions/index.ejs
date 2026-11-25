@@ -5,6 +5,10 @@
   const checkMethodValue = typeof checkMethod === 'undefined' ? '' : checkMethod;
   const centerValue = typeof center === 'undefined' ? '' : center;
   const centerOptionsValue = typeof centerOptions === 'undefined' ? [] : centerOptions;
+  const objectOptionsValue = typeof objectOptions === 'undefined' ? [] : objectOptions;
+  const objectCategoriesValue = typeof objectCategories === 'undefined' ? [] : objectCategories;
+  const checkLayerOptionsValue = typeof checkLayerOptions === 'undefined' ? [] : checkLayerOptions;
+  const frequencyOptionsValue = typeof frequencyOptions === 'undefined' ? [] : frequencyOptions;
   const totalValue = typeof total === 'undefined' ? definitions.length : total;
   const pageValue = typeof page === 'undefined' ? 1 : page;
   const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
@@ -71,6 +75,15 @@
   </form>
 </div></div></div>
 
+<datalist id="createCategoryOptions"><% objectCategoriesValue.forEach(category => { %><option value="<%= category.name %>"></option><% }) %></datalist>
+<datalist id="editCategoryOptions"><% objectCategoriesValue.forEach(category => { %><option value="<%= category.name %>"></option><% }) %></datalist>
+<datalist id="createObjectOptions"></datalist>
+<datalist id="editObjectOptions"></datalist>
+<datalist id="createCheckLayerOptions"><% checkLayerOptionsValue.forEach(value => { %><option value="<%= value %>"></option><% }) %></datalist>
+<datalist id="editCheckLayerOptions"><% checkLayerOptionsValue.forEach(value => { %><option value="<%= value %>"></option><% }) %></datalist>
+<datalist id="createFrequencyOptions"><% frequencyOptionsValue.forEach(value => { %><option value="<%= value %>"></option><% }) %></datalist>
+<datalist id="editFrequencyOptions"><% frequencyOptionsValue.forEach(value => { %><option value="<%= value %>"></option><% }) %></datalist>
+
 <div class="modal fade" id="createDefinitionModal" tabindex="-1" aria-labelledby="createDefinitionModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
   <form id="createDefinitionForm" method="post" action="/supervision-definitions"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="scope" value="">
     <div class="modal-header"><h2 class="modal-title fs-5" id="createDefinitionModalLabel">新增检查方案</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
@@ -83,9 +96,9 @@
       <div class="tab-content px-4 py-3">
         <section class="tab-pane fade show active" id="createBasicPane" role="tabpanel" aria-labelledby="createBasicTab" tabindex="0">
           <div class="row g-3">
-            <div class="col-md-8"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" required maxlength="500" placeholder="例如：云平台账号管理"></div>
-            <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" placeholder="例如：管理制度、执行计划"></div>
-            <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" placeholder="例如：管理层面、技术层面"></div>
+            <div class="col-md-8"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" list="createObjectOptions" autocomplete="off" required maxlength="500" placeholder="输入名称、别名或先选择分类"><div class="form-text">来自“中心检查对象”规范对象主数据；必须选择一个已有对象。</div></div>
+            <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" list="createCategoryOptions" autocomplete="off" placeholder="可先选分类筛选对象"><div class="form-text">分类来自对象工作台，选择对象后自动关联。</div></div>
+            <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" list="createCheckLayerOptions" autocomplete="off" placeholder="选择现有值或输入新值"></div>
             <div class="col-md-4"><label class="form-label" for="createRecognizedObject">是否公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
             <div class="col-12"><label class="form-label d-block">适用检查中心</label><div class="d-flex flex-wrap gap-2" id="createCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="createCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">来自原表“检查项位于”；可多选，执行时按中心分别记录。</div></div>
@@ -95,7 +108,7 @@
           <div class="row g-3">
             <div class="col-12"><label class="form-label d-block">检查方法</label><div class="d-flex flex-wrap gap-2" id="createCheckMethods"><% checkMethodOptions.forEach((method, index) => { %><input class="btn-check" type="checkbox" name="checkMethods" id="createMethod<%= index %>" value="<%= method %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createMethod<%= index %>"><%= method %></label><% }) %></div></div>
             <div class="col-md-6"><label class="form-label" for="createAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="createAdditionalCheckMethods" name="additionalCheckMethods" placeholder="多个方法用逗号分隔"></div>
-            <div class="col-md-3"><label class="form-label" for="createFrequency">中心执行频率</label><input class="form-control" id="createFrequency" name="frequency" placeholder="例如：每季度"></div>
+            <div class="col-md-3"><label class="form-label" for="createFrequency">执行频率</label><input class="form-control" id="createFrequency" name="frequency" list="createFrequencyOptions" autocomplete="off" placeholder="选择现有值或输入新值"></div>
             <div class="col-md-3"><label class="form-label" for="createAccessMode">远程/现场查看</label><select class="form-select" id="createAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
             <div class="col-12"><label class="form-label" for="createDescription">检查项描述</label><textarea class="form-control" id="createDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
             <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="4"></textarea></div>
@@ -103,9 +116,14 @@
           </div>
         </section>
         <section class="tab-pane fade" id="createStandardsPane" role="tabpanel" aria-labelledby="createStandardsTab" tabindex="0">
-          <label class="form-label" for="createStandardItems">关联标准项</label>
-          <select class="form-select" id="createStandardItems" name="standardItemIds" multiple size="12" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select>
-          <div class="form-text">一条检查方案可以关联多个标准项。</div>
+          <label class="form-label" for="createStandardSearch">关联标准项</label>
+          <select class="d-none" id="createStandardItems" name="standardItemIds" multiple></select>
+          <div class="standard-picker" data-picker="createStandardPicker">
+            <div class="standard-picker-selected d-flex flex-wrap gap-2 mb-2" id="createStandardChips"></div>
+            <input class="form-control" id="createStandardSearch" type="search" autocomplete="off" placeholder="输入标准编号、条款编号或内容搜索">
+            <div class="standard-picker-results list-group shadow-sm mt-1 d-none" id="createStandardResults"></div>
+          </div>
+          <div class="form-text">支持标准编号、内部编号、标题和正文内容搜索；已选项会显示在上方。</div>
         </section>
       </div>
     </div>
@@ -125,9 +143,9 @@
       <div class="tab-content px-4 py-3">
         <section class="tab-pane fade show active" id="editBasicPane" role="tabpanel" aria-labelledby="editBasicTab" tabindex="0">
           <div class="row g-3">
-            <div class="col-md-8"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" required maxlength="500"></div>
-            <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory"></div>
-            <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer"></div>
+            <div class="col-md-8"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" list="editObjectOptions" autocomplete="off" required maxlength="500"><div class="form-text">来自“中心检查对象”规范对象主数据；必须选择一个已有对象。</div></div>
+            <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory" list="editCategoryOptions" autocomplete="off"><div class="form-text">选择对象后自动关联。</div></div>
+            <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer" list="editCheckLayerOptions" autocomplete="off"></div>
             <div class="col-md-4"><label class="form-label" for="editRecognizedObject">是否公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
             <div class="col-12"><label class="form-label d-block">适用检查中心</label><div class="d-flex flex-wrap gap-2" id="editCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="editCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">来自原表“检查项位于”；执行时按中心分别记录。</div></div>
@@ -137,7 +155,7 @@
           <div class="row g-3">
             <div class="col-12"><label class="form-label d-block">检查方法</label><div class="d-flex flex-wrap gap-2" id="editCheckMethods"><% checkMethodOptions.forEach((method, index) => { %><input class="btn-check" type="checkbox" name="checkMethods" id="editMethod<%= index %>" value="<%= method %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editMethod<%= index %>"><%= method %></label><% }) %></div></div>
             <div class="col-md-6"><label class="form-label" for="editAdditionalCheckMethods">其他检查方法</label><input class="form-control" id="editAdditionalCheckMethods" name="additionalCheckMethods" placeholder="多个方法用逗号分隔"></div>
-            <div class="col-md-3"><label class="form-label" for="editFrequency">中心执行频率</label><input class="form-control" id="editFrequency" name="frequency"></div>
+            <div class="col-md-3"><label class="form-label" for="editFrequency">执行频率</label><input class="form-control" id="editFrequency" name="frequency" list="editFrequencyOptions" autocomplete="off"></div>
             <div class="col-md-3"><label class="form-label" for="editAccessMode">远程/现场查看</label><select class="form-select" id="editAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
             <div class="col-12"><label class="form-label" for="editDescription">检查项描述</label><textarea class="form-control" id="editDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
             <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="4"></textarea></div>
@@ -145,9 +163,14 @@
           </div>
         </section>
         <section class="tab-pane fade" id="editStandardsPane" role="tabpanel" aria-labelledby="editStandardsTab" tabindex="0">
-          <label class="form-label" for="editStandardItems">关联标准项</label>
-          <select class="form-select" id="editStandardItems" name="standardItemIds" multiple size="12" required><% standardItems.forEach(item => { %><option value="<%= item.id %>"><%= item.standard_code %> / <%= item.version %> · <%= item.item_code %> <%= item.title ? '· ' + item.title : '' %></option><% }) %></select>
-          <div class="form-text">修改关联不会删除既有执行记录。</div>
+          <label class="form-label" for="editStandardSearch">关联标准项</label>
+          <select class="d-none" id="editStandardItems" name="standardItemIds" multiple></select>
+          <div class="standard-picker" data-picker="editStandardPicker">
+            <div class="standard-picker-selected d-flex flex-wrap gap-2 mb-2" id="editStandardChips"></div>
+            <input class="form-control" id="editStandardSearch" type="search" autocomplete="off" placeholder="输入标准编号、条款编号或内容搜索">
+            <div class="standard-picker-results list-group shadow-sm mt-1 d-none" id="editStandardResults"></div>
+          </div>
+          <div class="form-text">支持标准编号、内部编号、标题和正文内容搜索；修改关联不会删除既有执行记录。</div>
         </section>
       </div>
     </div>
@@ -155,6 +178,11 @@
   </form>
 </div></div></div>
 <style>
+  .standard-picker { position: relative; }
+  .standard-picker-results { position: absolute; z-index: 1085; left: 0; right: 0; max-height: 18rem; overflow-y: auto; }
+  .standard-picker-result { text-align: left; }
+  .standard-picker-result code { color: #475569; }
+  .standard-chip { max-width: 100%; white-space: normal; text-align: left; }
   @media (max-width: 767.98px) {
     #createDefinitionModal .modal-dialog,
     #editDefinitionModal .modal-dialog {
@@ -192,10 +220,204 @@
   }
 </style>
 <script>
-  function updateStandardItemCount(selectId, badgeId) {
-    const count = document.getElementById(selectId).selectedOptions.length;
-    document.getElementById(badgeId).textContent = String(count);
+  const planObjectCatalog = <%- JSON.stringify(objectOptionsValue).replace(/</g, '\\u003c') %>;
+
+  function normalizedPickerText(value) {
+    return String(value || '').normalize('NFKC').trim().toLowerCase();
   }
+  function objectInputMatches(inputValue) {
+    const term = normalizedPickerText(inputValue);
+    return planObjectCatalog.find(item =>
+      normalizedPickerText(item.canonical_name) === term
+      || (item.aliases || []).some(alias => normalizedPickerText(alias) === term)
+    ) || null;
+  }
+  function populateObjectOptions(prefix, categoryInputValue = '') {
+    const input = document.getElementById(prefix + 'ObjectName');
+    const datalist = document.getElementById(prefix + 'ObjectOptions');
+    if (!input || !datalist) return;
+    const categoryTerm = normalizedPickerText(categoryInputValue);
+    const matchingCategory = Array.from(document.getElementById(prefix + 'CategoryOptions')?.options || [])
+      .find(option => normalizedPickerText(option.value) === categoryTerm)?.value || '';
+    const options = [];
+    for (const object of planObjectCatalog) {
+      if (matchingCategory && object.object_category !== matchingCategory) continue;
+      const canonical = document.createElement('option');
+      canonical.value = object.canonical_name;
+      canonical.label = object.object_category || '未分类';
+      options.push(canonical);
+      for (const alias of object.aliases || []) {
+        if (normalizedPickerText(alias) === normalizedPickerText(object.canonical_name)) continue;
+        const aliasOption = document.createElement('option');
+        aliasOption.value = alias;
+        aliasOption.label = `别名 · ${object.canonical_name} · ${object.object_category || '未分类'}`;
+        options.push(aliasOption);
+      }
+    }
+    datalist.replaceChildren(...options);
+  }
+  function resolvePlanObject(prefix, apply = false) {
+    const input = document.getElementById(prefix + 'ObjectName');
+    const categoryInput = document.getElementById(prefix + 'ObjectCategory');
+    const object = objectInputMatches(input.value);
+    if (object && apply) {
+      input.value = object.canonical_name;
+      categoryInput.value = object.object_category || '';
+    }
+    return object;
+  }
+  function initializeObjectPicker(prefix) {
+    const objectInput = document.getElementById(prefix + 'ObjectName');
+    const categoryInput = document.getElementById(prefix + 'ObjectCategory');
+    populateObjectOptions(prefix);
+    categoryInput.addEventListener('input', () => {
+      input.value = '';
+      populateObjectOptions(prefix, categoryInput.value);
+    });
+    objectInput.addEventListener('input', () => {
+      if (!objectInput.value.trim()) categoryInput.value = '';
+    });
+    objectInput.addEventListener('change', () => resolvePlanObject(prefix, true));
+  }
+  initializeObjectPicker('create');
+  initializeObjectPicker('edit');
+
+  class StandardItemPicker {
+    constructor(kind) {
+      this.kind = kind;
+      this.select = document.getElementById(kind + 'StandardItems');
+      this.search = document.getElementById(kind + 'StandardSearch');
+      this.results = document.getElementById(kind + 'StandardResults');
+      this.chips = document.getElementById(kind + 'StandardChips');
+      this.countBadge = document.getElementById(kind + 'StandardItemCount');
+      this.items = new Map();
+      this.timer = null;
+      this.search.addEventListener('input', () => this.scheduleSearch());
+      this.search.addEventListener('focus', () => { if (this.search.value.trim()) this.searchItems(); });
+      this.search.addEventListener('blur', () => window.setTimeout(() => this.hideResults(), 160));
+    }
+    setItems(items) {
+      this.items = new Map((items || []).filter(item => item?.id).map(item => [ String(item.id), item ]));
+      this.render();
+    }
+    ids() {
+      return Array.from(this.items.keys());
+    }
+    size() {
+      return this.items.size;
+    }
+    add(item) {
+      this.items.set(String(item.id), item);
+      this.search.value = '';
+      this.hideResults();
+      this.render();
+    }
+    remove(id) {
+      this.items.delete(String(id));
+      this.render();
+    }
+    render() {
+      const chips = [];
+      for (const item of this.items.values()) {
+        const chip = document.createElement('span');
+        chip.className = 'badge text-bg-light border d-inline-flex align-items-start gap-2 standard-chip';
+        const text = document.createElement('span');
+        text.textContent = [ item.standardNumber || item.code, item.title || item.preview || '' ].filter(Boolean).join(' · ');
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn-close btn-close-sm';
+        remove.setAttribute('aria-label', '移除该标准项');
+        remove.addEventListener('click', () => this.remove(item.id));
+        chip.append(text, remove);
+        chips.push(chip);
+      }
+      if (!chips.length) {
+        const empty = document.createElement('span');
+        empty.className = 'text-secondary small';
+        empty.textContent = '尚未关联标准项';
+        chips.push(empty);
+      }
+      this.chips.replaceChildren(...chips);
+      const options = Array.from(this.items.values()).map(item => {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.selected = true;
+        return option;
+      });
+      this.select.replaceChildren(...options);
+      this.countBadge.textContent = String(this.items.size);
+    }
+    scheduleSearch() {
+      window.clearTimeout(this.timer);
+      if (!this.search.value.trim()) {
+        this.hideResults();
+        return;
+      }
+      this.timer = window.setTimeout(() => this.searchItems(), 220);
+    }
+    async searchItems() {
+      const query = this.search.value.trim();
+      if (!query) return;
+      this.results.classList.remove('d-none');
+      this.results.replaceChildren(Object.assign(document.createElement('div'), {
+        className: 'list-group-item text-secondary',
+        textContent: '正在搜索...',
+      }));
+      try {
+        const response = await fetch('/api/supervision-definition-options/standard-items?q=' + encodeURIComponent(query));
+        if (!response.ok) throw new Error('标准项搜索失败');
+        const body = await response.json();
+        if (this.search.value.trim() !== query) return;
+        this.renderResults(body.data || []);
+      } catch (error) {
+        this.results.replaceChildren(Object.assign(document.createElement('div'), {
+          className: 'list-group-item text-danger',
+          textContent: error.message,
+        }));
+      }
+    }
+    renderResults(items) {
+      if (!items.length) {
+        this.results.replaceChildren(Object.assign(document.createElement('div'), {
+          className: 'list-group-item text-secondary',
+          textContent: '没有匹配的标准项，请尝试编号或正文关键词。',
+        }));
+        return;
+      }
+      const rows = items.map(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'list-group-item list-group-item-action standard-picker-result';
+        if (this.items.has(String(item.id))) {
+          button.disabled = true;
+          button.textContent = `${item.standardNumber || item.code} · 已关联`;
+          return button;
+        }
+        const title = document.createElement('div');
+        title.className = 'fw-semibold';
+        title.textContent = [ item.standardNumber || item.code, item.title ].filter(Boolean).join(' · ');
+        const meta = document.createElement('div');
+        meta.className = 'small text-secondary mt-1';
+        meta.textContent = [ item.standardCode, item.version, item.chapterCode, item.preview ].filter(Boolean).join(' · ');
+        button.append(title, meta);
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.addEventListener('click', () => this.add(item));
+        return button;
+      });
+      this.results.replaceChildren(...rows);
+    }
+    hideResults() {
+      this.results.classList.add('d-none');
+      this.results.replaceChildren();
+    }
+  }
+  const planPickers = {
+    create: new StandardItemPicker('create'),
+    edit: new StandardItemPicker('edit'),
+  };
+  planPickers.create.setItems([]);
+  planPickers.edit.setItems([]);
+
   function showPlanFormTab(element) {
     const pane = element.closest('.tab-pane');
     if (!pane) return;
@@ -250,6 +472,7 @@
       editReferenceMaterials: definition.reference_materials || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
+    populateObjectOptions('edit', definition.object_category || '');
     const centers = new Set(definition.centers || []);
     form.querySelectorAll('input[name="centers"]').forEach(input => { input.checked = centers.has(input.value); });
     const methods = new Set((definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean));
@@ -260,19 +483,32 @@
     document.getElementById('editAccessMode').value = definition.access_mode || '';
     document.getElementById('editRecognizedObject').value = definition.recognized_object === null ? '' : String(definition.recognized_object);
     document.getElementById('editPriority').value = definition.priority || '';
-    const selected = new Set((definition.standard_items || []).map(item => item.id));
-    Array.from(document.getElementById('editStandardItems').options).forEach(option => { option.selected = selected.has(option.value); });
-    updateStandardItemCount('editStandardItems', 'editStandardItemCount');
+    planPickers.edit.setItems(definition.standard_items || []);
+    document.getElementById('editStandardSearch').value = '';
   });
   [
-    { formId: 'createDefinitionForm', standardItemsId: 'createStandardItems', standardCountId: 'createStandardItemCount' },
-    { formId: 'editDefinitionForm', standardItemsId: 'editStandardItems', standardCountId: 'editStandardItemCount' },
-  ].forEach(({ formId, standardItemsId, standardCountId }) => {
+    { formId: 'createDefinitionForm', prefix: 'create', picker: planPickers.create },
+    { formId: 'editDefinitionForm', prefix: 'edit', picker: planPickers.edit },
+  ].forEach(({ formId, prefix, picker }) => {
     const form = document.getElementById(formId);
-    const standardItems = document.getElementById(standardItemsId);
-    standardItems.addEventListener('change', () => updateStandardItemCount(standardItemsId, standardCountId));
     form.addEventListener('invalid', event => showPlanFormTab(event.target), true);
     form.addEventListener('submit', event => {
+      const selectedObject = resolvePlanObject(prefix, true);
+      if (!selectedObject) {
+        event.preventDefault();
+        showPlanFormTab(document.getElementById(prefix + 'ObjectName'));
+        window.showAppNotice('检查对象必须从“中心检查对象”主数据中选择。', '检查方案未保存');
+        return;
+      }
+      const categoryInput = document.getElementById(prefix + 'ObjectCategory');
+      if (normalizedPickerText(categoryInput.value)
+        && normalizedPickerText(categoryInput.value) !== normalizedPickerText(selectedObject.object_category)) {
+        event.preventDefault();
+        showPlanFormTab(categoryInput);
+        window.showAppNotice('对象分类必须与所选检查对象关联，请重新选择对象。', '检查方案未保存');
+        return;
+      }
+      categoryInput.value = selectedObject.object_category || '';
       const centerCount = form.querySelectorAll('input[name="centers"]:checked').length;
       if (!centerCount) {
         event.preventDefault();
@@ -281,10 +517,16 @@
         return;
       }
       const methodCount = form.querySelectorAll('input[name="checkMethods"]:checked').length;
-      if (!methodCount && !document.getElementById(formId === 'createDefinitionForm' ? 'createAdditionalCheckMethods' : 'editAdditionalCheckMethods').value.trim()) {
+      if (!methodCount && !document.getElementById(prefix + 'AdditionalCheckMethods').value.trim()) {
         event.preventDefault();
         showPlanFormTab(form.querySelector('input[name="checkMethods"]'));
         window.showAppNotice('请选择或填写至少一种检查方法。', '检查方案未保存');
+        return;
+      }
+      if (!picker.size()) {
+        event.preventDefault();
+        showPlanFormTab(document.getElementById(prefix + 'StandardSearch'));
+        window.showAppNotice('请至少关联一个标准项。', '检查方案未保存');
       }
     });
   });
