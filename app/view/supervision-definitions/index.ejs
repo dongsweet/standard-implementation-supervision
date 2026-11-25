@@ -75,8 +75,6 @@
   </form>
 </div></div></div>
 
-<datalist id="createCategoryOptions"><% objectCategoriesValue.forEach(category => { %><option value="<%= category.name %>"></option><% }) %></datalist>
-<datalist id="editCategoryOptions"><% objectCategoriesValue.forEach(category => { %><option value="<%= category.name %>"></option><% }) %></datalist>
 <datalist id="createObjectOptions"></datalist>
 <datalist id="editObjectOptions"></datalist>
 <datalist id="createCheckLayerOptions"><% checkLayerOptionsValue.forEach(value => { %><option value="<%= value %>"></option><% }) %></datalist>
@@ -97,7 +95,7 @@
         <section class="tab-pane fade show active" id="createBasicPane" role="tabpanel" aria-labelledby="createBasicTab" tabindex="0">
           <div class="row g-3">
             <div class="col-md-8"><label class="form-label" for="createObjectName">检查对象</label><input class="form-control" id="createObjectName" name="objectName" list="createObjectOptions" autocomplete="off" required maxlength="500" placeholder="输入名称、别名或先选择分类"><div class="form-text">来自“中心检查对象”规范对象主数据；必须选择一个已有对象。</div></div>
-            <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><input class="form-control" id="createObjectCategory" name="objectCategory" list="createCategoryOptions" autocomplete="off" placeholder="可先选分类筛选对象"><div class="form-text">分类来自对象工作台，选择对象后自动关联。</div></div>
+            <div class="col-md-4"><label class="form-label" for="createObjectCategory">对象分类</label><div class="object-category-combobox" id="createObjectCategoryCombobox"><input class="form-control object-category-combobox-input" id="createObjectCategory" name="objectCategory" type="search" autocomplete="off" placeholder="输入分类名称筛选对象" role="combobox" aria-expanded="false" aria-controls="createObjectCategoryMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="createObjectCategoryToggle" type="button" aria-label="展开对象分类候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="createObjectCategoryMenu" role="listbox"></div></div><div class="visually-hidden" id="createObjectCategorySearchStatus" role="status" aria-live="polite"></div><div class="form-text">先选分类会筛选检查对象；选择对象后自动关联分类。</div></div>
             <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" list="createCheckLayerOptions" autocomplete="off" placeholder="选择现有值或输入新值"></div>
             <div class="col-md-4"><label class="form-label" for="createRecognizedObject">是否公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
@@ -144,7 +142,7 @@
         <section class="tab-pane fade show active" id="editBasicPane" role="tabpanel" aria-labelledby="editBasicTab" tabindex="0">
           <div class="row g-3">
             <div class="col-md-8"><label class="form-label" for="editObjectName">检查对象</label><input class="form-control" id="editObjectName" name="objectName" list="editObjectOptions" autocomplete="off" required maxlength="500"><div class="form-text">来自“中心检查对象”规范对象主数据；必须选择一个已有对象。</div></div>
-            <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><input class="form-control" id="editObjectCategory" name="objectCategory" list="editCategoryOptions" autocomplete="off"><div class="form-text">选择对象后自动关联。</div></div>
+            <div class="col-md-4"><label class="form-label" for="editObjectCategory">对象分类</label><div class="object-category-combobox" id="editObjectCategoryCombobox"><input class="form-control object-category-combobox-input" id="editObjectCategory" name="objectCategory" type="search" autocomplete="off" placeholder="输入分类名称筛选对象" role="combobox" aria-expanded="false" aria-controls="editObjectCategoryMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="editObjectCategoryToggle" type="button" aria-label="展开对象分类候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="editObjectCategoryMenu" role="listbox"></div></div><div class="visually-hidden" id="editObjectCategorySearchStatus" role="status" aria-live="polite"></div><div class="form-text">先选分类会筛选检查对象；选择对象后自动关联分类。</div></div>
             <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer" list="editCheckLayerOptions" autocomplete="off"></div>
             <div class="col-md-4"><label class="form-label" for="editRecognizedObject">是否公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
@@ -183,6 +181,16 @@
   .standard-picker-result { text-align: left; }
   .standard-picker-result code { color: #475569; }
   .standard-chip { max-width: 100%; white-space: normal; text-align: left; }
+  .object-category-combobox { position: relative; }
+  .object-category-combobox-input { padding-right: 2.5rem; background: #fff; }
+  .object-category-combobox-toggle { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 2.25rem; border: 0; background: transparent; color: #6c757d; }
+  .object-category-combobox-toggle:hover, .object-category-combobox-toggle:focus { color: #0d6efd; outline: none; }
+  .object-category-combobox-menu { position: absolute; z-index: 1086; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; background: #fff; border: 1px solid #d8dee6; border-radius: .25rem; box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .12); padding: .25rem 0; }
+  .object-category-combobox-option, .object-category-combobox-empty { display: block; width: 100%; border: 0; background: transparent; padding: .55rem .75rem; text-align: left; }
+  .object-category-combobox-option { cursor: pointer; color: #212529; }
+  .object-category-combobox-option:hover, .object-category-combobox-option.is-active { background: #f1f4f8; }
+  .object-category-combobox-option .option-subtitle { display: block; margin-top: .1rem; color: #6c757d; font-size: .8125rem; }
+  .object-category-combobox-empty { color: #6c757d; }
   @media (max-width: 767.98px) {
     #createDefinitionModal .modal-dialog,
     #editDefinitionModal .modal-dialog {
@@ -221,6 +229,11 @@
 </style>
 <script>
   const planObjectCatalog = <%- JSON.stringify(objectOptionsValue).replace(/</g, '\\u003c') %>;
+  const planCategoryCatalog = <%- JSON.stringify(objectCategoriesValue.map(category => ({
+    name: category.name,
+    count: Number(category.object_count) || 0,
+  }))).replace(/</g, '\\u003c') %>;
+  const planCategoryPickers = {};
 
   function normalizedPickerText(value) {
     return String(value || '').normalize('NFKC').trim().toLowerCase();
@@ -232,16 +245,22 @@
       || (item.aliases || []).some(alias => normalizedPickerText(alias) === term)
     ) || null;
   }
+  function categoryInputMatches(inputValue) {
+    const term = normalizedPickerText(inputValue);
+    return planCategoryCatalog.find(item => normalizedPickerText(item.name) === term) || null;
+  }
   function populateObjectOptions(prefix, categoryInputValue = '') {
-    const input = document.getElementById(prefix + 'ObjectName');
     const datalist = document.getElementById(prefix + 'ObjectOptions');
-    if (!input || !datalist) return;
+    if (!datalist) return;
     const categoryTerm = normalizedPickerText(categoryInputValue);
-    const matchingCategory = Array.from(document.getElementById(prefix + 'CategoryOptions')?.options || [])
-      .find(option => normalizedPickerText(option.value) === categoryTerm)?.value || '';
+    const matchingCategory = categoryTerm ? categoryInputMatches(categoryInputValue) : null;
+    if (categoryTerm && !matchingCategory) {
+      datalist.replaceChildren();
+      return;
+    }
     const options = [];
     for (const object of planObjectCatalog) {
-      if (matchingCategory && object.object_category !== matchingCategory) continue;
+      if (matchingCategory && normalizedPickerText(object.object_category) !== normalizedPickerText(matchingCategory.name)) continue;
       const canonical = document.createElement('option');
       canonical.value = object.canonical_name;
       canonical.label = object.object_category || '未分类';
@@ -263,19 +282,152 @@
     if (object && apply) {
       input.value = object.canonical_name;
       categoryInput.value = object.object_category || '';
+      planCategoryPickers[prefix]?.setValue(categoryInput.value);
     }
     return object;
+  }
+  function initializePlanCategoryPicker(prefix, onCategoryChange) {
+    const root = document.getElementById(prefix + 'ObjectCategoryCombobox');
+    const input = document.getElementById(prefix + 'ObjectCategory');
+    const toggle = document.getElementById(prefix + 'ObjectCategoryToggle');
+    const menu = document.getElementById(prefix + 'ObjectCategoryMenu');
+    const status = document.getElementById(prefix + 'ObjectCategorySearchStatus');
+    if (!root || !input || !toggle || !menu || !status) return null;
+    let visible = [];
+    let activeIndex = -1;
+    let open = false;
+    const close = () => {
+      open = false;
+      activeIndex = -1;
+      menu.classList.add('d-none');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const show = () => {
+      open = true;
+      menu.classList.remove('d-none');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const paint = (items, message) => {
+      visible = items;
+      activeIndex = items.length ? 0 : -1;
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'object-category-combobox-empty';
+        empty.textContent = message;
+        menu.replaceChildren(empty);
+        return;
+      }
+      menu.replaceChildren(...items.map((item, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'object-category-combobox-option' + (index === activeIndex ? ' is-active' : '');
+        button.setAttribute('role', 'option');
+        button.dataset.index = String(index);
+        const label = document.createElement('span');
+        label.textContent = item.name;
+        button.appendChild(label);
+        if (item.count) {
+          const subtitle = document.createElement('span');
+          subtitle.className = 'option-subtitle';
+          subtitle.textContent = `${item.count} 个规范对象`;
+          button.appendChild(subtitle);
+        }
+        return button;
+      }));
+    };
+    const updateActive = next => {
+      if (!visible.length) return;
+      activeIndex = (next + visible.length) % visible.length;
+      menu.querySelectorAll('.object-category-combobox-option').forEach((option, index) => {
+        option.classList.toggle('is-active', index === activeIndex);
+        if (index === activeIndex) option.scrollIntoView({ block: 'nearest' });
+      });
+    };
+    const select = item => {
+      if (!item) return;
+      input.value = item.name;
+      status.textContent = `已选择：${item.name}`;
+      onCategoryChange(item.name);
+      close();
+    };
+    const renderMatches = () => {
+      const keyword = normalizedPickerText(input.value);
+      const matches = keyword
+        ? planCategoryCatalog.filter(item => normalizedPickerText(item.name).includes(keyword))
+        : planCategoryCatalog;
+      paint(matches, keyword ? '没有匹配的分类' : '暂无可选分类');
+      status.textContent = keyword
+        ? `匹配 ${matches.length} 个分类。`
+        : `共 ${planCategoryCatalog.length} 个分类，可展开选择或输入名称筛选。`;
+      show();
+    };
+    input.addEventListener('focus', renderMatches);
+    input.addEventListener('input', () => {
+      status.textContent = '';
+      onCategoryChange(input.value);
+      renderMatches();
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!open) renderMatches();
+        updateActive(activeIndex - 1);
+      } else if (event.key === 'Enter' && open && visible[activeIndex]) {
+        event.preventDefault();
+        select(visible[activeIndex]);
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+    toggle.addEventListener('mousedown', event => event.preventDefault());
+    toggle.addEventListener('click', () => {
+      if (open) {
+        close();
+      } else {
+        input.focus();
+        renderMatches();
+      }
+    });
+    menu.addEventListener('mousedown', event => event.preventDefault());
+    menu.addEventListener('click', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (!option) return;
+      select(visible[Number(option.dataset.index)]);
+    });
+    menu.addEventListener('mouseover', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) updateActive(Number(option.dataset.index));
+    });
+    document.addEventListener('click', event => {
+      if (!root.contains(event.target) && event.target !== toggle) close();
+    });
+    const setValue = value => {
+      input.value = value || '';
+      status.textContent = input.value.trim()
+        ? `已选择：${input.value.trim()}`
+        : `共 ${planCategoryCatalog.length} 个分类，可展开选择或输入名称筛选。`;
+      close();
+    };
+    setValue(input.value);
+    return { setValue };
   }
   function initializeObjectPicker(prefix) {
     const objectInput = document.getElementById(prefix + 'ObjectName');
     const categoryInput = document.getElementById(prefix + 'ObjectCategory');
     populateObjectOptions(prefix);
-    categoryInput.addEventListener('input', () => {
-      input.value = '';
-      populateObjectOptions(prefix, categoryInput.value);
+    planCategoryPickers[prefix] = initializePlanCategoryPicker(prefix, categoryValue => {
+      objectInput.value = '';
+      populateObjectOptions(prefix, categoryValue);
     });
     objectInput.addEventListener('input', () => {
-      if (!objectInput.value.trim()) categoryInput.value = '';
+      if (!objectInput.value.trim()) {
+        categoryInput.value = '';
+        planCategoryPickers[prefix]?.setValue('');
+      }
     });
     objectInput.addEventListener('change', () => resolvePlanObject(prefix, true));
   }
@@ -474,6 +626,7 @@
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
     populateObjectOptions('edit', definition.object_category || '');
+    planCategoryPickers.edit?.setValue(definition.object_category || '');
     const centers = new Set(definition.centers || []);
     form.querySelectorAll('input[name="centers"]').forEach(input => { input.checked = centers.has(input.value); });
     const methods = new Set((definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean));
@@ -494,22 +647,30 @@
     const form = document.getElementById(formId);
     form.addEventListener('invalid', event => showPlanFormTab(event.target), true);
     form.addEventListener('submit', event => {
-      const selectedObject = resolvePlanObject(prefix, true);
+      const categoryInput = document.getElementById(prefix + 'ObjectCategory');
+      const categoryValue = categoryInput.value.trim();
+      const selectedCategory = categoryValue ? categoryInputMatches(categoryValue) : null;
+      if (categoryValue && !selectedCategory) {
+        event.preventDefault();
+        showPlanFormTab(categoryInput);
+        window.showAppNotice('请从分类候选中选择一个对象分类，或清空分类筛选。', '检查方案未保存');
+        return;
+      }
+      const selectedObject = resolvePlanObject(prefix);
       if (!selectedObject) {
         event.preventDefault();
         showPlanFormTab(document.getElementById(prefix + 'ObjectName'));
         window.showAppNotice('检查对象必须从“中心检查对象”主数据中选择。', '检查方案未保存');
         return;
       }
-      const categoryInput = document.getElementById(prefix + 'ObjectCategory');
-      if (normalizedPickerText(categoryInput.value)
-        && normalizedPickerText(categoryInput.value) !== normalizedPickerText(selectedObject.object_category)) {
+      if (selectedCategory
+        && normalizedPickerText(selectedCategory.name) !== normalizedPickerText(selectedObject.object_category)) {
         event.preventDefault();
         showPlanFormTab(categoryInput);
         window.showAppNotice('对象分类必须与所选检查对象关联，请重新选择对象。', '检查方案未保存');
         return;
       }
-      categoryInput.value = selectedObject.object_category || '';
+      resolvePlanObject(prefix, true);
       const centerCount = form.querySelectorAll('input[name="centers"]:checked').length;
       if (!centerCount) {
         event.preventDefault();
