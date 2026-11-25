@@ -514,9 +514,11 @@
         button.appendChild(label);
         const subtitle = document.createElement('span');
         subtitle.className = 'option-subtitle';
-        subtitle.textContent = item.historical
-          ? `${item.planCount} / ${totalPlanCount} 个检查方案 · ${item.known ? '现有分类' : '保存时采用为此分类'}`
-          : `${item.count} 个规范对象`;
+        if (item.historical) {
+          subtitle.textContent = `${item.planCount} / ${totalPlanCount} 个检查方案 · ${item.known ? '现有分类' : '保存时采用为此分类'}`;
+        } else {
+          subtitle.textContent = '现有分类';
+        }
         button.appendChild(subtitle);
         return button;
       }));

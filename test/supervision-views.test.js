@@ -286,6 +286,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /\$\{item\.planCount\} \/ \$\{totalPlanCount\} 个检查方案/);
   assert.match(html, /现有分类/);
   assert.match(html, /保存时采用为此分类/);
+  assert.match(html, /subtitle\.textContent = '现有分类'/);
+  assert.doesNotMatch(html, /:\s*`\$\{item\.count\} 个规范对象`/);
   assert.match(html, /objectEditPicker\.setHistorical\(history, Number\(button\.dataset\.planCount\) \|\| 0\)/);
   assert.match(html, /categoryName: exact \? '' : categoryName/);
   assert.doesNotMatch(html, /<select class="form-select" id="editCategoryId" name="categoryId">/);
