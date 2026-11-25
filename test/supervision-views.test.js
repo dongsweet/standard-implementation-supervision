@@ -123,7 +123,7 @@ test('groups the plan editor into three compact source-aligned tabs', () => {
   assert.match(planView, /showPlanFormTab/);
 });
 
-test('filters plan object choices through the shared category combobox behavior', () => {
+test('keeps plan object and category independent while category remains searchable', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   for (const prefix of [ 'create', 'edit' ]) {
     assert.match(planView, new RegExp(`id="${prefix}ObjectCategoryCombobox"`));
@@ -135,14 +135,17 @@ test('filters plan object choices through the shared category combobox behavior'
   assert.doesNotMatch(planView, /CategoryOptions"><% objectCategoriesValue/);
   assert.match(planView, /const planCategoryCatalog =/);
   assert.match(planView, /categoryInputMatches/);
-  assert.match(planView, /if \(categoryTerm && !matchingCategory\) \{\s*datalist\.replaceChildren\(\);/);
-  assert.match(planView, /objectInput\.value = '';\s*populateObjectOptions\(prefix, categoryValue\);/);
-  assert.match(planView, /planCategoryPickers\[prefix\]\?\.setValue/);
+  assert.match(planView, /function initializePlanCategoryPicker\(prefix\)/);
+  assert.match(planView, /input\.addEventListener\('input', renderMatches\)/);
+  assert.match(planView, /独立选择对象分类，不改变检查对象/);
   assert.match(planView, /ArrowDown/);
   assert.match(planView, /ArrowUp/);
   assert.match(planView, /Escape/);
   assert.match(planView, /请从分类候选中选择一个对象分类，或清空分类筛选/);
-  assert.doesNotMatch(planView, /categoryInput\.addEventListener\('input', \(\) => \{\s*input\.value = '';/);
+  assert.doesNotMatch(planView, /objectInput\.value = '';\s*populateObjectOptions/);
+  assert.doesNotMatch(planView, /categoryInput\.value = '';/);
+  assert.doesNotMatch(planView, /对象分类必须与所选检查对象关联/);
+  assert.doesNotMatch(planView, /先选分类会筛选检查对象/);
 });
 
 test('renders joint review page with a single optional scope filter', { skip: !ejs }, async () => {
