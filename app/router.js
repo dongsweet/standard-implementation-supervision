@@ -20,6 +20,8 @@ module.exports = app => {
   router.post('/api/supervision-center-objects/ai-review', controller.supervisionDefinition.aiReviewCenterObject);
   router.post('/api/supervision-center-objects/ai-screen', controller.supervisionDefinition.aiScreenCenterObjects);
   router.post('/api/supervision-center-objects/reviews', controller.supervisionDefinition.reviewCenterObject);
+  router.post('/api/supervision-center-objects/objects/:objectId', controller.supervisionDefinition.updateCenterObject);
+  router.post('/api/supervision-center-objects/categories', controller.supervisionDefinition.createCenterObjectCategory);
   router.get('/supervision-definitions/import-template', controller.supervisionPlanImport.template);
   router.post('/supervision-plan-imports', controller.supervisionPlanImport.create);
   router.get('/supervision-plan-imports/:jobId', controller.supervisionPlanImport.review);

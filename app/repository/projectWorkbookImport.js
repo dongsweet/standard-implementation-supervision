@@ -3,6 +3,7 @@
 const { normalizeKey, splitEvidence } = require('../lib/projectWorkbookImport');
 const { normalizeDetails, parseSubmittedAssignmentText } = require('../lib/answerAssignment');
 const { normalizeDefinition } = require('../lib/dedupe');
+const SupervisionObjectRepository = require('./supervisionObject');
 
 function normalizedContent(value) {
   return normalizeKey(value);
@@ -488,6 +489,9 @@ class ProjectWorkbookImportRepository {
             }
             definitionsByHash.set(fields.normalized_hash, definitionId);
           }
+          const objectRepository = new SupervisionObjectRepository(this.pool);
+          const canonicalObjectId = await objectRepository.ensure(client, fields.object_name, fields.object_category);
+          await client.query('UPDATE supervision_definitions SET canonical_object_id = $2 WHERE id = $1', [ definitionId, canonicalObjectId ]);
           const linked = await client.query(`
             INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
             VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING definition_id`, [ definitionId, row.standardItemId ]);
@@ -505,6 +509,7 @@ class ProjectWorkbookImportRepository {
             await client.query(`
               INSERT INTO supervision_definition_centers (definition_id, center_name)
               VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ definitionId, supervisionCenter ]);
+            await objectRepository.ensure(client, fields.object_name, fields.object_category, supervisionCenter);
             const key = [ definitionId, supervisionCenter, cloudCenterId, checkedAt ].join('|');
             if (!executionGroups.has(key)) {
               executionGroups.set(key, {

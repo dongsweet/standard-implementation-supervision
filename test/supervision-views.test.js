@@ -131,6 +131,20 @@ test('links the center object page to manual object deduplication', () => {
   assert.match(html, /对象去重复核/);
 });
 
+test('organizes canonical objects, pending classification, and category maintenance in one workbench', () => {
+  const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
+  assert.match(html, /对象总览/);
+  assert.match(html, /待整理对象/);
+  assert.match(html, /分类维护/);
+  assert.match(html, /规范对象或原始名称/);
+  assert.match(html, /适用检查中心/);
+  assert.match(html, /新增对象分类/);
+  assert.match(html, /规范对象名称/);
+  assert.match(html, /对象分类/);
+  assert.match(html, /objectCategoriesValue = Array\.isArray\(objectCategories\)/);
+  assert.match(html, /centerObjectsValue = Array\.isArray\(centerObjects\)/);
+});
+
 test('keeps rule scanning manual, AI optional, and manual review always available', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/dedupe.ejs'), 'utf8');
   assert.match(html, /按名称相似度规则筛选后，可直接由人工判断是否重复/);

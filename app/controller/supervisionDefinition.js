@@ -105,6 +105,24 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async updateCenterObject() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.updateCenterObject(
+        this.ctx.params.objectId, this.ctx.request.body || {}, this.ctx.session.userId
+      ),
+    };
+  }
+
+  async createCenterObjectCategory() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.createCenterObjectCategory(
+        this.ctx.request.body || {}, this.ctx.session.userId
+      ),
+    };
+  }
+
   async create() {
     requireGlobalWrite(this.ctx);
     await this.ctx.service.supervisionDefinition.create(this.ctx.request.body || {}, this.ctx.session.userId);

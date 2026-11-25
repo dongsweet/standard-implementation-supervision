@@ -66,16 +66,27 @@ class SupervisionDefinitionService extends Service {
   async listCenterObjects(query = {}) {
     const center = String(query.center || '').trim();
     const search = String(query.search || '').trim().slice(0, 100);
+    const category = String(query.category || '').trim();
+    const view = [ 'overview', 'pending', 'categories' ].includes(String(query.view || ''))
+      ? String(query.view)
+      : 'overview';
     if (center && !DEFAULT_SUPERVISION_CENTERS.includes(center)) this.ctx.throw(400, '无效的检查中心筛选');
     const pageSize = 20;
     const requestedPage = Number.parseInt(query.page, 10);
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-    const result = await this.repository.listCenterObjects({ center, search, page, pageSize });
+    const effectiveCategory = view === 'pending' ? '未分类' : category;
+    const [ result, categories ] = await Promise.all([
+      this.repository.listObjectWorkbench({ center, search, category: effectiveCategory, page, pageSize }),
+      this.repository.listObjectCategories(),
+    ]);
     return {
       center,
       search,
+      category,
+      view,
       centerOptions: DEFAULT_SUPERVISION_CENTERS,
       centerObjects: result.rows,
+      objectCategories: categories,
       total: result.total,
       page: result.page,
       pageSize,
@@ -265,6 +276,37 @@ class SupervisionDefinitionService extends Service {
 
   async listCenterObjectReviews() {
     return this.repository.listCenterObjectReviews();
+  }
+
+  async updateCenterObject(id, payload, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '对象编号格式无效');
+    const canonicalName = String(payload.canonicalName || '').trim();
+    const categoryId = String(payload.categoryId || '').trim() || null;
+    const notes = String(payload.notes || '').trim();
+    if (!canonicalName) this.ctx.throw(400, '规范对象名称不能为空');
+    if (canonicalName.length > 500) this.ctx.throw(400, '规范对象名称不能超过 500 个字符');
+    try {
+      const result = await this.repository.updateObject(id, { canonicalName, categoryId, notes }, actorId);
+      if (!result) this.ctx.throw(404, '规范对象不存在');
+      return result;
+    } catch (error) {
+      if (error.code === '23503' || error.code === 'INVALID_OBJECT_CATEGORY') this.ctx.throw(400, '对象分类不存在');
+      if (error.code === 'DUPLICATE_SUPERVISION_OBJECT') this.ctx.throw(409, error.message);
+      throw error;
+    }
+  }
+
+  async createCenterObjectCategory(payload, actorId) {
+    const name = String(payload.name || '').trim();
+    const description = String(payload.description || '').trim();
+    if (!name) this.ctx.throw(400, '分类名称不能为空');
+    if (name.length > 200) this.ctx.throw(400, '分类名称不能超过 200 个字符');
+    try {
+      return await this.repository.createObjectCategory({ name, description }, actorId);
+    } catch (error) {
+      if (error.code === '23505') this.ctx.throw(409, '该分类已存在');
+      throw error;
+    }
   }
 
   async listCenterObjectDedupe({ threshold = null, scanned = false, filter = 'all' } = {}) {

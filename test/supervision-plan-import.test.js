@@ -171,6 +171,11 @@ test('imports plan definitions and multiple item links without creating executio
       if (statement.startsWith('INSERT INTO supervision_definitions')) return { rows: [ { id: 'definition-1' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO supervision_definition_standard_items')) return { rows: [ { definition_id: 'definition-1' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO supervision_definition_centers')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_categories')) return { rows: [ { id: 'category-1' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT id, category_id FROM supervision_objects')) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('INSERT INTO supervision_objects')) return { rows: [ { id: 'object-1' } ], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_aliases')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('UPDATE supervision_definitions SET canonical_object_id')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
@@ -234,6 +239,11 @@ test('merges otherwise identical plans while combining their applicable centers'
         return { rows: [ { definition_id: values[0] } ], rowCount: 1 };
       }
       if (statement.startsWith('INSERT INTO supervision_definition_centers')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_categories')) return { rows: [ { id: 'category-1' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT id, category_id FROM supervision_objects')) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('INSERT INTO supervision_objects')) return { rows: [ { id: 'object-1' } ], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_aliases')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('UPDATE supervision_definitions SET canonical_object_id')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('UPDATE supervision_plan_import_jobs')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);

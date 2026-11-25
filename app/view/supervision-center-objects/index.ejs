@@ -1,49 +1,64 @@
 <%
-  const centerValue = typeof center === 'undefined' ? '' : center;
-  const searchValue = typeof search === 'undefined' ? '' : search;
-  const totalValue = typeof total === 'undefined' ? centerObjects.length : total;
-  const pageValue = typeof page === 'undefined' ? 1 : page;
-  const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
-  const buildPageUrl = targetPage => {
-    const params = [];
+  const centerValue = center || '';
+  const searchValue = search || '';
+  const categoryValue = category || '';
+  const viewValue = [ 'overview', 'pending', 'categories' ].includes(view) ? view : 'overview';
+  const objectCategoriesValue = Array.isArray(objectCategories) ? objectCategories : [];
+  const centerObjectsValue = Array.isArray(centerObjects) ? centerObjects : [];
+  const totalValue = typeof total === 'undefined' ? centerObjectsValue.length : total;
+  const pageValue = page || 1;
+  const pageCountValue = pageCount || 1;
+  const buildUrl = (targetView = viewValue, targetPage = 1) => {
+    const params = [ 'view=' + encodeURIComponent(targetView) ];
     if (centerValue) params.push('center=' + encodeURIComponent(centerValue));
     if (searchValue) params.push('search=' + encodeURIComponent(searchValue));
-    params.push('page=' + targetPage);
-    return '?' + params.join('&');
+    if (categoryValue) params.push('category=' + encodeURIComponent(categoryValue));
+    if (targetPage > 1) params.push('page=' + targetPage);
+    return '/supervision-center-objects?' + params.join('&');
   };
+  const canWrite = user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code));
 %>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <p class="text-secondary mb-0">按“检查中心 × 检查对象”查看持续监督覆盖范围。同一对象可以适用于多个检查中心，具体检查内容仍在检查方案中维护。</p>
+  <div><h2 class="h4 mb-1">中心检查对象</h2><p class="text-secondary mb-0">维护规范化对象、对象分类和检查中心适用关系。检查方案中的检查方法、层面和检查内容仍在方案页维护。</p></div>
   <div class="ms-auto d-flex gap-2"><a class="btn btn-outline-primary" href="/supervision-center-objects/dedupe">对象去重复核</a><a class="btn btn-outline-secondary" href="/supervision-definitions">查看检查方案</a></div>
 </div>
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><a class="nav-link <%= viewValue === 'overview' ? 'active' : '' %>" href="<%= buildUrl('overview') %>">对象总览</a></li>
+  <li class="nav-item"><a class="nav-link <%= viewValue === 'pending' ? 'active' : '' %>" href="<%= buildUrl('pending') %>">待整理对象</a></li>
+  <li class="nav-item"><a class="nav-link <%= viewValue === 'categories' ? 'active' : '' %>" href="<%= buildUrl('categories') %>">分类维护</a></li>
+</ul>
 
-<div class="card mb-3">
-  <div class="card-body">
-    <form method="get" action="/supervision-center-objects" class="row g-2 align-items-end">
-      <div class="col-12 col-md-5"><label class="form-label" for="centerObjectSearch">检查对象</label><input class="form-control" id="centerObjectSearch" name="search" value="<%= searchValue %>" placeholder="搜索检查对象名称"></div>
-      <div class="col-12 col-md-4"><label class="form-label" for="centerObjectCenter">检查中心</label><select class="form-select" id="centerObjectCenter" name="center"><option value="">全部中心</option><% centerOptions.forEach(option => { %><option value="<%= option %>" <%= centerValue === option ? 'selected' : '' %>><%= option %></option><% }) %></select></div>
-      <div class="col-12 col-md-3 d-flex gap-2"><button class="btn btn-outline-primary" type="submit">筛选</button><a class="btn btn-outline-secondary" href="/supervision-center-objects">重置</a></div>
-    </form>
-  </div>
+<% if (viewValue === 'categories') { %>
+<div class="row g-3">
+  <% if (canWrite) { %><div class="col-12 col-lg-4"><div class="card"><div class="card-header"><h3 class="card-title">新增对象分类</h3></div><div class="card-body"><form method="post" action="/api/supervision-center-objects/categories" id="categoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="mb-3"><label class="form-label" for="categoryName">分类名称</label><input class="form-control" id="categoryName" name="name" maxlength="200" required placeholder="例如：制度、技术、人员"></div><div class="mb-3"><label class="form-label" for="categoryDescription">分类说明</label><textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea></div><button class="btn btn-primary" type="submit">保存分类</button></form></div></div></div><% } %>
+  <div class="col-12 <%= canWrite ? 'col-lg-8' : '' %>"><div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title">对象分类</h3><span class="badge text-bg-secondary ms-auto"><%= objectCategoriesValue.length %> 个</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>分类</th><th>说明</th><th>对象数量</th></tr></thead><tbody><% objectCategoriesValue.forEach(item => { %><tr><td><strong><%= item.name %></strong></td><td><%= item.description || '-' %></td><td><%= item.object_count %></td></tr><% }) %><% if (!objectCategoriesValue.length) { %><tr><td colspan="3" class="text-center text-secondary py-5">尚未建立对象分类。</td></tr><% } %></tbody></table></div></div></div>
 </div>
+<% } else { %>
+<div class="card mb-3"><div class="card-body"><form method="get" action="/supervision-center-objects" class="row g-2 align-items-end"><input type="hidden" name="view" value="<%= viewValue %>"><div class="col-12 col-md-4"><label class="form-label" for="objectSearch">规范对象或原始名称</label><input class="form-control" id="objectSearch" name="search" value="<%= searchValue %>" placeholder="搜索对象名称"></div><div class="col-6 col-md-3"><label class="form-label" for="objectCenter">检查中心</label><select class="form-select" id="objectCenter" name="center"><option value="">全部中心</option><% centerOptions.forEach(option => { %><option value="<%= option %>" <%= centerValue === option ? 'selected' : '' %>><%= option %></option><% }) %></select></div><div class="col-6 col-md-3"><label class="form-label" for="objectCategory">对象分类</label><select class="form-select" id="objectCategory" name="category"><option value="">全部分类</option><option value="未分类" <%= categoryValue === '未分类' ? 'selected' : '' %>>未分类</option><% objectCategoriesValue.forEach(item => { %><option value="<%= item.name %>" <%= categoryValue === item.name ? 'selected' : '' %>><%= item.name %></option><% }) %></select></div><div class="col-12 col-md-2 d-flex gap-2"><button class="btn btn-outline-primary" type="submit">筛选</button><a class="btn btn-outline-secondary" href="<%= buildUrl(viewValue) %>">重置</a></div></form></div></div>
+<div class="card"><div class="card-header d-flex align-items-center"><h3 class="card-title"><%= viewValue === 'pending' ? '待整理对象' : '规范对象总览' %></h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 个对象</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>规范对象</th><th>对象分类</th><th>适用检查中心</th><th>原始名称</th><th>检查方案</th><th>关联标准项</th><th class="text-end">操作</th></tr></thead><tbody><% centerObjectsValue.forEach(row => { %><tr><td><strong><%= row.canonical_name %></strong><% if (row.notes) { %><div class="small text-secondary"><%= row.notes %></div><% } %></td><td><% if (row.object_category) { %><span class="badge text-bg-light border"><%= row.object_category %></span><% } else { %><span class="badge text-bg-warning">未分类</span><% } %></td><td><% (row.centers || []).forEach(item => { %><span class="badge text-bg-light border me-1 mb-1"><%= item %></span><% }) %><% if (!(row.centers || []).length) { %><span class="text-secondary">未关联</span><% } %></td><td><% (row.aliases || []).slice(0, 4).forEach(alias => { %><span class="badge text-bg-light border me-1 mb-1"><%= alias %></span><% }) %><% if ((row.aliases || []).length > 4) { %><span class="small text-secondary">另有 <%= row.aliases.length - 4 %> 个</span><% } %></td><td><span class="badge text-bg-primary"><%= row.plan_count %> 个</span><div class="small text-secondary"><%= (row.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') || '-' %></div></td><td><%= row.standard_item_count %> 项</td><td class="text-end text-nowrap"><% if (canWrite) { %><button class="btn btn-sm btn-outline-primary" type="button" data-object-id="<%= row.id %>" data-object-name="<%= row.canonical_name %>" data-category="<%= row.object_category || '' %>" data-notes="<%= row.notes || '' %>" onclick="editObject(this)">整理</button><% } %><a class="btn btn-sm btn-outline-secondary" href="/supervision-definitions?search=<%= encodeURIComponent(row.canonical_name) %>">查看方案</a></td></tr><% }) %><% if (!centerObjectsValue.length) { %><tr><td colspan="7" class="text-center text-secondary py-5">没有找到匹配的对象。</td></tr><% } %></tbody></table></div>
+<% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildUrl(viewValue, pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildUrl(viewValue, number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildUrl(viewValue, pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %></div>
+<% } %>
 
-<div class="card">
-  <div class="card-header d-flex align-items-center"><h3 class="card-title">中心检查对象</h3><span class="badge text-bg-secondary ms-auto"><%= totalValue %> 个中心对象组合</span></div>
-  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th>检查中心</th><th>检查对象</th><th>检查方案</th><th>关联标准项</th><th>检查方法</th><th class="text-end">操作</th></tr></thead>
-    <tbody>
-      <% centerObjects.forEach(row => { %>
-        <tr>
-          <td><span class="badge text-bg-light border"><%= row.center_name %></span></td>
-          <td><strong><%= row.object_name %></strong></td>
-          <td><span class="badge text-bg-primary"><%= row.plan_count %> 个</span><div class="small text-secondary mt-1"><%= (row.plan_numbers || []).map(number => String(number).padStart(3, '0')).join('、') %></div></td>
-          <td><%= row.standard_item_count %> 项</td>
-          <td><% (row.check_methods || []).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
-          <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-primary" href="/supervision-definitions?center=<%= encodeURIComponent(row.center_name) %>&search=<%= encodeURIComponent(row.object_name) %>">查看方案</a></td>
-        </tr>
-      <% }) %>
-      <% if (!centerObjects.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">没有找到匹配的中心检查对象。</td></tr><% } %>
-    </tbody>
-  </table></div>
-  <% if (pageCountValue > 1) { %><div class="card-footer d-flex flex-wrap align-items-center gap-2"><span class="small text-secondary">第 <%= pageValue %> / <%= pageCountValue %> 页</span><nav class="ms-auto" aria-label="中心检查对象分页"><ul class="pagination pagination-sm mb-0"><li class="page-item <%= pageValue <= 1 ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue <= 1 ? '#' : buildPageUrl(pageValue - 1) %>">上一页</a></li><% for (let number = 1; number <= pageCountValue; number += 1) { %><li class="page-item <%= number === pageValue ? 'active' : '' %>"><a class="page-link" href="<%= buildPageUrl(number) %>"><%= number %></a></li><% } %><li class="page-item <%= pageValue >= pageCountValue ? 'disabled' : '' %>"><a class="page-link" href="<%= pageValue >= pageCountValue ? '#' : buildPageUrl(pageValue + 1) %>">下一页</a></li></ul></nav></div><% } %>
-</div>
+<% if (canWrite && viewValue === 'categories') { %><script>
+  document.getElementById('categoryForm')?.addEventListener('submit', async event => {
+    event.preventDefault(); const form = event.currentTarget;
+    const response = await fetch(form.action, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' }, body: JSON.stringify({ name: form.name.value, description: form.description.value }) });
+    const data = await response.json(); if (!response.ok) { window.showAppNotice(data.message || '保存失败', '分类维护失败'); return; } window.location.reload();
+  });
+</script><% } %>
+
+<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectEditModal" tabindex="-1" aria-labelledby="objectEditTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" id="objectEditForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="objectEditTitle">整理规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="editCanonicalName">规范对象名称</label><input class="form-control" id="editCanonicalName" name="canonicalName" maxlength="500" required></div><div class="mb-3"><label class="form-label" for="editCategoryId">对象分类</label><select class="form-select" id="editCategoryId" name="categoryId"><option value="">未分类</option><% objectCategoriesValue.forEach(item => { %><option value="<%= item.id %>"><%= item.name %></option><% }) %></select></div><div><label class="form-label" for="editObjectNotes">整理备注</label><textarea class="form-control" id="editObjectNotes" name="notes" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存</button></div></form></div></div></div><script>
+  function editObject(button) {
+    document.getElementById('objectEditForm').action = '/api/supervision-center-objects/objects/' + button.dataset.objectId;
+    document.getElementById('editCanonicalName').value = button.dataset.objectName || '';
+    document.getElementById('editObjectNotes').value = button.dataset.notes || '';
+    const category = [...document.getElementById('editCategoryId').options].find(option => option.textContent.trim() === (button.dataset.category || ''));
+    document.getElementById('editCategoryId').value = category ? category.value : '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('objectEditModal')).show();
+  }
+  document.getElementById('objectEditForm').addEventListener('submit', async event => {
+    event.preventDefault(); const form = event.currentTarget;
+    const response = await fetch(form.action, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' }, body: JSON.stringify({ canonicalName: form.canonicalName.value, categoryId: form.categoryId.value, notes: form.notes.value }) });
+    const data = await response.json(); if (!response.ok) { window.showAppNotice(data.message || '保存失败', '对象整理失败'); return; } window.location.reload();
+  });
+</script><% } %>

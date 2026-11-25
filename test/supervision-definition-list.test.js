@@ -62,6 +62,30 @@ test('clamps out-of-range supervision pages before querying rows', async () => {
   assert.deepEqual(calls[1].values, [ 20, 40 ]);
 });
 
+test('lists canonical supervision objects with category and center filters', async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push({ statement, values });
+      if (statement.startsWith('SELECT count(*)')) return { rows: [ { total: 21 } ], rowCount: 1 };
+      if (statement.startsWith('SELECT o.id')) return {
+        rows: [ { id: 'object-1', canonical_name: '云平台', object_category: '技术', centers: [ '云中心' ], aliases: [ '云平台' ], plan_count: 2, standard_item_count: 3, plan_numbers: [ 1, 2 ] } ],
+        rowCount: 1,
+      };
+      throw new Error('Unexpected query: ' + statement);
+    },
+  };
+  const result = await new Repository(pool).listObjectWorkbench({ center: '云中心', search: '云平台', category: '技术', page: 2, pageSize: 20 });
+  assert.equal(result.total, 21);
+  assert.equal(result.page, 2);
+  assert.equal(result.pageCount, 2);
+  assert.equal(result.rows[0].canonical_name, '云平台');
+  assert.deepEqual(calls[0].values, [ '云中心', '%云平台%', '技术' ]);
+  assert.deepEqual(calls[1].values, [ '云中心', '%云平台%', '技术', 20, 20 ]);
+  assert.match(calls[1].statement, /GROUP BY o\.id, c\.name/);
+});
+
 test('merges center object names and updates plans only within the selected center', async () => {
   const calls = [];
   const client = {
@@ -87,6 +111,7 @@ test('merges center object names and updates plans only within the selected cent
         rowCount: 2,
       };
       if (statement.startsWith('UPDATE supervision_definitions')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_object_aliases')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('INSERT INTO supervision_object_dedupe_reviews')) return {
         rows: [ { id: 'review-1', decision: 'merged' } ],
         rowCount: 1,

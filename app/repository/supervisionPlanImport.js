@@ -2,6 +2,7 @@
 
 const { normalizeDefinition, normalizeText } = require('../lib/dedupe');
 const { DEFAULT_SUPERVISION_CENTERS, splitSupervisionCenters } = require('../lib/supervisionCenters');
+const SupervisionObjectRepository = require('./supervisionObject');
 
 const PLAN_METADATA_FIELDS = [ 'scope', 'recognized_object', 'priority', 'access_mode', 'reference_result', 'reference_materials' ];
 
@@ -221,7 +222,11 @@ class SupervisionPlanImportRepository {
           }
           definitionsByKey.set(planKey, definitionId);
         }
+        const objectRepository = new SupervisionObjectRepository(this.pool);
+        const canonicalObjectId = await objectRepository.ensure(client, fields.object_name, fields.object_category);
+        await client.query(`UPDATE supervision_definitions SET canonical_object_id = $2 WHERE id = $1`, [ definitionId, canonicalObjectId ]);
         for (const centerName of fields.centers) {
+          await objectRepository.ensure(client, fields.object_name, fields.object_category, centerName);
           await client.query(`
             INSERT INTO supervision_definition_centers (definition_id, center_name)
             VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ definitionId, centerName ]);

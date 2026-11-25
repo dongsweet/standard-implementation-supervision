@@ -1,10 +1,41 @@
 'use strict';
 
-const { normalizeDefinition } = require('../lib/dedupe');
+const { normalizeDefinition, normalizeText } = require('../lib/dedupe');
 
 class SupervisionDefinitionRepository {
   constructor(pool) {
     this.pool = pool;
+  }
+
+  async ensureCanonicalObject(client, name, categoryName = '', centerName = null) {
+    const canonicalName = String(name || '').trim();
+    if (!canonicalName) return null;
+    const normalizedName = normalizeText(canonicalName).replace(/\s+/g, '');
+    const categoryText = String(categoryName || '').trim();
+    let categoryId = null;
+    if (categoryText) {
+      const category = await client.query(`
+        INSERT INTO supervision_object_categories (name)
+        VALUES ($1) ON CONFLICT (name) DO UPDATE SET updated_at = now()
+        RETURNING id`, [ categoryText ]);
+      categoryId = category.rows[0].id;
+    }
+    let object = await client.query(`
+      SELECT id, category_id FROM supervision_objects
+      WHERE canonical_name = $1 AND status = 'active'
+      ORDER BY created_at, id LIMIT 1 FOR UPDATE`, [ canonicalName ]);
+    if (!object.rowCount) {
+      object = await client.query(`
+        INSERT INTO supervision_objects (canonical_name, normalized_name, category_id)
+        VALUES ($1, $2, $3) RETURNING id, category_id`, [ canonicalName, normalizedName, categoryId ]);
+    } else if (categoryId && !object.rows[0].category_id) {
+      await client.query('UPDATE supervision_objects SET category_id = $2, updated_at = now() WHERE id = $1', [ object.rows[0].id, categoryId ]);
+    }
+    const objectId = object.rows[0].id;
+    await client.query(`
+      INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, center_name, source)
+      VALUES ($1, $2, $3, $4, 'plan') ON CONFLICT DO NOTHING`, [ objectId, canonicalName, normalizedName, centerName ]);
+    return objectId;
   }
 
   async listCandidates({ threshold = 0.6, limit = 1000 } = {}) {
@@ -224,6 +255,176 @@ class SupervisionDefinitionRepository {
     return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
   }
 
+  async listObjectWorkbench({ center = '', search = '', category = '', page = 1, pageSize = 20 } = {}) {
+    const conditions = [ `o.status = 'active'` ];
+    const values = [];
+    if (center) {
+      values.push(center);
+      conditions.push(`EXISTS (SELECT 1 FROM supervision_definition_centers fdc
+        JOIN supervision_definitions fd ON fd.id = fdc.definition_id AND fd.status = 'active'
+        WHERE fd.canonical_object_id = o.id AND fdc.center_name = $${values.length})`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      conditions.push(`(o.canonical_name ILIKE $${values.length}
+        OR EXISTS (SELECT 1 FROM supervision_object_aliases fa
+          WHERE fa.object_id = o.id AND fa.alias_name ILIKE $${values.length}))`);
+    }
+    if (category === '未分类') {
+      conditions.push('o.category_id IS NULL');
+    } else if (category) {
+      values.push(category);
+      conditions.push(`c.name = $${values.length}`);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const countResult = await this.pool.query(`
+      SELECT count(*)::integer AS total
+      FROM supervision_objects o
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      ${where}`, values);
+    const total = Number(countResult.rows[0]?.total || 0);
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(Math.max(Number(page) || 1, 1), pageCount);
+    const limitParameter = values.length + 1;
+    const offsetParameter = values.length + 2;
+    const result = await this.pool.query(`
+      SELECT o.id, o.canonical_name, c.name AS object_category, o.notes,
+             count(DISTINCT d.id)::integer AS plan_count,
+             count(DISTINCT dsi.standard_item_id)::integer AS standard_item_count,
+             COALESCE(array_agg(DISTINCT dc.center_name ORDER BY dc.center_name)
+               FILTER (WHERE dc.center_name IS NOT NULL), ARRAY[]::text[]) AS centers,
+             COALESCE(array_agg(DISTINCT oa.alias_name ORDER BY oa.alias_name)
+               FILTER (WHERE oa.alias_name IS NOT NULL), ARRAY[]::text[]) AS aliases,
+             COALESCE(array_agg(DISTINCT d.plan_number ORDER BY d.plan_number)
+               FILTER (WHERE d.plan_number IS NOT NULL), ARRAY[]::bigint[]) AS plan_numbers
+      FROM supervision_objects o
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      LEFT JOIN supervision_definitions d ON d.canonical_object_id = o.id AND d.status = 'active'
+      LEFT JOIN supervision_definition_standard_items dsi ON dsi.definition_id = d.id
+      LEFT JOIN supervision_definition_centers dc ON dc.definition_id = d.id
+      LEFT JOIN supervision_object_aliases oa ON oa.object_id = o.id
+      ${where}
+      GROUP BY o.id, c.name
+      ORDER BY o.canonical_name
+      LIMIT $${limitParameter} OFFSET $${offsetParameter}`, [ ...values, pageSize, (currentPage - 1) * pageSize ]);
+    return { rows: result.rows, total, page: currentPage, pageSize, pageCount };
+  }
+
+  async listObjectCategories() {
+    const result = await this.pool.query(`
+      SELECT c.id, c.name, c.description, c.status,
+             count(DISTINCT o.id)::integer AS object_count
+      FROM supervision_object_categories c
+      LEFT JOIN supervision_objects o ON o.category_id = c.id AND o.status = 'active'
+      WHERE c.status = 'active'
+      GROUP BY c.id
+      ORDER BY c.name`);
+    return result.rows;
+  }
+
+  async updateObject(id, { canonicalName, categoryId, notes }, actorId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const categoryResult = categoryId
+        ? await client.query('SELECT name FROM supervision_object_categories WHERE id = $1 AND status = \'active\'', [ categoryId ])
+        : { rowCount: 0, rows: [] };
+      if (categoryId && !categoryResult.rowCount) {
+        const error = new Error('对象分类不存在');
+        error.code = 'INVALID_OBJECT_CATEGORY';
+        throw error;
+      }
+      const duplicate = await client.query(`
+        SELECT id FROM supervision_objects
+        WHERE id <> $1 AND status = 'active'
+          AND normalized_name = lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g'))
+        LIMIT 1`, [ id, canonicalName ]);
+      if (duplicate.rowCount) {
+        const error = new Error('规范对象名称已对应其他对象，请先通过去重复核合并');
+        error.code = 'DUPLICATE_SUPERVISION_OBJECT';
+        throw error;
+      }
+      const definitions = await client.query(`
+        SELECT d.id, d.object_name, d.check_layer, d.check_method, d.description, d.steps, d.frequency,
+               COALESCE(array_agg(dc.center_name) FILTER (WHERE dc.center_name IS NOT NULL), ARRAY[]::text[]) AS centers
+        FROM supervision_definitions d
+        LEFT JOIN supervision_definition_centers dc ON dc.definition_id = d.id
+        WHERE d.canonical_object_id = $1 AND d.status = 'active'
+        GROUP BY d.id`, [ id ]);
+      for (const definition of definitions.rows) {
+        await client.query(`
+          INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, center_name, source)
+          SELECT $1, $2, lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')), value, 'normalization'
+          FROM unnest($3::text[]) AS value
+          ON CONFLICT DO NOTHING`, [ id, definition.object_name, definition.centers ]);
+        const normalizedHash = normalizeDefinition({
+          object_name: canonicalName,
+          object_category: categoryResult.rows[0]?.name || '',
+          check_layer: definition.check_layer,
+          check_method: definition.check_method,
+          description: definition.description,
+          steps: definition.steps,
+          frequency: definition.frequency,
+        }).normalizedHash;
+        await client.query(`
+          UPDATE supervision_definitions
+          SET object_name = $2, object_category = $3, normalized_hash = $4, updated_at = now()
+          WHERE id = $1`, [ definition.id, canonicalName, categoryResult.rows[0]?.name || null, normalizedHash ]);
+      }
+      const result = await client.query(`
+        UPDATE supervision_objects
+        SET canonical_name = $2, normalized_name = lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')),
+            category_id = $3, notes = $4, updated_at = now()
+        WHERE id = $1 AND status = 'active'
+        RETURNING *`, [ id, canonicalName, categoryId || null, notes || null ]);
+      if (!result.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query(`
+        INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, source)
+        VALUES ($1, $2, lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')), 'normalization')
+        ON CONFLICT DO NOTHING`, [ id, canonicalName ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'update_supervision_object', 'supervision_object', $2, $3)`, [
+        actorId || null, id, JSON.stringify({ canonicalName, categoryId: categoryId || null }),
+      ]);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createObjectCategory({ name, description }, actorId) {
+    const result = await this.pool.query(`
+      INSERT INTO supervision_object_categories (name, description)
+      VALUES ($1, $2) RETURNING *`, [ name, description || null ]);
+    await this.pool.query(`
+      INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1, 'create_supervision_object_category', 'supervision_object_category', $2, $3)`, [
+      actorId || null, result.rows[0].id, JSON.stringify({ name }),
+    ]);
+    return result.rows[0];
+  }
+
+  async setObjectCategory(id, categoryId, actorId) {
+    const result = await this.pool.query(`
+      UPDATE supervision_objects SET category_id = $2, updated_at = now()
+      WHERE id = $1 AND status = 'active' RETURNING id, canonical_name`, [ id, categoryId || null ]);
+    if (!result.rowCount) return null;
+    await this.pool.query(`
+      INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1, 'classify_supervision_object', 'supervision_object', $2, $3)`, [
+      actorId || null, id, JSON.stringify({ categoryId: categoryId || null }),
+    ]);
+    return result.rows[0];
+  }
+
   async listCenterObjectEntries() {
     const result = await this.pool.query(`
       SELECT dc.center_name, d.object_name,
@@ -350,7 +551,7 @@ class SupervisionDefinitionRepository {
     try {
       if (ownClient) await db.query('BEGIN');
       const entries = await db.query(`
-        SELECT d.id, d.object_name, d.plan_number, d.object_category, d.check_layer,
+        SELECT d.id, d.object_name, d.canonical_object_id, d.plan_number, d.object_category, d.check_layer,
                d.check_method, d.description, d.steps, d.frequency, d.access_mode,
                d.priority, d.reference_result, d.reference_materials, d.normalized_hash,
                ARRAY(SELECT dc2.center_name FROM supervision_definition_centers dc2
@@ -375,12 +576,17 @@ class SupervisionDefinitionRepository {
           throw error;
         }
         const sourcePlans = entries.rows.filter(plan => plan.object_name === sourceObjectName);
+        const canonicalObjectId = entries.rows.find(plan => plan.object_name === canonicalObjectName)?.canonical_object_id;
         if (sourcePlans.some(plan => (plan.centers || []).some(center => center !== centerName))) {
           const error = new Error('待合并对象关联的检查方案还适用于其他检查中心；为避免跨中心串改，不能在此合并');
           error.code = 'OBJECT_DEDUPE_CROSS_CENTER';
           throw error;
         }
         for (const plan of sourcePlans) {
+          await db.query(`
+            INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, center_name, source)
+            VALUES ($1, $2, lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')), $3, 'dedupe')
+            ON CONFLICT DO NOTHING`, [ canonicalObjectId, plan.object_name, centerName ]);
           const fields = {
             object_name: canonicalObjectName,
             object_category: plan.object_category || '',
@@ -393,8 +599,8 @@ class SupervisionDefinitionRepository {
           const normalizedHash = normalizeDefinition(fields).normalizedHash;
           await db.query(`
             UPDATE supervision_definitions
-            SET object_name = $2, normalized_hash = $3, updated_at = now()
-            WHERE id = $1`, [ plan.id, canonicalObjectName, normalizedHash ]);
+            SET object_name = $2, canonical_object_id = $3, normalized_hash = $4, updated_at = now()
+            WHERE id = $1`, [ plan.id, canonicalObjectName, canonicalObjectId, normalizedHash ]);
         }
         affectedPlanIds = sourcePlans.map(plan => plan.id);
       }
@@ -468,9 +674,12 @@ class SupervisionDefinitionRepository {
           ON CONFLICT DO NOTHING`, [ result.rows[0].id, standardItemId ]);
       }
       for (const centerName of fields.centers || []) {
+        await this.ensureCanonicalObject(client, fields.objectName, fields.objectCategory, centerName);
         await client.query(`INSERT INTO supervision_definition_centers (definition_id, center_name)
           VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ result.rows[0].id, centerName ]);
       }
+      const canonicalObjectId = await this.ensureCanonicalObject(client, fields.objectName, fields.objectCategory);
+      await client.query('UPDATE supervision_definitions SET canonical_object_id = $2 WHERE id = $1', [ result.rows[0].id, canonicalObjectId ]);
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
         VALUES ($1, 'create_supervision_definition', 'supervision_definition', $2, $3)`, [
@@ -521,9 +730,12 @@ class SupervisionDefinitionRepository {
       }
       await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ id ]);
       for (const centerName of fields.centers || []) {
+        await this.ensureCanonicalObject(client, fields.objectName, fields.objectCategory, centerName);
         await client.query(`INSERT INTO supervision_definition_centers (definition_id, center_name)
           VALUES ($1, $2) ON CONFLICT DO NOTHING`, [ id, centerName ]);
       }
+      const canonicalObjectId = await this.ensureCanonicalObject(client, fields.objectName, fields.objectCategory);
+      await client.query('UPDATE supervision_definitions SET canonical_object_id = $2 WHERE id = $1', [ id, canonicalObjectId ]);
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
         VALUES ($1, 'update_supervision_definition', 'supervision_definition', $2, $3)`, [
