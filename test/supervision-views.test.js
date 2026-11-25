@@ -4,11 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {
-  SUPERVISION_CENTER_LABELS,
-  supervisionCenterLabel,
-} = require('../app/lib/supervisionCenters');
-
 let ejs;
 try {
   ejs = require('ejs');
@@ -28,7 +23,7 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   assert.match(planView, /name="scope"/);
   assert.match(planView, /name="centers"/);
   assert.match(planView, /适用机构/);
-  assert.match(planView, /supervisionCenterLabel\(centerOption\)/);
+  assert.match(planView, /<%= centerOption %>/);
   assert.match(planView, /name="status"/);
   assert.match(planView, /buildPageUrl\(pageValue - 1\)/);
   assert.match(planView, /definitionDetailModal/);
@@ -68,8 +63,6 @@ test('keeps the supervision definition edit payload valid after HTML attribute d
     definitions: [ definition ],
     standardItems: [],
     checkMethodOptions: [],
-    supervisionCenterLabel,
-    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     user: { roles: [ { code: 'security_admin', projectId: null } ] },
     csrf: 'test-token',
   });
@@ -82,8 +75,6 @@ test('escapes standard content before placing supervision definitions in script 
   const attackText = '</script><script>alert(1)</script>';
   const html = await ejs.renderFile(path.join(viewRoot, 'supervision-executions/index.ejs'), {
     project: { id: 'project-1', name: '测试项目' },
-    supervisionCenterLabel,
-    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     user: { roles: [ { projectId: 'project-1', code: 'operator' } ] },
     executions: [],
     definitions: [ {
@@ -270,7 +261,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /分类维护/);
   assert.match(html, /规范对象、原始名称或分类/);
   assert.match(html, /适用机构/);
-  assert.match(html, /supervisionCenterLabel\(option\)/);
+  assert.match(html, /<%= option %>/);
   assert.match(html, /新增对象分类/);
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /name="categoryInput"/);
@@ -279,7 +270,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="objectPlanPopover"/);
   assert.match(html, /showObjectPlanPreview/);
   assert.match(html, /检查方案 /);
-  assert.match(html, /\[ '适用机构', \(plan\.centers \|\| \[\]\)\.map\(supervisionCenterText\)\.join\('、'\) \]/);
+  assert.match(html, /\[ '适用机构', \(plan\.centers \|\| \[\]\)\.join\('、'\) \]/);
   assert.match(html, /检查描述/);
   assert.match(html, /检查步骤/);
   assert.match(html, /频率 \/ 方式/);
@@ -343,7 +334,6 @@ test('keeps rule scanning manual, AI optional, and manual review always availabl
   assert.match(html, /当前：/);
   assert.match(html, /object-review-actions/);
   assert.match(html, /该机构下.*检查方案会更新到保留对象/);
-  assert.match(html, /data-center-label="<%= supervisionCenterLabel\(candidate\.center_name\) %>"/);
   assert.match(html, /所有合并都必须人工确认/);
   assert.doesNotMatch(html, /AI 已排除<\/h3>/);
   assert.doesNotMatch(html, /最近人工复核/);
@@ -357,7 +347,6 @@ test('moves object dedupe history behind its own page', () => {
   assert.match(dedupe, /dedupe\/history/);
   assert.match(dedupe, /查看复核历史/);
   assert.match(history, /检查对象去重复核历史/);
-  assert.match(history, /supervisionCenterLabel\(review\.center_name\)/);
   assert.match(history, /检查方案已迁移/);
 });
 
@@ -365,14 +354,12 @@ test('renders the inspection object page with branch terminology', { skip: !ejs 
   const html = await ejs.renderFile(path.join(viewRoot, 'supervision-center-objects/index.ejs'), {
     centerObjects: [],
     centerOptions: [ '云中心' ],
-    supervisionCenterLabel,
-    supervisionCenterLabels: SUPERVISION_CENTER_LABELS,
     csrf: 'test-token',
     user: { display_name: '管理员', roles: [] },
     currentPath: '/supervision-center-objects',
   });
   assert.match(html, /检查对象/);
   assert.match(html, /name="center"/);
-  assert.match(html, /分支机构/);
+  assert.match(html, /云中心/);
   assert.doesNotMatch(html, /中心检查对象/);
 });

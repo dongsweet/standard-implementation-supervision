@@ -33,7 +33,7 @@
       <% rows.slice(0, 20).forEach(row => { %>
         <tr>
           <td><strong><%= row.objectName %></strong><div class="small text-secondary"><%= row.scope || '-' %></div></td>
-          <td><%= (row.centers || []).map(supervisionCenterLabel).join('、') || '未指定' %></td>
+          <td><%= (row.centers || []).join('、') || '未指定' %></td>
           <td><%= row.objectCategory || '-' %><div class="small text-secondary"><%= row.checkLayer || '-' %> · <%= row.priority || '重点项未指定' %></div></td>
           <td><%= row.checkMethod %><% if (row.steps) { %><details class="small mt-1"><summary>查看检查步骤</summary><div class="mt-1 text-break"><%= row.steps %></div></details><% } %></td>
           <td><div class="text-break"><%= row.description %></div><% if (row.referenceResult || row.referenceMaterials) { %><details class="small mt-1"><summary>参考信息</summary><% if (row.referenceResult) { %><div class="mt-1"><strong>判定：</strong><%= row.referenceResult %></div><% } %><% if (row.referenceMaterials) { %><div class="mt-1"><strong>材料：</strong><%= row.referenceMaterials %></div><% } %></details><% } %></td>

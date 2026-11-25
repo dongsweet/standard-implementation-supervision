@@ -15,7 +15,7 @@
         <% reviews.forEach(review => { %>
           <tr>
             <td><%= new Date(review.created_at).toLocaleString('zh-CN') %></td>
-            <td><%= supervisionCenterLabel(review.center_name) %></td>
+            <td><%= review.center_name %></td>
             <td><%= review.left_object_name %></td>
             <td><%= review.right_object_name %></td>
             <td><span class="badge <%= review.decision === 'merged' ? 'text-bg-success' : review.decision === 'distinct' ? 'text-bg-secondary' : 'text-bg-warning' %>"><%= review.decision === 'merged' ? '已合并' : review.decision === 'distinct' ? '不是重复' : '暂不确定' %></span></td>

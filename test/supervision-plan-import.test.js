@@ -42,7 +42,7 @@ test('builds the plan template with branch choices in the applicable organizatio
   );
   assert.ok(sheetXml.some(xml =>
     xml.includes('sqref="D2:D5000"')
-    && xml.includes('&quot;分支机构,统一运维机构,总部&quot;')
+    && xml.includes('&quot;云中心,统一运维中心,总部&quot;')
   ));
 });
 
@@ -94,8 +94,8 @@ test('maps original workbook headers into the editable plan fields', () => {
 test('merges applicable branches from repeated import rows into one definition', () => {
   const parsed = parseSupervisionPlanRows([ { name: '检查方案', rows: [
     [ '标准化编号', '检查范围', '适用机构', '检查对象', '检查方法', '检查项描述' ],
-    [ '31168-2023-06008', '生产', '分支机构', '云平台账号', '证据材料核查', '核查高权限账号' ],
-    [ '31168-2023-06009', '生产', '统一运维机构', '云平台账号', '证据材料核查', '核查高权限账号' ],
+    [ '31168-2023-06008', '生产', '云中心', '云平台账号', '证据材料核查', '核查高权限账号' ],
+    [ '31168-2023-06009', '生产', '统一运维中心', '云平台账号', '证据材料核查', '核查高权限账号' ],
   ] } ]);
   assert.deepEqual(parsed.rows.map(row => row.centers), [ [ '云中心' ], [ '统一运维中心' ] ]);
   assert.equal(parsed.rows[0].scope, parsed.rows[1].scope);

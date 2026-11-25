@@ -75,14 +75,14 @@
           </td>
           <td>
             <strong><%= item.object_name %></strong>
-            <div class="small text-secondary mt-1"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %> · 适用机构：<%= (item.centers || []).map(supervisionCenterLabel).join('、') || '未指定' %></div>
+            <div class="small text-secondary mt-1"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %> · 适用机构：<%= (item.centers || []).join('、') || '未指定' %></div>
             <div class="small mt-1"><b>方法：</b><%= item.check_method %></div>
             <div class="small"><b>描述：</b><%= item.description %></div>
             <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.steps || '-' %></div><div><b>频率/方式：</b><%= item.frequency || '-' %> / <%= item.access_mode || '-' %></div><div><b>标准项：</b><%= (item.standard_item_codes || []).join('、') || '无' %></div><% if (item.reference_result || item.reference_materials) { %><div><b>参考判定：</b><%= item.reference_result || '-' %></div><div><b>参考材料：</b><%= item.reference_materials || '-' %></div><% } %></details>
           </td>
           <td>
             <strong><%= item.candidate_object_name %></strong>
-            <div class="small text-secondary mt-1"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %> · 适用机构：<%= (item.candidate_centers || []).map(supervisionCenterLabel).join('、') || '未指定' %></div>
+            <div class="small text-secondary mt-1"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %> · 适用机构：<%= (item.candidate_centers || []).join('、') || '未指定' %></div>
             <div class="small mt-1"><b>方法：</b><%= item.candidate_check_method %></div>
             <div class="small"><b>描述：</b><%= item.candidate_description %></div>
             <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.candidate_steps || '-' %></div><div><b>频率/方式：</b><%= item.candidate_frequency || '-' %> / <%= item.candidate_access_mode || '-' %></div><div><b>标准项：</b><%= (item.candidate_standard_item_codes || []).join('、') || '无' %></div><% if (item.candidate_reference_result || item.candidate_reference_materials) { %><div><b>参考判定：</b><%= item.candidate_reference_result || '-' %></div><div><b>参考材料：</b><%= item.candidate_reference_materials || '-' %></div><% } %></details>

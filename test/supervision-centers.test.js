@@ -2,10 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  supervisionCenterLabel,
-  splitSupervisionCenters,
-} = require('../app/lib/supervisionCenters');
+const { splitSupervisionCenters } = require('../app/lib/supervisionCenters');
 const { normalizeDefinition, definitionConflicts } = require('../app/lib/dedupe');
 const { planImportKey } = require('../app/repository/supervisionPlanImport');
 const { buildObjectCandidates, objectCandidate, partitionSemanticCandidates } = require('../app/lib/centerObjectDedupe');
@@ -13,14 +10,6 @@ const { buildObjectCandidates, objectCandidate, partitionSemanticCandidates } = 
 test('parses and canonicalizes multiple applicable supervision centers', () => {
   assert.deepEqual(splitSupervisionCenters('云中心，统一运维、总部；云中心'), [ '云中心', '统一运维中心', '总部' ]);
   assert.deepEqual(splitSupervisionCenters([ '云中心', '总部' ]), [ '云中心', '总部' ]);
-  assert.deepEqual(splitSupervisionCenters('分支机构，统一运维机构、总部'), [ '云中心', '统一运维中心', '总部' ]);
-});
-
-test('presents legacy center values with branch terminology', () => {
-  assert.equal(supervisionCenterLabel('云中心'), '分支机构');
-  assert.equal(supervisionCenterLabel('统一运维中心'), '统一运维机构');
-  assert.equal(supervisionCenterLabel('总部'), '总部');
-  assert.equal(supervisionCenterLabel('新疆'), '新疆');
 });
 
 test('center differences do not change definition identity or create a metadata conflict', () => {

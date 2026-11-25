@@ -34,7 +34,7 @@
       <div class="col-12 col-md-6 col-xl-4"><label class="form-label" for="definitionSearch">查找</label><input class="form-control" id="definitionSearch" name="search" value="<%= searchValue %>" placeholder="方案编号、检查对象、描述或标准编号"></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionPriority">重点项</label><select class="form-select" id="definitionPriority" name="priority"><option value="">全部</option><option value="重点项" <%= priorityValue === '重点项' ? 'selected' : '' %>>重点项</option><option value="非重点项" <%= priorityValue === '非重点项' ? 'selected' : '' %>>非重点项</option><option value="未指定" <%= priorityValue === '未指定' ? 'selected' : '' %>>未指定</option></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionMethod">检查方法</label><select class="form-select" id="definitionMethod" name="checkMethod"><option value="">全部方法</option><% checkMethodOptions.forEach(method => { %><option value="<%= method %>" <%= checkMethodValue === method ? 'selected' : '' %>><%= method %></option><% }) %></select></div>
-      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionCenter">适用机构</label><select class="form-select" id="definitionCenter" name="center"><option value="">全部机构</option><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>" <%= centerValue === centerOption ? 'selected' : '' %>><%= supervisionCenterLabel(centerOption) %></option><% }) %></select></div>
+      <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionCenter">适用机构</label><select class="form-select" id="definitionCenter" name="center"><option value="">全部机构</option><% centerOptionsValue.forEach(centerOption => { %><option value="<%= centerOption %>" <%= centerValue === centerOption ? 'selected' : '' %>><%= centerOption %></option><% }) %></select></div>
       <div class="col-6 col-md-3 col-xl-2"><label class="form-label" for="definitionStatus">状态</label><select class="form-select" id="definitionStatus" name="status"><option value="">全部状态</option><option value="active" <%= statusValue === 'active' ? 'selected' : '' %>>有效</option><option value="merged" <%= statusValue === 'merged' ? 'selected' : '' %>>已归并</option></select></div>
       <div class="col-12 d-flex justify-content-end gap-2"><button class="btn btn-outline-primary" type="submit">查找</button><a class="btn btn-outline-secondary" href="/supervision-definitions">重置</a></div>
     </form>
@@ -49,7 +49,7 @@
       <% definitions.forEach(definition => { %>
         <tr>
           <td><span class="badge text-bg-primary"><%= String(definition.plan_number || '').padStart(3, '0') %></span></td>
-          <td><% (definition.centers || []).forEach(centerName => { %><span class="badge text-bg-light border me-1 mb-1"><%= supervisionCenterLabel(centerName) %></span><% }) %><% if (!(definition.centers || []).length) { %><span class="text-secondary">未指定</span><% } %></td>
+          <td><% (definition.centers || []).forEach(centerName => { %><span class="badge text-bg-light border me-1 mb-1"><%= centerName %></span><% }) %><% if (!(definition.centers || []).length) { %><span class="text-secondary">未指定</span><% } %></td>
           <td><strong><%= definition.object_name %></strong></td>
           <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
           <td><div title="<%= definition.description %>" style="display:-webkit-box; max-width:32rem; overflow:hidden; white-space:normal; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:4; line-clamp:4; line-height:1.55"><%= definition.description %></div></td>
@@ -99,7 +99,7 @@
             <div class="col-md-4"><label class="form-label" for="createCheckLayer">检查层面</label><input class="form-control" id="createCheckLayer" name="checkLayer" list="createCheckLayerOptions" autocomplete="off" placeholder="选择现有值或输入新值"></div>
             <div class="col-md-4"><label class="form-label" for="createRecognizedObject">是否公认对象</label><select class="form-select" id="createRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="createPriority">重点项</label><select class="form-select" id="createPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
-            <div class="col-12"><label class="form-label d-block">适用机构</label><div class="d-flex flex-wrap gap-2" id="createCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="createCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createCenter<%= index %>"><%= supervisionCenterLabel(centerOption) %></label><% }) %></div><div class="form-text">可选择总部、分支机构或统一运维机构；执行时按机构分别记录。</div></div>
+            <div class="col-12"><label class="form-label d-block">适用机构</label><div class="d-flex flex-wrap gap-2" id="createCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="createCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="createCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">可选择一个或多个适用机构；执行时按机构分别记录。</div></div>
           </div>
         </section>
         <section class="tab-pane fade" id="createRequirementPane" role="tabpanel" aria-labelledby="createRequirementTab" tabindex="0">
@@ -146,7 +146,7 @@
             <div class="col-md-4"><label class="form-label" for="editCheckLayer">检查层面</label><input class="form-control" id="editCheckLayer" name="checkLayer" list="editCheckLayerOptions" autocomplete="off"></div>
             <div class="col-md-4"><label class="form-label" for="editRecognizedObject">是否公认对象</label><select class="form-select" id="editRecognizedObject" name="recognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
             <div class="col-md-4"><label class="form-label" for="editPriority">重点项</label><select class="form-select" id="editPriority" name="priority"><option value="">未指定</option><option>重点项</option><option>非重点项</option></select></div>
-            <div class="col-12"><label class="form-label d-block">适用机构</label><div class="d-flex flex-wrap gap-2" id="editCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="editCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editCenter<%= index %>"><%= supervisionCenterLabel(centerOption) %></label><% }) %></div><div class="form-text">可选择总部、分支机构或统一运维机构；执行时按机构分别记录。</div></div>
+            <div class="col-12"><label class="form-label d-block">适用机构</label><div class="d-flex flex-wrap gap-2" id="editCenters"><% centerOptionsValue.forEach((centerOption, index) => { %><input class="btn-check" type="checkbox" name="centers" id="editCenter<%= index %>" value="<%= centerOption %>" autocomplete="off"><label class="btn btn-outline-secondary" for="editCenter<%= index %>"><%= centerOption %></label><% }) %></div><div class="form-text">可选择一个或多个适用机构；执行时按机构分别记录。</div></div>
           </div>
         </section>
         <section class="tab-pane fade" id="editRequirementPane" role="tabpanel" aria-labelledby="editRequirementTab" tabindex="0">
@@ -234,8 +234,6 @@
     count: Number(category.object_count) || 0,
   }))).replace(/</g, '\\u003c') %>;
   const planCategoryPickers = {};
-  const supervisionCenterLabels = <%- JSON.stringify(supervisionCenterLabels).replace(/</g, '\\u003c') %>;
-  const supervisionCenterText = value => supervisionCenterLabels[value] || value || '';
 
   function normalizedPickerText(value) {
     return String(value || '').normalize('NFKC').trim().toLowerCase();
@@ -558,7 +556,7 @@
     const rows = [
       ['方案编号', String(definition.plan_number || '').padStart(3, '0')],
       ['检查对象', definition.object_name],
-      ['适用机构', (definition.centers || []).map(supervisionCenterText).join('、') || '未指定'],
+      ['适用机构', (definition.centers || []).join('、') || '未指定'],
       ...(definition.scope ? [ [ '检查范围', definition.scope ] ] : []),
       ['对象分类', definition.object_category || '未指定'],
       ['检查层面', definition.check_layer || '未指定'],
