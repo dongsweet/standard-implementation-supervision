@@ -1,13 +1,13 @@
 <%
-  const centerValue = center || '';
-  const searchValue = search || '';
-  const categoryValue = category || '';
-  const viewValue = [ 'overview', 'pending', 'categories' ].includes(view) ? view : 'overview';
-  const objectCategoriesValue = Array.isArray(objectCategories) ? objectCategories : [];
-  const centerObjectsValue = Array.isArray(centerObjects) ? centerObjects : [];
+  const centerValue = typeof center === 'undefined' ? '' : (center || '');
+  const searchValue = typeof search === 'undefined' ? '' : (search || '');
+  const categoryValue = typeof category === 'undefined' ? '' : (category || '');
+  const viewValue = [ 'overview', 'pending', 'categories' ].includes(typeof view === 'undefined' ? '' : view) ? view : 'overview';
+  const objectCategoriesValue = Array.isArray(typeof objectCategories === 'undefined' ? null : objectCategories) ? objectCategories : [];
+  const centerObjectsValue = Array.isArray(typeof centerObjects === 'undefined' ? null : centerObjects) ? centerObjects : [];
   const totalValue = typeof total === 'undefined' ? centerObjectsValue.length : total;
-  const pageValue = page || 1;
-  const pageCountValue = pageCount || 1;
+  const pageValue = typeof page === 'undefined' ? 1 : (page || 1);
+  const pageCountValue = typeof pageCount === 'undefined' ? 1 : (pageCount || 1);
   const buildUrl = (targetView = viewValue, targetPage = 1) => {
     const params = [ 'view=' + encodeURIComponent(targetView) ];
     if (centerValue) params.push('center=' + encodeURIComponent(centerValue));
