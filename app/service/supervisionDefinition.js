@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
 const { friendlyAiError } = require('../lib/aiProvider');
 const {
+  OBJECT_SIMILARITY_ALGORITHM_VERSION,
   buildObjectCandidates,
   objectCandidate,
   pairKey,
@@ -176,6 +177,7 @@ class SupervisionDefinitionService extends Service {
           [ candidate.left_object_name, candidate.right_object_name ].sort(),
           context.leftPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
           context.rightPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+          OBJECT_SIMILARITY_ALGORITHM_VERSION,
           modelName,
           promptVersion,
         ])).digest('hex');
@@ -184,7 +186,7 @@ class SupervisionDefinitionService extends Service {
           leftObjectName: candidate.left_object_name,
           rightObjectName: candidate.right_object_name,
           inputHash,
-          algorithmVersion: 'object-normalized-trigram-v1',
+          algorithmVersion: OBJECT_SIMILARITY_ALGORITHM_VERSION,
           promptVersion,
           modelName,
         });
@@ -430,6 +432,7 @@ class SupervisionDefinitionService extends Service {
       [ leftObjectName, rightObjectName ].sort(),
       context.leftPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
       context.rightPlans.map(plan => [ plan.id, plan.check_method, plan.description ]),
+      OBJECT_SIMILARITY_ALGORITHM_VERSION,
       modelName,
       promptVersion,
     ])).digest('hex');
@@ -440,7 +443,7 @@ class SupervisionDefinitionService extends Service {
       leftObjectName,
       rightObjectName,
       inputHash,
-      algorithmVersion: 'object-normalized-trigram-v1',
+      algorithmVersion: OBJECT_SIMILARITY_ALGORITHM_VERSION,
       promptVersion,
       modelName,
     });

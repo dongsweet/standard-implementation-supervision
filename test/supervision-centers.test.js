@@ -5,7 +5,13 @@ const assert = require('node:assert/strict');
 const { splitSupervisionCenters } = require('../app/lib/supervisionCenters');
 const { normalizeDefinition, definitionConflicts } = require('../app/lib/dedupe');
 const { planImportKey } = require('../app/repository/supervisionPlanImport');
-const { buildObjectCandidates, objectCandidate, partitionSemanticCandidates } = require('../app/lib/centerObjectDedupe');
+const {
+  OBJECT_SIMILARITY_ALGORITHM_VERSION,
+  buildObjectCandidates,
+  objectCandidate,
+  objectSimilarity,
+  partitionSemanticCandidates,
+} = require('../app/lib/centerObjectDedupe');
 
 test('parses and canonicalizes multiple applicable supervision centers', () => {
   assert.deepEqual(splitSupervisionCenters('云中心，统一运维、总部；云中心'), [ '云中心', '统一运维中心', '总部' ]);
@@ -25,21 +31,24 @@ test('center differences do not change definition identity or create a metadata 
   ), []);
 });
 
-test('center object rule candidates distinguish punctuation variants from unrelated objects', () => {
+test('center object rule candidates use normalized longest common subsequence similarity', () => {
+  assert.equal(OBJECT_SIMILARITY_ALGORITHM_VERSION, 'object-normalized-lcs-v1');
   assert.deepEqual(objectCandidate('《采购合同或协议》', '采购合同或协议'), {
     candidateType: 'exact',
     similarity: 1,
   });
   const similar = objectCandidate('存储设备数据清理记录', '移动存储设备数据清理记录');
   assert.equal(similar.candidateType, 'similar');
-  assert.ok(similar.similarity >= 0.6);
+  assert.ok(Math.abs(similar.similarity - (10 / 11)) < 1e-12);
   assert.equal(objectCandidate('云平台', '堡垒机'), null);
+  assert.equal(objectSimilarity('《曙光云软件安全管理规范》', '云平台软件开发安全管理规范'), 0.75);
+  assert.ok(Math.abs(objectSimilarity('渗透测试报告', '验收测试报告') - (2 / 3)) < 1e-12);
 });
 
 test('center object rule candidates honor the user supplied similarity threshold', () => {
-  assert.equal(objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.75), null);
+  assert.equal(objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.84), null);
   assert.equal(
-    objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.7).candidateType,
+    objectCandidate('《安全设备通用操作规范》', '《安全设备通用操作规范》（网络隔离）', 0.83).candidateType,
     'similar'
   );
 });

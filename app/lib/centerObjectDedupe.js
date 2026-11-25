@@ -2,14 +2,29 @@
 
 const { normalizeText } = require('./dedupe');
 
+const OBJECT_SIMILARITY_ALGORITHM_VERSION = 'object-normalized-lcs-v1';
+
 function objectKey(value) {
   return normalizeText(value)
     .replace(/[^\p{L}\p{N}]/gu, '');
 }
 
-function trigrams(value) {
-  const text = `  ${value}  `;
-  return new Set(Array.from({ length: Math.max(0, text.length - 2) }, (_, index) => text.slice(index, index + 3)));
+function longestCommonSubsequenceLength(left, right) {
+  const a = Array.from(left);
+  const b = Array.from(right);
+  if (a.length < b.length) return longestCommonSubsequenceLength(right, left);
+  let previous = new Uint32Array(b.length + 1);
+  let current = new Uint32Array(b.length + 1);
+  for (let leftIndex = 1; leftIndex <= a.length; leftIndex += 1) {
+    for (let rightIndex = 1; rightIndex <= b.length; rightIndex += 1) {
+      current[rightIndex] = a[leftIndex - 1] === b[rightIndex - 1]
+        ? previous[rightIndex - 1] + 1
+        : Math.max(previous[rightIndex], current[rightIndex - 1]);
+    }
+    [ previous, current ] = [ current, previous ];
+    current.fill(0);
+  }
+  return previous[b.length];
 }
 
 function objectSimilarity(left, right) {
@@ -18,11 +33,8 @@ function objectSimilarity(left, right) {
   if (!a.length && !b.length) return 1;
   if (!a.length || !b.length) return 0;
   if (a === b) return 1;
-  const first = trigrams(a);
-  const second = trigrams(b);
-  let intersection = 0;
-  for (const item of first) if (second.has(item)) intersection += 1;
-  return (2 * intersection) / (first.size + second.size);
+  const commonLength = longestCommonSubsequenceLength(a, b);
+  return (2 * commonLength) / (Array.from(a).length + Array.from(b).length);
 }
 
 function objectCandidate(leftObject, rightObject, threshold = 0.6) {
@@ -104,6 +116,7 @@ function partitionSemanticCandidates(candidates) {
 }
 
 module.exports = {
+  OBJECT_SIMILARITY_ALGORITHM_VERSION,
   buildObjectCandidates,
   objectCandidate,
   objectKey,
