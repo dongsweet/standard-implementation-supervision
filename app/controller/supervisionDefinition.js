@@ -121,6 +121,60 @@ class SupervisionDefinitionController extends Controller {
     };
   }
 
+  async objectSplitDrafts() {
+    requireGlobalRead(this.ctx);
+    await this.ctx.render('supervision-center-objects/split-drafts', {
+      title: '对象拆分草案',
+      drafts: await this.ctx.service.supervisionDefinition.listObjectSplitDrafts(),
+      canWrite: this.globalWriteAllowed(),
+      csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
+    });
+  }
+
+  async objectSplitDraft() {
+    requireGlobalRead(this.ctx);
+    const draft = await this.ctx.service.supervisionDefinition.objectSplitDraft(this.ctx.params.draftId);
+    const preview = draft.status === 'draft'
+      ? await this.ctx.service.supervisionDefinition.objectSplitPreview(draft.source_object_id)
+      : { plans: [] };
+    await this.ctx.render('supervision-center-objects/split-draft', {
+      title: '拆分草案提交',
+      draft,
+      preview,
+      canWrite: this.globalWriteAllowed(),
+      csrf: this.ctx.csrf,
+      user: this.ctx.state.user,
+    });
+  }
+
+  globalWriteAllowed() {
+    return (this.ctx.state.user?.roles || []).some(role =>
+      !role.projectId && [ 'system_admin', 'security_admin' ].includes(role.code)
+    );
+  }
+
+  async createObjectSplitDraft() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.saveObjectSplitDraft(
+        this.ctx.params.objectId,
+        this.ctx.request.body || {},
+        this.ctx.session.userId
+      ),
+    };
+  }
+
+  async submitObjectSplitDraft() {
+    requireGlobalWrite(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.supervisionDefinition.submitObjectSplitDraft(
+        this.ctx.params.draftId,
+        this.ctx.session.userId
+      ),
+    };
+  }
+
   async mergeCenterObject() {
     requireGlobalWrite(this.ctx);
     this.ctx.body = {

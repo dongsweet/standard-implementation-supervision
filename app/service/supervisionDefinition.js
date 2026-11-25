@@ -4,7 +4,7 @@ const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
 const { friendlyAiError } = require('../lib/aiProvider');
-const { buildSplitGroups } = require('../lib/objectSplit');
+const { buildSplitGroups, validateSplitDraft } = require('../lib/objectSplit');
 const {
   OBJECT_SIMILARITY_ALGORITHM_VERSION,
   buildObjectCandidates,
@@ -331,6 +331,89 @@ class SupervisionDefinitionService extends Service {
       suggestedName: group.category === '未分类' ? '' : `${group.category}${object.canonical_name}`,
     }));
     return { object, plans, groups };
+  }
+
+  async saveObjectSplitDraft(id, payload, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '对象编号格式无效');
+    const preview = await this.objectSplitPreview(id);
+    const categories = await this.repository.listObjectCategories();
+    const categoryByName = new Map(categories.map(item => [ item.name, item ]));
+    const names = new Set();
+    const groups = (Array.isArray(payload.groups) ? payload.groups : []).map(group => {
+      const name = String(group.name || '').trim();
+      const category = String(group.category || '').trim();
+      const planIds = Array.isArray(group.planIds) ? group.planIds.map(String) : [];
+      if (names.has(name)) this.ctx.throw(409, `新对象名称重复：${name}`);
+      names.add(name);
+      const plans = preview.plans
+        .filter(plan => planIds.includes(plan.id))
+        .map(plan => ({
+          id: plan.id,
+          planNumber: plan.plan_number,
+          objectName: plan.object_name,
+          objectCategory: plan.object_category,
+          checkLayer: plan.check_layer,
+          checkMethod: plan.check_method,
+          description: plan.description,
+          centers: plan.centers || [],
+        }));
+      return {
+        name,
+        category,
+        categoryId: categoryByName.get(category)?.id || null,
+        planIds,
+        plans,
+      };
+    });
+    const validation = validateSplitDraft({ sourceName: preview.object.canonical_name, groups });
+    if (validation.errors.length) this.ctx.throw(400, validation.errors.join('；'));
+    const sourcePlanIds = new Set(preview.plans.map(plan => plan.id));
+    if (groups.some(group => group.planIds.some(planId => !sourcePlanIds.has(planId)))) {
+      this.ctx.throw(409, '拆分草案包含不属于该对象的检查方案');
+    }
+    const assigned = new Set(groups.flatMap(group => group.planIds));
+    if (assigned.size !== sourcePlanIds.size) this.ctx.throw(400, '每个来源检查方案必须且只能分配到一个拆分分组');
+    for (const group of groups) {
+      const conflict = await this.repository.findActiveObjectNameConflict(group.name);
+      if (conflict) this.ctx.throw(409, `拆分目标名称已对应现有规范对象：${conflict.canonical_name}`);
+    }
+    try {
+      return await this.repository.createObjectSplitDraft({
+        sourceObjectId: id,
+        groups,
+        userId: actorId,
+      });
+    } catch (error) {
+      if (error.code === '23505') this.ctx.throw(409, '该规范对象已有待提交的拆分草案，请先处理现有草案');
+      if (error.code === 'SPLIT_SOURCE_CHANGED') this.ctx.throw(409, error.message);
+      throw error;
+    }
+  }
+
+  async listObjectSplitDrafts() {
+    return this.repository.listObjectSplitDrafts();
+  }
+
+  async objectSplitDraft(id) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '拆分草案编号格式无效');
+    const draft = await this.repository.getObjectSplitDraft(id);
+    if (!draft) this.ctx.throw(404, '拆分草案不存在');
+    return draft;
+  }
+
+  async submitObjectSplitDraft(id, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '拆分草案编号格式无效');
+    const draft = await this.repository.getObjectSplitDraft(id);
+    if (!draft) this.ctx.throw(404, '拆分草案不存在');
+    if (draft.status !== 'draft') this.ctx.throw(409, '该拆分草案已提交，不能重复提交');
+    try {
+      return await this.repository.submitObjectSplitDraft(id, actorId);
+    } catch (error) {
+      if ([ 'SPLIT_DRAFT_ALREADY_SUBMITTED', 'SPLIT_SOURCE_CHANGED', 'SPLIT_INVALID_GROUPS', 'SPLIT_TARGET_EXISTS' ].includes(error.code)) {
+        this.ctx.throw(409, error.message);
+      }
+      throw error;
+    }
   }
 
   async mergeCenterObject(id, payload, actorId) {

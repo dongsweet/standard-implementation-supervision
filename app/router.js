@@ -26,6 +26,10 @@ module.exports = app => {
   router.post('/api/supervision-center-objects/reviews', controller.supervisionDefinition.reviewCenterObject);
   router.post('/api/supervision-center-objects/objects/:objectId', controller.supervisionDefinition.updateCenterObject);
   router.get('/api/supervision-center-objects/objects/:objectId/split-preview', controller.supervisionDefinition.objectSplitPreview);
+  router.post('/api/supervision-center-objects/objects/:objectId/split-drafts', controller.supervisionDefinition.createObjectSplitDraft);
+  router.get('/supervision-center-objects/split-drafts', controller.supervisionDefinition.objectSplitDrafts);
+  router.get('/supervision-center-objects/split-drafts/:draftId', controller.supervisionDefinition.objectSplitDraft);
+  router.post('/api/supervision-center-objects/split-drafts/:draftId/submit', controller.supervisionDefinition.submitObjectSplitDraft);
   router.post('/api/supervision-center-objects/objects/:objectId/merge', controller.supervisionDefinition.mergeCenterObject);
   router.post('/api/supervision-center-objects/categories', controller.supervisionDefinition.createCenterObjectCategory);
   router.post('/api/supervision-center-objects/categories/:categoryId/delete', controller.supervisionDefinition.deleteCenterObjectCategory);

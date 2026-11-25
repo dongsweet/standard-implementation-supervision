@@ -453,6 +453,222 @@ class SupervisionDefinitionRepository {
     return result.rows;
   }
 
+  async createObjectSplitDraft({ sourceObjectId, groups, userId }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(`
+        INSERT INTO supervision_object_split_drafts (source_object_id, groups, created_by)
+        VALUES ($1, $2, $3)
+        RETURNING *`, [ sourceObjectId, JSON.stringify(groups), userId || null ]);
+      const source = await client.query(`
+        UPDATE supervision_objects
+        SET split_into_draft_id = $2, updated_at = now()
+        WHERE id = $1 AND status = 'active'`, [ sourceObjectId, result.rows[0].id ]);
+      if (!source.rowCount) {
+        const error = new Error('来源规范对象已发生变化，请重新生成草案');
+        error.code = 'SPLIT_SOURCE_CHANGED';
+        throw error;
+      }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'create_supervision_object_split_draft', 'supervision_object_split_draft', $2, $3)`, [
+        userId || null, result.rows[0].id, JSON.stringify({ sourceObjectId }),
+      ]);
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listObjectSplitDrafts() {
+    const result = await this.pool.query(`
+      SELECT d.*, o.canonical_name AS source_object_name,
+             c.name AS source_category, u.display_name AS created_by_name
+      FROM supervision_object_split_drafts d
+      JOIN supervision_objects o ON o.id = d.source_object_id
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      LEFT JOIN users u ON u.id = d.created_by
+      WHERE d.status IN ('draft', 'submitted')
+      ORDER BY d.status, d.updated_at DESC
+      LIMIT 200`);
+    return result.rows;
+  }
+
+  async getObjectSplitDraft(id) {
+    const result = await this.pool.query(`
+      SELECT d.*, o.canonical_name AS source_object_name, o.status AS source_status,
+             c.name AS source_category
+      FROM supervision_object_split_drafts d
+      JOIN supervision_objects o ON o.id = d.source_object_id
+      LEFT JOIN supervision_object_categories c ON c.id = o.category_id
+      WHERE d.id = $1`, [ id ]);
+    return result.rows[0] || null;
+  }
+
+  async submitObjectSplitDraft(id, userId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const draftResult = await client.query(`
+        SELECT d.*, o.canonical_name AS source_object_name, o.status AS source_status
+        FROM supervision_object_split_drafts d
+        JOIN supervision_objects o ON o.id = d.source_object_id
+        WHERE d.id = $1
+        FOR UPDATE OF d, o`, [ id ]);
+      const draft = draftResult.rows[0];
+      if (!draft) {
+        const error = new Error('拆分草案不存在');
+        error.code = 'SPLIT_DRAFT_NOT_FOUND';
+        throw error;
+      }
+      if (draft.status !== 'draft') {
+        const error = new Error('该拆分草案已提交，不能重复提交');
+        error.code = 'SPLIT_DRAFT_ALREADY_SUBMITTED';
+        throw error;
+      }
+      if (draft.source_status !== 'active') {
+        const error = new Error('来源规范对象已发生变化，请重新生成草案');
+        error.code = 'SPLIT_SOURCE_CHANGED';
+        throw error;
+      }
+      const groups = Array.isArray(draft.groups) ? draft.groups : [];
+      const sourcePlans = await client.query(`
+        SELECT id, check_layer, check_method, description, steps, frequency
+        FROM supervision_definitions
+        WHERE canonical_object_id = $1 AND status = 'active'
+        FOR UPDATE`, [ draft.source_object_id ]);
+      const plansById = new Map(sourcePlans.rows.map(plan => [ plan.id, plan ]));
+      const activePlanIds = new Set(sourcePlans.rows.map(plan => plan.id));
+      const assigned = new Set();
+      for (const group of groups) {
+        for (const planId of group.planIds || []) {
+          if (!activePlanIds.has(planId)) {
+            const error = new Error('拆分草案中的检查方案已发生变化，请重新生成草案');
+            error.code = 'SPLIT_SOURCE_CHANGED';
+            throw error;
+          }
+          if (assigned.has(planId)) {
+            const error = new Error('同一检查方案出现在多个拆分分组');
+            error.code = 'SPLIT_INVALID_GROUPS';
+            throw error;
+          }
+          assigned.add(planId);
+        }
+      }
+      if (assigned.size !== activePlanIds.size) {
+        const error = new Error('来源对象新增了未分配到草案的检查方案，请重新生成草案');
+        error.code = 'SPLIT_SOURCE_CHANGED';
+        throw error;
+      }
+      const created = [];
+      for (const group of groups) {
+        const conflict = await client.query(`
+          SELECT o.id FROM supervision_objects o
+          WHERE o.status = 'active'
+            AND o.normalized_name = lower(regexp_replace(btrim($1), '[[:space:][:punct:]]+', '', 'g'))
+          UNION ALL
+          SELECT o.id FROM supervision_object_aliases a
+          JOIN supervision_objects o ON o.id = a.object_id AND o.status = 'active'
+          WHERE a.normalized_name = lower(regexp_replace(btrim($1), '[[:space:][:punct:]]+', '', 'g'))
+          LIMIT 1`, [ group.name ]);
+        if (conflict.rowCount) {
+          const error = new Error(`拆分目标名称已对应现有规范对象：${group.name}`);
+          error.code = 'SPLIT_TARGET_EXISTS';
+          throw error;
+        }
+        const categoryId = group.categoryId || null;
+        const categoryResult = categoryId
+          ? await client.query('SELECT name FROM supervision_object_categories WHERE id = $1 AND status = \'active\'', [ categoryId ])
+          : await client.query(`
+              INSERT INTO supervision_object_categories (name)
+              VALUES ($1) ON CONFLICT (name) DO UPDATE SET updated_at = now()
+              RETURNING name`, [ group.category ]);
+        const categoryName = categoryResult.rows[0]?.name;
+        if (!categoryName) {
+          const error = new Error(`分类不存在：${group.category}`);
+          error.code = 'SPLIT_INVALID_GROUPS';
+          throw error;
+        }
+        const object = await client.query(`
+          INSERT INTO supervision_objects (canonical_name, normalized_name, category_id)
+          VALUES ($1, lower(regexp_replace(btrim($1), '[[:space:][:punct:]]+', '', 'g')), $2)
+          RETURNING id`, [ group.name, categoryId || (await client.query(
+            'SELECT id FROM supervision_object_categories WHERE name = $1',
+            [ categoryName ]
+          )).rows[0]?.id || null ]);
+        const objectId = object.rows[0].id;
+        await client.query(`
+          INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, source)
+          VALUES ($1, $2, lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')), 'split')
+          ON CONFLICT DO NOTHING`, [ objectId, group.name ]);
+        for (const planId of group.planIds || []) {
+          const plan = plansById.get(planId);
+          const normalizedHash = normalizeDefinition({
+            object_name: group.name,
+            object_category: categoryName,
+            check_layer: plan.check_layer,
+            check_method: plan.check_method,
+            description: plan.description,
+            steps: plan.steps,
+            frequency: plan.frequency,
+          }).normalizedHash;
+          await client.query(`
+            UPDATE supervision_definitions
+            SET object_name = $2, canonical_object_id = $3, object_category = $4,
+                normalized_hash = $5, updated_at = now()
+            WHERE id = $1 AND status = 'active'`, [ planId, group.name, objectId, categoryName, normalizedHash ]);
+        }
+        await client.query(`
+          INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, source)
+          VALUES ($1, $2, lower(regexp_replace(btrim($2), '[[:space:][:punct:]]+', '', 'g')), 'split-source')
+          ON CONFLICT DO NOTHING`, [ objectId, draft.source_object_name ]);
+        created.push({ objectId, name: group.name, category: categoryName, planIds: group.planIds || [] });
+      }
+      await client.query(`
+        UPDATE supervision_objects
+        SET status = 'split', split_into_draft_id = $2, updated_at = now()
+        WHERE id = $1`, [ draft.source_object_id, id ]);
+      const result = { sourceObjectId: draft.source_object_id, created };
+      const updated = await client.query(`
+        UPDATE supervision_object_split_drafts
+        SET status = 'submitted', submitted_by = $2, submitted_at = now(),
+            result = $3, updated_at = now()
+        WHERE id = $1 RETURNING *`, [ id, userId || null, JSON.stringify(result) ]);
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'submit_supervision_object_split', 'supervision_object_split_draft', $2, $3)`, [
+        userId || null, id, JSON.stringify(result),
+      ]);
+      await client.query('COMMIT');
+      return updated.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async findActiveObjectNameConflict(name) {
+    const result = await this.pool.query(`
+      SELECT o.id, o.canonical_name, 'object' AS conflict_source
+      FROM supervision_objects o
+      WHERE o.status = 'active'
+        AND o.normalized_name = lower(regexp_replace(btrim($1), '[[:space:][:punct:]]+', '', 'g'))
+      UNION ALL
+      SELECT o.id, o.canonical_name, 'alias' AS conflict_source
+      FROM supervision_object_aliases a
+      JOIN supervision_objects o ON o.id = a.object_id AND o.status = 'active'
+      WHERE a.normalized_name = lower(regexp_replace(btrim($1), '[[:space:][:punct:]]+', '', 'g'))
+      LIMIT 1`, [ name ]);
+    return result.rows[0] || null;
+  }
+
   async getObjectById(id) {
     const result = await this.pool.query(`
       SELECT o.id, o.canonical_name, o.status, c.name AS object_category

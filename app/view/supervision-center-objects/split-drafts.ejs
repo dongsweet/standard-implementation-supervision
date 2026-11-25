@@ -1,0 +1,27 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div>
+    <h2 class="h4 mb-1">对象拆分草案</h2>
+    <p class="text-secondary mb-0">草案保存后不会修改业务数据。进入草案核对并最终提交后，才会拆分对象和迁移检查方案。</p>
+  </div>
+  <a class="btn btn-outline-secondary ms-auto" href="/supervision-center-objects">返回检查对象</a>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center"><h3 class="card-title">待提交与已提交草案</h3><span class="badge text-bg-secondary ms-auto"><%= drafts.length %> 条</span></div>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <thead><tr><th>创建时间</th><th>来源对象</th><th>拆分目标</th><th>状态</th><th>创建人</th><th class="text-end">操作</th></tr></thead>
+    <tbody>
+      <% drafts.forEach(draft => { const groups = Array.isArray(draft.groups) ? draft.groups : []; %>
+        <tr>
+          <td class="text-nowrap"><%= new Date(draft.created_at).toLocaleString('zh-CN') %></td>
+          <td><strong><%= draft.source_object_name %></strong><div class="small text-secondary"><%= draft.source_category || '未分类' %></div></td>
+          <td><% groups.forEach(group => { %><span class="badge text-bg-light border me-1 mb-1"><%= group.name %> · <%= (group.planIds || []).length %> 个方案</span><% }) %></td>
+          <td><span class="badge <%= draft.status === 'submitted' ? 'text-bg-success' : 'text-bg-warning' %>"><%= draft.status === 'submitted' ? '已提交' : '待提交' %></span></td>
+          <td><%= draft.created_by_name || '-' %></td>
+          <td class="text-end"><a class="btn btn-sm <%= draft.status === 'draft' && canWrite ? 'btn-warning' : 'btn-outline-secondary' %>" href="/supervision-center-objects/split-drafts/<%= draft.id %>"><%= draft.status === 'draft' && canWrite ? '核对并提交' : '查看草案' %></a></td>
+        </tr>
+      <% }) %>
+      <% if (!drafts.length) { %><tr><td colspan="6" class="text-center text-secondary py-5">暂无对象拆分草案。</td></tr><% } %>
+    </tbody>
+  </table></div>
+</div>

@@ -29,7 +29,7 @@
 %>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div><h2 class="h4 mb-1">检查对象</h2><p class="text-secondary mb-0">维护规范化对象、对象分类和适用机构关系。检查方案中的检查方法、层面和检查内容仍在方案页维护。</p></div>
-  <div class="ms-auto d-flex gap-2"><a class="btn btn-outline-primary" href="/supervision-center-objects/dedupe">对象去重复核</a><a class="btn btn-outline-secondary" href="/supervision-definitions">查看检查方案</a></div>
+  <div class="ms-auto d-flex gap-2"><a class="btn btn-outline-warning" href="/supervision-center-objects/split-drafts">拆分草案</a><a class="btn btn-outline-primary" href="/supervision-center-objects/dedupe">对象去重复核</a><a class="btn btn-outline-secondary" href="/supervision-definitions">查看检查方案</a></div>
 </div>
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item"><a class="nav-link <%= viewValue === 'overview' ? 'active' : '' %>" href="<%= buildUrl('overview') %>">对象总览</a></li>
@@ -312,7 +312,7 @@
     return `<label class="split-plan-option"><input type="checkbox" value="${escapeHtml(plan.id)}" checked><span><strong>${String(plan.plan_number).padStart(3, '0')}</strong> ${escapeHtml(plan.object_category || '未分类')} · ${escapeHtml(plan.description || '')}<small>${escapeHtml((plan.centers || []).join('、') || '未指定机构')}</small></span></label>`;
   }
   function splitGroupHtml(group, index) {
-    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex align-items-center gap-2"><span class="badge text-bg-primary">${escapeHtml(group.category)} · ${group.planNumbers.length} 个方案</span><label class="form-check-label ms-auto"><input class="form-check-input split-group-include" type="checkbox" checked> 纳入拆分</label></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">检查方案</label><div class="form-control bg-body-tertiary">${group.planNumbers.length} 个</div></div></div><details><summary>查看并调整方案归属</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
+    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex align-items-center gap-2"><span class="badge text-bg-primary">${escapeHtml(group.category)} · ${group.planNumbers.length} 个方案</span><label class="form-check-label ms-auto"><input class="form-check-input split-group-select" type="checkbox"> 选择</label><label class="form-check-label"><input class="form-check-input split-group-include" type="checkbox" checked> 纳入拆分</label></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">检查方案</label><div class="form-control bg-body-tertiary">${group.planNumbers.length} 个</div></div></div><details><summary>查看并调整方案归属</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
   }
   async function openSplitObject(button) {
     const modalElement = document.getElementById('objectSplitModal');
@@ -363,25 +363,43 @@
     document.getElementById('saveSplitDraft').disabled = errors.length > 0 || !document.getElementById('objectSplitConfirmation').checked;
   });
   document.getElementById('mergeSplitGroups').addEventListener('click', () => {
-    const groups = [...document.querySelectorAll('.object-split-group')];
-    const included = groups.filter(group => group.querySelector('.split-group-include').checked);
-    if (included.length < 2) return;
-    const target = included[0];
-    for (const group of included.slice(1)) {
+    const selected = [...document.querySelectorAll('.split-group-select:checked')]
+      .map(input => input.closest('.object-split-group'));
+    if (selected.length < 2) {
+      return window.showAppNotice('请先勾选至少两个要合并的分组。', '合并拆分分组');
+    }
+    const target = selected[0];
+    target.querySelector('.split-group-include').checked = true;
+    for (const group of selected.slice(1)) {
       const targetList = target.querySelector('.split-plan-list');
       const targetChecks = new Set([...targetList.querySelectorAll('input')].map(input => input.value));
-      for (const input of group.querySelectorAll('.split-plan-option input')) {
+      for (const input of group.querySelectorAll('.split-plan-option input:checked')) {
         if (!targetChecks.has(input.value)) {
           targetList.insertAdjacentHTML('beforeend', splitGroupPlan(splitObjectState.plans.find(plan => plan.id === input.value)));
         }
       }
       group.remove();
     }
-    target.querySelector('.split-group-include').dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('objectSplitModal').dispatchEvent(new Event('change', { bubbles: true }));
   });
-  document.getElementById('saveSplitDraft').addEventListener('click', () => {
+  document.getElementById('saveSplitDraft').addEventListener('click', async event => {
+    const button = event.currentTarget;
     const groups = readSplitDraft();
-    window.showAppNotice(`已形成 ${groups.length} 个拆分分组。当前为预览版，业务数据尚未修改。`, '拆分草案已生成');
+    if (!splitObjectState?.object?.id || groups.length < 2) return;
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/supervision-center-objects/objects/' + encodeURIComponent(splitObjectState.object.id) + '/split-drafts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' },
+        body: JSON.stringify({ groups }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || '拆分草案保存失败');
+      window.location.assign('/supervision-center-objects/split-drafts/' + encodeURIComponent(payload.data.id));
+    } catch (error) {
+      button.disabled = false;
+      window.showAppNotice(error.message, '拆分草案未保存');
+    }
   });
 </script><% } %>
 <% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectMergeModal" tabindex="-1" aria-labelledby="objectMergeTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form id="objectMergeForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="objectMergeTitle">合并规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectMergeSummary"></div><label class="form-label" for="mergeTargetObject">合并到</label><div class="object-category-combobox" id="mergeTargetCombobox"><input class="form-control object-category-combobox-input" id="mergeTargetObject" type="search" autocomplete="off" placeholder="搜索要保留的规范对象" role="combobox" aria-expanded="false" aria-controls="mergeTargetObjectMenu" aria-autocomplete="list"><button class="object-category-combobox-toggle" id="mergeTargetObjectToggle" type="button" aria-label="展开保留对象候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="mergeTargetObjectMenu" role="listbox"></div></div><input type="hidden" id="mergeTargetObjectId"><div class="small text-secondary mt-1" id="mergeTargetHint">来源对象的检查方案会迁移到保留对象，来源对象将标记为已合并。</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" type="submit">确认合并</button></div></form></div></div></div><script>
