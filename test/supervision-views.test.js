@@ -195,7 +195,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /class="object-category-combobox"/);
   assert.match(html, /id="objectCategoryToggle"/);
   assert.match(html, /id="objectCategoryMenu"/);
-  assert.match(html, /id="objectCategorySearchStatus"/);
+  assert.match(html, /class="visually-hidden" id="objectCategorySearchStatus" role="status" aria-live="polite"/);
+  assert.doesNotMatch(html, /class="form-text" id="objectCategorySearchStatus"/);
   assert.match(html, /placeholder="输入对象分类名称筛选"/);
   assert.match(html, /paint\(options, '暂无可选分类'\)/);
   assert.match(html, /可直接选择或输入名称筛选/);
