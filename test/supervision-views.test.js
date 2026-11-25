@@ -192,6 +192,9 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /deleteObjectCategory/);
   assert.match(html, /name="categoryInput"/);
   assert.match(html, /id="objectCategoryCombobox"/);
+  assert.match(html, /const resetUrl = targetView => buildUrl\(targetView, 1, \{[\s\S]*center: '',[\s\S]*search: '',[\s\S]*categoryInput: ''/);
+  assert.match(html, /href="<%= resetUrl\(viewValue\) %>">重置<\/a>/);
+  assert.doesNotMatch(html, /href="<%= buildUrl\(viewValue\) %>">重置<\/a>/);
   assert.match(html, /class="object-category-combobox"/);
   assert.match(html, /id="objectCategoryToggle"/);
   assert.match(html, /id="objectCategoryMenu"/);
