@@ -2,7 +2,7 @@
   const groups = Array.isArray(draft.groups) ? draft.groups : [];
   const snapshotPlans = groups.flatMap(group => group.plans || []);
   const planById = new Map([ ...(preview.plans || []), ...snapshotPlans ].map(plan => [ plan.id, plan ]));
-  const sourcePlanCount = (preview.plans || []).length;
+  const sourcePlanCount = draft.status === 'draft' ? (preview.plans || []).length : snapshotPlans.length;
   const assignedPlanCount = groups.reduce((count, group) => count + (group.planIds || []).length, 0);
   const submitted = draft.status === 'submitted';
 %>

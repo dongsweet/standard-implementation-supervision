@@ -57,8 +57,8 @@ test('saves a complete split draft with plan snapshots and category ids', { skip
   }, 'user-1');
   assert.equal(draft.id, 'draft-1');
   assert.deepEqual(saved.groups.map(group => group.categoryId), [ 'category-ops', 'category-business' ]);
-  assert.equal(saved.groups[0].plans[0].planNumber, 62);
-  assert.equal(saved.groups[1].plans[0].planNumber, 37);
+  assert.equal(saved.groups[0].plans[0].plan_number, 62);
+  assert.equal(saved.groups[1].plans[0].plan_number, 37);
 });
 
 test('rejects a draft that omits or reassigns source plans', { skip: !Service }, async () => {

@@ -349,11 +349,11 @@ class SupervisionDefinitionService extends Service {
         .filter(plan => planIds.includes(plan.id))
         .map(plan => ({
           id: plan.id,
-          planNumber: plan.plan_number,
-          objectName: plan.object_name,
-          objectCategory: plan.object_category,
-          checkLayer: plan.check_layer,
-          checkMethod: plan.check_method,
+          plan_number: plan.plan_number,
+          object_name: plan.object_name,
+          object_category: plan.object_category,
+          check_layer: plan.check_layer,
+          check_method: plan.check_method,
           description: plan.description,
           centers: plan.centers || [],
         }));
