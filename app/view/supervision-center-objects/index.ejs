@@ -355,7 +355,7 @@
     return `<label class="split-plan-option"><input class="form-check-input split-plan-check" type="checkbox" value="${escapeHtml(plan.id)}" checked><span><strong>${String(plan.plan_number).padStart(3, '0')}</strong> ${escapeHtml(plan.object_category || '未分类')} · ${escapeHtml(plan.description || '')}<small>${escapeHtml((plan.centers || []).join('、') || '未指定机构')}</small></span></label>`;
   }
   function splitGroupHtml(group, index) {
-    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex align-items-center gap-2"><span class="badge text-bg-primary">${escapeHtml(group.category)} · 最多 ${group.planNumbers.length} 个方案</span></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">本次拆出</label><div class="form-control bg-body-tertiary split-group-count">${group.planNumbers.length} 个</div></div></div><details><summary>选择要拆到该对象的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
+    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex flex-wrap align-items-center gap-2"><span class="badge text-bg-primary split-group-badge">${escapeHtml(group.category)} · 已选 ${group.planNumbers.length} / ${group.planNumbers.length}</span><div class="ms-auto btn-group btn-group-sm" role="group" aria-label="批量选择检查方案"><button class="btn btn-outline-secondary split-group-all" type="button">全选</button><button class="btn btn-outline-secondary split-group-none" type="button">清空</button></div></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">本次拆出</label><div class="form-control bg-body-tertiary split-group-count">${group.planNumbers.length} 个</div></div></div><details><summary>选择要拆到该对象的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
   }
   async function openSplitObject(button) {
     const modalElement = document.getElementById('objectSplitModal');
@@ -407,7 +407,13 @@
       ? `拆出 ${plans.size} 个 · 保留在来源对象 ${remain} 个`
       : '待计算';
     document.querySelectorAll('.object-split-group').forEach(group => {
-      group.querySelector('.split-group-count').textContent = `${group.querySelectorAll('.split-plan-check:checked').length} 个`;
+      const allPlans = group.querySelectorAll('.split-plan-check');
+      const checkedPlans = group.querySelectorAll('.split-plan-check:checked');
+      group.querySelector('.split-group-count').textContent = `${checkedPlans.length} 个`;
+      const badge = group.querySelector('.split-group-badge');
+      if (badge) {
+        badge.textContent = badge.textContent.replace(/已选 \d+ \/ \d+$/, `已选 ${checkedPlans.length} / ${allPlans.length}`);
+      }
     });
     errorBox.textContent = errors.join('；');
     errorBox.classList.toggle('d-none', !errors.length);
@@ -415,6 +421,16 @@
   }
   document.getElementById('objectSplitModal').addEventListener('input', refreshSplitDraft);
   document.getElementById('objectSplitModal').addEventListener('change', refreshSplitDraft);
+  document.getElementById('objectSplitGroups').addEventListener('click', event => {
+    const allButton = event.target.closest('.split-group-all');
+    const noneButton = event.target.closest('.split-group-none');
+    if (!allButton && !noneButton) return;
+    const group = event.target.closest('.object-split-group');
+    group.querySelectorAll('.split-plan-check').forEach(input => {
+      input.checked = Boolean(allButton);
+    });
+    refreshSplitDraft();
+  });
   document.getElementById('saveSplitDraft').addEventListener('click', async event => {
     const button = event.currentTarget;
     const groups = readSplitDraft();

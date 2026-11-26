@@ -292,6 +292,9 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /未勾选的方案会继续保留在来源对象/);
   assert.match(html, /同一个检查方案不能出现在多个拆分目标/);
   assert.match(html, /拆出 \$\{plans\.size\} 个 · 保留在来源对象 \$\{remain\} 个/);
+  assert.match(html, /split-group-all/);
+  assert.match(html, /split-group-none/);
+  assert.match(html, /已选 \$\{checkedPlans\.length\} \/ \$\{allPlans\.length\}/);
   assert.doesNotMatch(html, /拆分目标没有覆盖来源对象的全部检查方案/);
   assert.doesNotMatch(html, /mergeSplitGroups/);
   assert.doesNotMatch(html, /split-group-select/);
