@@ -234,8 +234,30 @@ test('deletes an unused object category and records the action', async () => {
   };
   const result = await new Repository({ connect: async () => client }).deleteObjectCategory('category-1', 'user-1');
   assert.equal(result.name, '业务平台');
+  const usage = calls.find(call => call.statement.startsWith('SELECT count(*)::integer AS object_count'));
+  assert.match(usage.statement, /status = 'active'/);
   assert.ok(calls.some(call => call.statement === 'COMMIT'));
   assert.ok(calls.some(call => call.statement.startsWith('INSERT INTO audit_logs')));
+});
+
+test('deletes a category whose only remaining objects are already merged', async () => {
+  const calls = [];
+  const client = {
+    async query(sql) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      calls.push(statement);
+      if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('SELECT id, name FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '统一运维中心' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT count(*)::integer AS object_count')) return { rows: [ { object_count: 0 } ], rowCount: 1 };
+      if (statement.startsWith('DELETE FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '统一运维中心' } ], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  const result = await new Repository({ connect: async () => client }).deleteObjectCategory('category-1', 'user-1');
+  assert.equal(result.name, '统一运维中心');
+  assert.ok(calls.includes('COMMIT'));
 });
 
 test('refuses to delete an object category that is still assigned', async () => {

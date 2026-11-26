@@ -900,7 +900,7 @@ class SupervisionDefinitionRepository {
       const usage = await client.query(`
         SELECT count(*)::integer AS object_count
         FROM supervision_objects
-        WHERE category_id = $1`, [ id ]);
+        WHERE category_id = $1 AND status = 'active'`, [ id ]);
       if (Number(usage.rows[0]?.object_count || 0) > 0) {
         const error = new Error('该分类仍被规范对象使用，请先调整对象分类');
         error.code = 'CATEGORY_IN_USE';
