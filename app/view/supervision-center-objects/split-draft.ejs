@@ -30,10 +30,10 @@
   </div>
 </div>
 
-<div class="row g-3">
+<div class="d-grid gap-3">
   <% groups.forEach((group, index) => { %>
-    <div class="col-12 col-xl-6">
-      <section class="card h-100">
+    <div class="w-100">
+      <section class="card">
         <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">目标 <%= index + 1 %></h3><span class="badge text-bg-primary ms-auto"><%= (group.planIds || []).length %> 个方案</span></div>
         <div class="card-body">
           <div class="row g-2 mb-3">
@@ -58,16 +58,11 @@
 <% if (!submitted && canWrite) { %>
 <div class="card mt-3">
   <div class="card-body">
-    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="splitSubmitConfirmation"><label class="form-check-label" for="splitSubmitConfirmation">我已核对拆分目标、分类和全部检查方案归属，确认执行拆分。</label></div>
-    <button class="btn btn-warning" type="button" id="submitSplitDraft" disabled>最终提交拆分</button>
+    <button class="btn btn-warning" type="button" id="submitSplitDraft">最终提交拆分</button>
   </div>
 </div>
 <script>
-  const splitSubmitConfirmation = document.getElementById('splitSubmitConfirmation');
   const splitSubmitButton = document.getElementById('submitSplitDraft');
-  splitSubmitConfirmation.addEventListener('change', () => {
-    splitSubmitButton.disabled = !splitSubmitConfirmation.checked;
-  });
   splitSubmitButton.addEventListener('click', async () => {
     if (!await window.confirmAppAction('最终提交后将创建新的规范对象并把来源检查方案迁移过去。是否继续？', '确认提交对象拆分')) return;
     splitSubmitButton.disabled = true;

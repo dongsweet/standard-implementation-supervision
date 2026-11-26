@@ -46,7 +46,9 @@ test('renders a draft submission page only after explicit confirmation', { skip:
   assert.match(html, /业务零信任/);
   assert.match(html, /本次拆出 <strong>3<\/strong> 个方案/);
   assert.match(html, /<strong>0<\/strong> 个方案继续保留在来源对象/);
-  assert.match(html, /id="splitSubmitConfirmation"/);
-  assert.match(html, /最终提交拆分/);
+  assert.doesNotMatch(html, /id="splitSubmitConfirmation"/);
+  assert.doesNotMatch(html, /col-xl-6/);
+  assert.match(html, /id="submitSplitDraft">最终提交拆分/);
+  assert.match(html, /确认提交对象拆分/);
   assert.match(html, /提交后才会真正拆分对象/);
 });
