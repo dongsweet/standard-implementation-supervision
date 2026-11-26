@@ -344,7 +344,7 @@
   });
 </script><% } %>
 
-<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="d-flex align-items-center gap-2 mb-2"><div><strong>拆分草案</strong><div class="small text-secondary">按来源方案的历史分类预览。新名称、分类和方案归属仍可逐项确认。</div></div><button class="btn btn-outline-secondary btn-sm ms-auto" type="button" id="mergeSplitGroups">合并选中的分组</button></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div><div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="objectSplitConfirmation"><label class="form-check-label" for="objectSplitConfirmation">我已核对分组和方案归属；本版仅生成拆分草案，不修改业务数据。</label></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
+<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="mb-2"><strong>拆分目标</strong><div class="small text-secondary">按来源方案的历史分类生成，每个分类对应一个新对象；如需再把新对象合在一起，请在拆分完成后的列表中单独使用“合并到”。</div></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div><div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="objectSplitConfirmation"><label class="form-check-label" for="objectSplitConfirmation">我已核对分组和方案归属；本版仅生成拆分草案，不修改业务数据。</label></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
   let splitObjectState = null;
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, character => ({
@@ -352,10 +352,10 @@
     })[character]);
   }
   function splitGroupPlan(plan) {
-    return `<label class="split-plan-option"><input type="checkbox" value="${escapeHtml(plan.id)}" checked><span><strong>${String(plan.plan_number).padStart(3, '0')}</strong> ${escapeHtml(plan.object_category || '未分类')} · ${escapeHtml(plan.description || '')}<small>${escapeHtml((plan.centers || []).join('、') || '未指定机构')}</small></span></label>`;
+    return `<div class="split-plan-option"><span><strong>${String(plan.plan_number).padStart(3, '0')}</strong> ${escapeHtml(plan.object_category || '未分类')} · ${escapeHtml(plan.description || '')}<small>${escapeHtml((plan.centers || []).join('、') || '未指定机构')}</small></span></div>`;
   }
   function splitGroupHtml(group, index) {
-    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex align-items-center gap-2"><span class="badge text-bg-primary">${escapeHtml(group.category)} · ${group.planNumbers.length} 个方案</span><label class="form-check-label ms-auto"><input class="form-check-input split-group-select" type="checkbox"> 选择</label><label class="form-check-label"><input class="form-check-input split-group-include" type="checkbox" checked> 纳入拆分</label></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">检查方案</label><div class="form-control bg-body-tertiary">${group.planNumbers.length} 个</div></div></div><details><summary>查看并调整方案归属</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
+    return `<section class="card object-split-group" data-group-index="${index}"><input type="hidden" class="split-group-plan-ids" value="${group.planIds.join(',')}"><div class="card-header d-flex align-items-center gap-2"><span class="badge text-bg-primary">${escapeHtml(group.category)} · ${group.planNumbers.length} 个方案</span></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">检查方案</label><div class="form-control bg-body-tertiary">${group.planNumbers.length} 个</div></div></div><details><summary>查看归属的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
   }
   async function openSplitObject(button) {
     const modalElement = document.getElementById('objectSplitModal');
@@ -376,13 +376,11 @@
     body.innerHTML = splitObjectState.groups.map(splitGroupHtml).join('');
   }
   function readSplitDraft() {
-    return Array.from(document.querySelectorAll('.object-split-group'))
-      .filter(group => group.querySelector('.split-group-include').checked)
-      .map(group => ({
-        name: group.querySelector('.split-group-name').value.trim(),
-        category: group.querySelector('.split-group-category').value.trim(),
-        planIds: [...group.querySelectorAll('.split-plan-option input:checked')].map(input => input.value),
-      }));
+    return Array.from(document.querySelectorAll('.object-split-group')).map(group => ({
+      name: group.querySelector('.split-group-name').value.trim(),
+      category: group.querySelector('.split-group-category').value.trim(),
+      planIds: group.querySelector('.split-group-plan-ids').value.split(',').filter(Boolean),
+    }));
   }
   document.getElementById('objectSplitModal').addEventListener('change', () => {
     const groups = readSplitDraft();
@@ -392,38 +390,21 @@
     const names = new Set();
     const plans = new Set();
     for (const group of groups) {
-      if (!group.name) errors.push('每个分组都需要填写新对象名称。');
-      if (!group.category) errors.push('每个分组都需要填写对象分类。');
+      if (!group.name) errors.push('每个拆分目标都需要填写新对象名称。');
+      if (!group.category) errors.push('每个拆分目标都需要填写对象分类。');
       if (names.has(group.name)) errors.push(`新对象名称重复：${group.name}`);
       names.add(group.name);
       for (const planId of group.planIds) {
-        if (plans.has(planId)) errors.push('同一个检查方案不能出现在多个分组。');
+        if (plans.has(planId)) errors.push('同一个检查方案不能出现在多个拆分目标。');
         plans.add(planId);
       }
+    }
+    if (splitObjectState && plans.size !== splitObjectState.plans.length) {
+      errors.push('拆分目标没有覆盖来源对象的全部检查方案。');
     }
     errorBox.textContent = errors.join('；');
     errorBox.classList.toggle('d-none', !errors.length);
     document.getElementById('saveSplitDraft').disabled = errors.length > 0 || !document.getElementById('objectSplitConfirmation').checked;
-  });
-  document.getElementById('mergeSplitGroups').addEventListener('click', () => {
-    const selected = [...document.querySelectorAll('.split-group-select:checked')]
-      .map(input => input.closest('.object-split-group'));
-    if (selected.length < 2) {
-      return window.showAppNotice('请先勾选至少两个要合并的分组。', '合并拆分分组');
-    }
-    const target = selected[0];
-    target.querySelector('.split-group-include').checked = true;
-    for (const group of selected.slice(1)) {
-      const targetList = target.querySelector('.split-plan-list');
-      const targetChecks = new Set([...targetList.querySelectorAll('input')].map(input => input.value));
-      for (const input of group.querySelectorAll('.split-plan-option input:checked')) {
-        if (!targetChecks.has(input.value)) {
-          targetList.insertAdjacentHTML('beforeend', splitGroupPlan(splitObjectState.plans.find(plan => plan.id === input.value)));
-        }
-      }
-      group.remove();
-    }
-    document.getElementById('objectSplitModal').dispatchEvent(new Event('change', { bubbles: true }));
   });
   document.getElementById('saveSplitDraft').addEventListener('click', async event => {
     const button = event.currentTarget;
