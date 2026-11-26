@@ -272,6 +272,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="mergeCategoryModal"/);
   assert.match(html, /id="mergeCategoryCombobox"/);
   assert.match(html, /id="mergeCategoryMenu"/);
+  assert.match(html, /#mergeCategoryCombobox \.object-category-combobox-menu \{ width: min\(36rem, calc\(100vw - 3rem\)\); max-height: 16rem; \}/);
+  assert.match(html, /white-space: normal; overflow-wrap: anywhere;/);
   assert.match(html, /placeholder="输入分类名称搜索或选择"/);
   assert.match(html, /const mergeCategoryPicker =/);
   assert.match(html, /请从现有分类候选中选择保留分类/);
@@ -346,7 +348,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /onclick="openMergeObject\(this\)"/);
   assert.match(html, /来源对象的检查方案会迁移到保留对象/);
   assert.match(html, /确认合并规范对象/);
-  assert.match(html, /object-category-combobox-menu \{ position: absolute; z-index: 1050; top: calc\(100% \+ 4px\); left: 0; right: 0; max-height: 180px;/);
+  assert.match(html, /object-category-combobox-menu \{ position: absolute; z-index: 1086; top: calc\(100% \+ 4px\); left: 0; right: 0; max-height: 220px;/);
   assert.match(html, /data-categories="<%= encodeURIComponent\(JSON\.stringify\(Object\.entries\(\(row\.plans \|\| \[\]\)\.reduce\(/);
   assert.match(html, /const objectEditCategories =/);
   assert.match(html, /data-plan-count="<%= row\.plan_count %>"/);

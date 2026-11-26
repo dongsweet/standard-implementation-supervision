@@ -32,6 +32,20 @@
   <div><h2 class="h4 mb-1">检查对象</h2><p class="text-secondary mb-0">维护规范化对象、对象分类和适用机构关系。检查方案中的检查方法、层面和检查内容仍在方案页维护。</p></div>
   <div class="ms-auto d-flex gap-2"><a class="btn btn-outline-warning" href="/supervision-center-objects/split-drafts">拆分草案</a><a class="btn btn-outline-primary" href="/supervision-center-objects/dedupe">对象去重复核</a><a class="btn btn-outline-secondary" href="/supervision-definitions">查看检查方案</a></div>
 </div>
+<style>
+  .object-category-combobox { position: relative; }
+  .object-category-combobox-input { padding-right: 2.5rem; background: #fff; }
+  .object-category-combobox-toggle { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 2.25rem; border: 0; background: transparent; color: #6c757d; }
+  .object-category-combobox-toggle:hover, .object-category-combobox-toggle:focus { color: #0d6efd; outline: none; }
+  .object-category-combobox-menu { position: absolute; z-index: 1086; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #d8dee6; border-radius: .25rem; box-shadow: 0 .5rem 1rem rgba(0,0,0,.12); padding: .25rem 0; }
+  .object-category-combobox-option, .object-category-combobox-empty { display: block; width: 100%; border: 0; background: transparent; padding: .55rem .75rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  .object-category-combobox-option { cursor: pointer; color: #212529; }
+  .object-category-combobox-option:hover, .object-category-combobox-option.is-active { background: #f1f4f8; }
+  .object-category-combobox-option .option-subtitle { display: block; margin-top: .1rem; color: #6c757d; font-size: .8125rem; }
+  .object-category-combobox-empty { color: #6c757d; }
+  #mergeCategoryCombobox .object-category-combobox-menu { width: min(36rem, calc(100vw - 3rem)); max-height: 16rem; }
+  #mergeCategoryCombobox .object-category-combobox-option { min-height: 2.5rem; }
+</style>
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item"><a class="nav-link <%= viewValue === 'overview' ? 'active' : '' %>" href="<%= buildUrl('overview') %>">对象总览</a></li>
   <li class="nav-item"><a class="nav-link <%= viewValue === 'pending' ? 'active' : '' %>" href="<%= buildUrl('pending') %>">待整理对象</a></li>
@@ -88,16 +102,6 @@
 <% if (canWrite) { %><div class="modal fade" id="createCategoryModal" tabindex="-1" aria-labelledby="createCategoryTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" action="/api/supervision-center-objects/categories" id="categoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="createCategoryTitle">新增对象分类</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="categoryName">分类名称</label><input class="form-control" id="categoryName" name="name" maxlength="200" required placeholder="例如：管理制度、业务平台"></div><div><label class="form-label" for="categoryDescription">分类说明</label><textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存分类</button></div></form></div></div></div><% } %>
 <% } else { %>
 <style>
-  .object-category-combobox { position: relative; }
-  .object-category-combobox-input { padding-right: 2.5rem; background: #fff; }
-  .object-category-combobox-toggle { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 2.25rem; border: 0; background: transparent; color: #6c757d; }
-  .object-category-combobox-toggle:hover, .object-category-combobox-toggle:focus { color: #0d6efd; outline: none; }
-  .object-category-combobox-menu { position: absolute; z-index: 1050; top: calc(100% + 4px); left: 0; right: 0; max-height: 180px; overflow-y: auto; background: #fff; border: 1px solid #d8dee6; border-radius: .25rem; box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .12); padding: .25rem 0; }
-  .object-category-combobox-option, .object-category-combobox-empty { display: block; width: 100%; border: 0; background: transparent; padding: .55rem .75rem; text-align: left; }
-  .object-category-combobox-option { cursor: pointer; color: #212529; }
-  .object-category-combobox-option:hover, .object-category-combobox-option.is-active { background: #f1f4f8; }
-  .object-category-combobox-option .option-subtitle { display: block; margin-top: .1rem; color: #6c757d; font-size: .8125rem; }
-  .object-category-combobox-empty { color: #6c757d; }
   .category-object-list { max-height: 11rem; overflow-y: auto; align-content: flex-start; }
   .split-plan-list { display: grid; gap: .45rem; }
   .split-plan-option { display: flex; align-items: flex-start; gap: .55rem; width: 100%; padding: .5rem .25rem; border-bottom: 1px solid #e8edf3; line-height: 1.5; cursor: pointer; }
