@@ -63,15 +63,13 @@
 <section class="card mb-3">
   <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">检查方案筛选结果</h3><span class="badge text-bg-primary">当前：<%= filterLabels[activeFilter] %></span><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:7rem">方案 A</th><th>检查内容 A</th><th>检查内容 B</th><th style="width:14rem">筛选结论</th><th style="width:25rem">人工复核</th></tr></thead>
+    <thead><tr><th style="width:10rem">方案编号</th><th>检查内容 A</th><th>检查内容 B</th><th style="width:14rem">筛选结论</th><th style="width:25rem">人工复核</th></tr></thead>
     <tbody>
       <% candidates.forEach(item => { %>
         <tr>
           <td>
-            <span class="badge text-bg-light border"><%= numberLabel(item.plan_number) %></span>
-            <div class="small text-secondary mt-1">执行 A：<%= item.execution_count || 0 %> 次</div>
-            <div class="small text-secondary">执行 B：<%= item.candidate_execution_count || 0 %> 次</div>
-            <div class="small text-secondary mt-1"><%= numberLabel(item.candidate_plan_number) %></div>
+            <div class="d-flex align-items-center gap-2 mb-1"><span class="badge text-bg-light border">A · <%= numberLabel(item.plan_number) %></span><span class="small text-secondary">执行 <%= item.execution_count || 0 %> 次</span></div>
+            <div class="d-flex align-items-center gap-2"><span class="badge text-bg-light border">B · <%= numberLabel(item.candidate_plan_number) %></span><span class="small text-secondary">执行 <%= item.candidate_execution_count || 0 %> 次</span></div>
           </td>
           <td>
             <strong><%= item.object_name %></strong>

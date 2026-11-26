@@ -260,6 +260,17 @@ test('links the plan page to manual threshold and optional AI deduplication', ()
   assert.match(historyView, /检查方案去重复核历史/);
 });
 
+test('labels both plan numbers and execution counts consistently in dedupe results', () => {
+  const html = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
+  assert.match(html, /<th style="width:10rem">方案编号<\/th>/);
+  assert.match(html, /A · <%= numberLabel\(item\.plan_number\) %>/);
+  assert.match(html, /B · <%= numberLabel\(item\.candidate_plan_number\) %>/);
+  assert.match(html, /执行 <%= item\.execution_count \|\| 0 %> 次/);
+  assert.match(html, /执行 <%= item\.candidate_execution_count \|\| 0 %> 次/);
+  assert.doesNotMatch(html, /<th style="width:7rem">方案 A<\/th>/);
+  assert.doesNotMatch(html, /执行 A：|执行 B：/);
+});
+
 test('links the center object page to manual object deduplication', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
   assert.match(html, /\/supervision-center-objects\/dedupe/);
