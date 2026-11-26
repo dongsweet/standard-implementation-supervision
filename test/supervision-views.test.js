@@ -294,6 +294,11 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /拆出 \$\{plans\.size\} 个 · 保留在来源对象 \$\{remain\} 个/);
   assert.match(html, /split-group-all/);
   assert.match(html, /split-group-none/);
+  assert.match(html, /\.split-plan-option \{ display: flex;/);
+  assert.match(html, /\.split-plan-center \{ display: inline-flex;/);
+  assert.match(html, /class="split-plan-number"/);
+  assert.match(html, /const centerBadges = centers\.map/);
+  assert.match(html, /class="split-plan-description"/);
   assert.match(html, /已选 \$\{checkedPlans\.length\} \/ \$\{allPlans\.length\}/);
   assert.doesNotMatch(html, /拆分目标没有覆盖来源对象的全部检查方案/);
   assert.doesNotMatch(html, /mergeSplitGroups/);

@@ -97,6 +97,16 @@
   .object-category-combobox-option .option-subtitle { display: block; margin-top: .1rem; color: #6c757d; font-size: .8125rem; }
   .object-category-combobox-empty { color: #6c757d; }
   .category-object-list { max-height: 11rem; overflow-y: auto; align-content: flex-start; }
+  .split-plan-list { display: grid; gap: .45rem; }
+  .split-plan-option { display: flex; align-items: flex-start; gap: .55rem; width: 100%; padding: .5rem .25rem; border-bottom: 1px solid #e8edf3; line-height: 1.5; cursor: pointer; }
+  .split-plan-option:last-child { border-bottom: 0; }
+  .split-plan-check { flex: 0 0 auto; margin-top: .25rem; }
+  .split-plan-copy { min-width: 0; flex: 1 1 auto; }
+  .split-plan-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .4rem; }
+  .split-plan-number { color: #212529; font-weight: 600; }
+  .split-plan-center { display: inline-flex; padding: .04rem .42rem; border-radius: .3rem; background: #e9ecef; color: #495057; font-size: .75rem; font-weight: 500; white-space: nowrap; }
+  .split-plan-category { color: #6c757d; font-size: .8125rem; }
+  .split-plan-description { margin-top: .2rem; color: #343a40; overflow-wrap: anywhere; }
   .object-plan-numbers { display: flex; flex-wrap: wrap; gap: .2rem .35rem; }
   .object-plan-number { border: 0; padding: 0; background: transparent; color: #0d6efd; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: help; }
   .object-plan-number:hover, .object-plan-number:focus-visible { color: #0a58ca; }
@@ -352,7 +362,9 @@
     })[character]);
   }
   function splitGroupPlan(plan) {
-    return `<label class="split-plan-option"><input class="form-check-input split-plan-check" type="checkbox" value="${escapeHtml(plan.id)}" checked><span><strong>${String(plan.plan_number).padStart(3, '0')}</strong> ${escapeHtml(plan.object_category || '未分类')} · ${escapeHtml(plan.description || '')}<small>${escapeHtml((plan.centers || []).join('、') || '未指定机构')}</small></span></label>`;
+    const centers = (plan.centers || []).length ? plan.centers : [ '未指定机构' ];
+    const centerBadges = centers.map(center => `<span class="split-plan-center">${escapeHtml(center)}</span>`).join('');
+    return `<label class="split-plan-option"><input class="form-check-input split-plan-check" type="checkbox" value="${escapeHtml(plan.id)}" checked><span class="split-plan-copy"><span class="split-plan-heading"><strong class="split-plan-number">${String(plan.plan_number).padStart(3, '0')}</strong>${centerBadges}<span class="split-plan-category">${escapeHtml(plan.object_category || '未分类')}</span></span><span class="split-plan-description">${escapeHtml(plan.description || '')}</span></span></label>`;
   }
   function splitGroupHtml(group, index) {
     return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex flex-wrap align-items-center gap-2"><span class="badge text-bg-primary split-group-badge">${escapeHtml(group.category)} · 已选 ${group.planNumbers.length} / ${group.planNumbers.length}</span><div class="ms-auto btn-group btn-group-sm" role="group" aria-label="批量选择检查方案"><button class="btn btn-outline-secondary split-group-all" type="button">全选</button><button class="btn btn-outline-secondary split-group-none" type="button">清空</button></div></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">本次拆出</label><div class="form-control bg-body-tertiary split-group-count">${group.planNumbers.length} 个</div></div></div><details><summary>选择要拆到该对象的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
