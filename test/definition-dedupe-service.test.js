@@ -90,6 +90,133 @@ test('filters check-plan candidates by optional AI result categories', { skip: !
   assert.equal(all.summary.aiPendingCount, 2);
 });
 
+test('loads both candidate plans and editor options for a template merge', { skip: !Service }, async () => {
+  const service = createService({
+    async findMergeEditorOptions(ids) {
+      assert.deepEqual(ids, [ 'left-id', 'right-id' ]);
+      return [
+        { id: 'left-id', plan_number: 1, object_name: '对象', check_method: '证据材料核查', centers: [ '云中心' ], standard_items: [] },
+        { id: 'right-id', plan_number: 2, object_name: '对象', check_method: '访谈', centers: [ '总部' ], standard_items: [] },
+      ];
+    },
+  });
+  Object.defineProperty(service, 'ctx', {
+    value: {
+      app: {
+        db: {
+          query: async () => ({ rowCount: 1, rows: [ {} ] }),
+        },
+      },
+    },
+  });
+  const result = await service.mergeEditorOptions('left-id', 'right-id');
+  assert.equal(result.definitions.length, 2);
+  assert.ok(result.checkMethodOptions.includes('证据材料核查'));
+  assert.ok(result.checkMethodOptions.includes('访谈'));
+  assert.deepEqual(result.centerOptions, [ '云中心', '统一运维中心', '总部' ]);
+});
+
+test('saves the edited template fields before merging the other plan', { skip: !Service }, async () => {
+  const statements = [];
+  const client = {
+    async query(sql, values = []) {
+      const statement = sql.replace(/\s+/g, ' ').trim();
+      statements.push({ statement, values });
+      if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: 0 };
+      if (statement.startsWith('INSERT INTO supervision_definition_reviews')) return { rows: [ { id: 'review-1' } ], rowCount: 1 };
+      if (statement.startsWith('SELECT id, frequency, steps')) {
+        return {
+          rows: [
+            { id: 'left-id', status: 'active' },
+            { id: 'right-id', status: 'active' },
+          ],
+          rowCount: 2,
+        };
+      }
+      if (statement === 'SELECT id FROM standard_items WHERE id = ANY($1::uuid[])') return { rows: [], rowCount: 2 };
+      if (statement.startsWith('UPDATE supervision_definitions SET object_name')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('UPDATE supervision_definitions SET status')) return { rows: [ { id: 'right-id' } ], rowCount: 1 };
+      if (statement.startsWith('DELETE FROM supervision_definition_standard_items')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('DELETE FROM supervision_definition_centers')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_definition_standard_items')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO supervision_definition_centers')) return { rows: [], rowCount: 1 };
+      if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
+      throw new Error('Unexpected query: ' + statement);
+    },
+    release() {},
+  };
+  let candidateCheck = false;
+  const service = createService({
+    async ensureCanonicalObject() {
+      return 'canonical-object-id';
+    },
+  });
+  Object.defineProperty(service, 'ctx', {
+    value: {
+      app: {
+        db: {
+          async query(sql) {
+            if (!sql.includes('supervision_definition_candidates')) throw new Error('Unexpected candidate query');
+            candidateCheck = true;
+            return { rowCount: 1, rows: [ {} ] };
+          },
+          async connect() {
+            return client;
+          },
+        },
+      },
+      service: {
+        supervisionDefinition: {
+          normalize(payload) {
+            assert.equal(payload.objectName, '编辑后的对象');
+            return {
+              fields: {
+                objectName: payload.objectName,
+                scope: '',
+                recognizedObject: true,
+                objectCategory: '运维管理区',
+                checkLayer: '技术层面',
+                checkMethod: '证据材料核查,访谈',
+                description: '编辑后的描述',
+                steps: '编辑后的步骤',
+                frequency: '每季度',
+                accessMode: '现场',
+                priority: '重点项',
+                referenceResult: '',
+                referenceMaterials: '',
+                normalizedHash: 'hash',
+                centers: [ '云中心' ],
+              },
+              standardItemIds: [ 'item-1', 'item-2' ],
+            };
+          },
+        },
+      },
+      throw(status, message) {
+        throw Object.assign(new Error(message), { status });
+      },
+    },
+  });
+  await service.review({
+    leftId: 'left-id',
+    rightId: 'right-id',
+    decision: 'duplicate',
+    canonicalId: 'right-id',
+    reviewerId: 'user-1',
+    editedDefinition: { objectName: '编辑后的对象' },
+  });
+  assert.equal(candidateCheck, true);
+  const fieldUpdate = statements.find(item => item.statement.startsWith('UPDATE supervision_definitions SET object_name'));
+  assert.ok(fieldUpdate);
+  assert.equal(fieldUpdate.values[1], '编辑后的对象');
+  const fieldUpdateIndex = statements.indexOf(fieldUpdate);
+  const mergeUpdateIndex = statements.findIndex(item => item.statement.startsWith('UPDATE supervision_definitions SET status'));
+  assert.ok(fieldUpdateIndex < mergeUpdateIndex);
+  assert.ok(statements.some(item => item.statement.startsWith('INSERT INTO audit_logs')
+    && item.values[2].includes('"edited":true')));
+  assert.ok(statements.some(item => item.statement === 'COMMIT'));
+});
+
 test('submits check-plan AI screening in bounded batches', { skip: !Service }, async () => {
   const repository = {
     async findById(id) {

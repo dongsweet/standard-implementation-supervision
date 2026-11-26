@@ -1324,6 +1324,34 @@ class SupervisionDefinitionRepository {
     return result.rows[0] || null;
   }
 
+  async findMergeEditorOptions(ids) {
+    const result = await this.pool.query(`
+      SELECT d.id, d.plan_number, d.object_name, d.scope, d.recognized_object,
+             d.object_category, d.check_layer, d.check_method, d.description, d.steps,
+             d.frequency, d.access_mode, d.priority, d.reference_result,
+             d.reference_materials, d.status,
+             COALESCE((SELECT array_agg(center_name ORDER BY center_name)
+                       FROM supervision_definition_centers
+                       WHERE definition_id = d.id), ARRAY[]::varchar[]) AS centers,
+             COALESCE((
+               SELECT json_agg(json_build_object(
+                 'id', si.id, 'code', si.item_code, 'standardNumber', si.standard_number,
+                 'title', si.title, 'chapterCode', sc.code, 'chapterName', sc.name,
+                 'standardCode', s.code, 'version', sv.version
+               ) ORDER BY s.code, sv.version, si.item_code)
+               FROM supervision_definition_standard_items dsi
+               JOIN standard_items si ON si.id = dsi.standard_item_id
+               JOIN standard_chapters sc ON sc.id = si.chapter_id
+               JOIN standard_versions sv ON sv.id = si.standard_version_id
+               JOIN standards s ON s.id = sv.standard_id
+               WHERE dsi.definition_id = d.id
+             ), '[]'::json) AS standard_items
+      FROM supervision_definitions d
+      WHERE d.id = ANY($1::uuid[]) AND d.status = 'active'
+      ORDER BY d.plan_number`, [ ids ]);
+    return result.rows;
+  }
+
   async createAiJob({ leftId, rightId, inputHash, algorithmVersion, promptVersion, modelName }, client = this.pool) {
     const result = await client.query(`
       INSERT INTO ai_dedupe_jobs

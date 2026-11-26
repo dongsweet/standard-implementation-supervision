@@ -43,6 +43,10 @@
   .definition-diff-value { color: #b42318 !important; background: #fff1f0; border-radius: .2rem; box-shadow: 0 0 0 2px #fff1f0; font-weight: 600; }
   .definition-diff-summary { line-height: 1.7; }
   details.definition-details-different { border-left: 3px solid #dc3545; padding-left: .5rem; }
+  .definition-merge-template .btn-check:checked + .btn { color: #fff; background: #0d6efd; border-color: #0d6efd; }
+  .definition-merge-picker { position: relative; }
+  .definition-merge-results { position: relative; z-index: 1080; width: 100%; max-height: 14rem; overflow-y: auto; }
+  .definition-merge-chip { max-width: 100%; white-space: normal; text-align: left; }
 </style>
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -133,6 +137,7 @@
           </td>
           <td>
             <div class="d-flex flex-column align-items-start gap-1">
+              <button class="btn btn-sm btn-primary text-nowrap" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="openDefinitionMergeEditor(this)">合并并编辑</button>
               <div class="d-flex flex-nowrap gap-1">
                 <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">保留 A 并合并</button>
                 <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.candidate_id %>')">保留 B 并合并</button>
@@ -154,6 +159,42 @@
   </table></div>
 </section>
 <% } %>
+
+<div class="modal fade" id="definitionMergeModal" tabindex="-1" aria-labelledby="definitionMergeModalLabel" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
+  <form id="definitionMergeForm">
+    <div class="modal-header"><div><h2 class="modal-title fs-5" id="definitionMergeModalLabel">合并并编辑检查方案</h2><div class="small text-secondary mt-1">选择一个模板并修改最终内容；所选模板对应的检查方案将被保留，另一条标记为已合并。</div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div>
+    <div class="modal-body">
+      <div class="mb-3"><label class="form-label d-block">以哪个方案为模板</label><div class="d-flex flex-wrap gap-2 definition-merge-template" id="definitionMergeTemplates"></div><div class="form-text">切换模板会用该方案当前内容覆盖下方表单，请先完成模板选择。</div></div>
+      <div class="row g-3">
+        <div class="col-md-8"><label class="form-label" for="definitionMergeObjectName">检查对象</label><input class="form-control" id="definitionMergeObjectName" maxlength="500" required list="definitionMergeObjectNames"><datalist id="definitionMergeObjectNames"></datalist></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeObjectCategory">对象分类</label><input class="form-control" id="definitionMergeObjectCategory" maxlength="200" list="definitionMergeCategoryNames"><datalist id="definitionMergeCategoryNames"></datalist></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeCheckLayer">检查层面</label><input class="form-control" id="definitionMergeCheckLayer" maxlength="200"></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeFrequency">执行频率</label><input class="form-control" id="definitionMergeFrequency" maxlength="100"></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeAccessMode">远程/现场查看</label><select class="form-select" id="definitionMergeAccessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeRecognizedObject">是否公认对象</label><select class="form-select" id="definitionMergeRecognizedObject"><option value="">未指定</option><option value="true">是</option><option value="false">否</option></select></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergePriority">重点项</label><select class="form-select" id="definitionMergePriority"><option value="">未指定</option><option value="重点项">重点项</option><option value="非重点项">非重点项</option></select></div>
+        <div class="col-md-4"><label class="form-label" for="definitionMergeScope">检查范围</label><input class="form-control" id="definitionMergeScope" maxlength="200"></div>
+        <div class="col-12"><label class="form-label d-block">适用机构</label><div class="d-flex flex-wrap gap-2" id="definitionMergeCenters"></div></div>
+        <div class="col-12"><label class="form-label d-block">检查方法</label><div class="d-flex flex-wrap gap-2" id="definitionMergeMethods"></div></div>
+        <div class="col-md-6"><label class="form-label" for="definitionMergeAdditionalMethods">其他检查方法</label><input class="form-control" id="definitionMergeAdditionalMethods" placeholder="多个方法用逗号分隔"></div>
+        <div class="col-12"><label class="form-label" for="definitionMergeDescription">检查项描述</label><textarea class="form-control" id="definitionMergeDescription" rows="3" maxlength="5000" required></textarea></div>
+        <div class="col-12"><label class="form-label" for="definitionMergeSteps">检查步骤</label><textarea class="form-control" id="definitionMergeSteps" rows="3"></textarea></div>
+        <div class="col-md-6"><label class="form-label" for="definitionMergeReferenceResult">参考判定描述</label><textarea class="form-control" id="definitionMergeReferenceResult" rows="2"></textarea></div>
+        <div class="col-md-6"><label class="form-label" for="definitionMergeReferenceMaterials">参考材料</label><textarea class="form-control" id="definitionMergeReferenceMaterials" rows="2"></textarea></div>
+        <div class="col-12">
+          <label class="form-label" for="definitionMergeStandardSearch">关联标准项</label>
+          <div class="definition-merge-picker">
+            <div class="d-flex flex-wrap gap-2 mb-2" id="definitionMergeStandardChips"></div>
+            <input class="form-control" id="definitionMergeStandardSearch" type="search" autocomplete="off" placeholder="输入标准编号、条款编号或内容搜索添加">
+            <div class="definition-merge-results list-group shadow-sm mt-1 d-none" id="definitionMergeStandardResults"></div>
+          </div>
+        </div>
+      </div>
+      <div class="alert alert-danger mt-3 mb-0 d-none" id="definitionMergeError"></div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit" id="definitionMergeSubmit">保存编辑并合并</button></div>
+  </form>
+</div></div></div>
 
 <div class="modal fade" id="definitionAiProgressModal" tabindex="-1" aria-labelledby="definitionAiProgressTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
   <div class="modal-header"><h2 class="modal-title fs-5" id="definitionAiProgressTitle">检查方案 AI 复核进度</h2></div>
@@ -188,8 +229,13 @@
     if (notice) params.set('notice', notice);
     return `/dedupe?${params.toString()}`;
   };
-  async function dedupeSend(path, body) {
-    const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': dedupeCsrfToken }, body: JSON.stringify(body) });
+  async function dedupeSend(path, body, method = 'POST') {
+    const options = { method, headers: { 'x-csrf-token': dedupeCsrfToken } };
+    if (method !== 'GET') {
+      options.headers['content-type'] = 'application/json';
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(path, options);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || '请求失败');
     return data.data;
@@ -278,6 +324,251 @@
       window.showAppNotice(error.message, '可选 AI 复核未完成');
     }
   }
+  const definitionMergeState = {
+    leftId: '',
+    rightId: '',
+    templateId: '',
+    definitions: [],
+    centerOptions: [],
+    checkMethodOptions: [],
+    standards: new Map(),
+    searchTimer: null,
+  };
+  const mergeField = id => document.getElementById(id);
+  const mergeNormalize = value => String(value || '').normalize('NFKC').trim().toLowerCase();
+  function mergeSetError(message = '') {
+    const box = mergeField('definitionMergeError');
+    box.textContent = message;
+    box.classList.toggle('d-none', !message);
+  }
+  function mergeTemplateDefinition() {
+    return definitionMergeState.definitions.find(item => item.id === definitionMergeState.templateId);
+  }
+  function renderMergeStandardChips() {
+    const chips = [ ...definitionMergeState.standards.values() ].map(item => {
+      const chip = document.createElement('span');
+      chip.className = 'badge text-bg-light border d-inline-flex align-items-start gap-2 definition-merge-chip';
+      const text = document.createElement('span');
+      text.textContent = [ item.standardNumber || item.code, item.title || '' ].filter(Boolean).join(' · ');
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'btn-close btn-close-sm';
+      remove.setAttribute('aria-label', '移除该标准项');
+      remove.addEventListener('click', () => {
+        definitionMergeState.standards.delete(String(item.id));
+        renderMergeStandardChips();
+      });
+      chip.append(text, remove);
+      return chip;
+    });
+    if (!chips.length) {
+      const empty = document.createElement('span');
+      empty.className = 'small text-secondary';
+      empty.textContent = '尚未关联标准项';
+      chips.push(empty);
+    }
+    mergeField('definitionMergeStandardChips').replaceChildren(...chips);
+  }
+  function renderMergeChoices(definition) {
+    const centers = new Set(definition.centers || []);
+    mergeField('definitionMergeCenters').replaceChildren(...definitionMergeState.centerOptions.map((center, index) => {
+      const wrapper = document.createElement('div');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.className = 'btn-check';
+      input.id = `definitionMergeCenter${index}`;
+      input.value = center;
+      input.checked = centers.has(center);
+      const label = document.createElement('label');
+      label.className = 'btn btn-outline-secondary';
+      label.htmlFor = input.id;
+      label.textContent = center;
+      wrapper.append(input, label);
+      return wrapper;
+    }));
+    const knownMethods = new Set(definitionMergeState.checkMethodOptions);
+    const selectedMethods = new Set(splitMethods(definition.check_method));
+    mergeField('definitionMergeMethods').replaceChildren(...definitionMergeState.checkMethodOptions.map((method, index) => {
+      const wrapper = document.createElement('div');
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.className = 'btn-check';
+      input.id = `definitionMergeMethod${index}`;
+      input.value = method;
+      input.checked = selectedMethods.has(method);
+      const label = document.createElement('label');
+      label.className = 'btn btn-outline-secondary';
+      label.htmlFor = input.id;
+      label.textContent = method;
+      wrapper.append(input, label);
+      return wrapper;
+    }));
+    mergeField('definitionMergeAdditionalMethods').value = [ ...selectedMethods ].filter(method => !knownMethods.has(method)).join(',');
+  }
+  function splitMethods(value) {
+    return String(value || '').split(/[,，、;；\/|\r\n]+/).map(item => item.trim()).filter(Boolean);
+  }
+  function applyMergeTemplate(definition) {
+    definitionMergeState.templateId = definition.id;
+    mergeField('definitionMergeObjectName').value = definition.object_name || '';
+    mergeField('definitionMergeObjectCategory').value = definition.object_category || '';
+    mergeField('definitionMergeCheckLayer').value = definition.check_layer || '';
+    mergeField('definitionMergeFrequency').value = definition.frequency || '';
+    mergeField('definitionMergeAccessMode').value = definition.access_mode || '';
+    mergeField('definitionMergeRecognizedObject').value = definition.recognized_object === null || definition.recognized_object === undefined ? '' : String(definition.recognized_object);
+    mergeField('definitionMergePriority').value = definition.priority || '';
+    mergeField('definitionMergeScope').value = definition.scope || '';
+    mergeField('definitionMergeDescription').value = definition.description || '';
+    mergeField('definitionMergeSteps').value = definition.steps || '';
+    mergeField('definitionMergeReferenceResult').value = definition.reference_result || '';
+    mergeField('definitionMergeReferenceMaterials').value = definition.reference_materials || '';
+    renderMergeChoices(definition);
+    definitionMergeState.standards = new Map((definition.standard_items || []).filter(item => item?.id).map(item => [ String(item.id), item ]));
+    renderMergeStandardChips();
+    mergeSetError('');
+  }
+  function renderMergeTemplates() {
+    mergeField('definitionMergeTemplates').replaceChildren(...definitionMergeState.definitions.map((definition, index) => {
+      const wrapper = document.createElement('div');
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.className = 'btn-check';
+      input.name = 'definitionMergeTemplate';
+      input.id = `definitionMergeTemplate${index}`;
+      input.value = definition.id;
+      input.checked = definition.id === definitionMergeState.templateId;
+      input.addEventListener('change', () => applyMergeTemplate(definition));
+      const label = document.createElement('label');
+      label.className = 'btn btn-outline-primary';
+      label.htmlFor = input.id;
+      label.textContent = `${index === 0 ? 'A' : 'B'} · ${numberLabel(definition.plan_number)} · ${definition.object_name}`;
+      wrapper.append(input, label);
+      return wrapper;
+    }));
+  }
+  async function openDefinitionMergeEditor(button) {
+    definitionMergeState.leftId = button.dataset.left;
+    definitionMergeState.rightId = button.dataset.right;
+    definitionMergeState.templateId = '';
+    mergeSetError('');
+    const modal = bootstrap.Modal.getOrCreateInstance(mergeField('definitionMergeModal'));
+    modal.show();
+    try {
+      const result = await dedupeSend(`/api/dedupe/merge-options?leftId=${encodeURIComponent(definitionMergeState.leftId)}&rightId=${encodeURIComponent(definitionMergeState.rightId)}`, null, 'GET');
+      definitionMergeState.definitions = result.definitions || [];
+      definitionMergeState.centerOptions = result.centerOptions || [];
+      definitionMergeState.checkMethodOptions = result.checkMethodOptions || [];
+      const objectNames = [ ...new Set(definitionMergeState.definitions.map(item => item.object_name).filter(Boolean)) ];
+      mergeField('definitionMergeObjectNames').replaceChildren(...objectNames.map(value => new Option(value, value)));
+      const categories = [ ...new Set(definitionMergeState.definitions.map(item => item.object_category).filter(Boolean)) ];
+      mergeField('definitionMergeCategoryNames').replaceChildren(...categories.map(value => new Option(value, value)));
+      if (!definitionMergeState.definitions.length) throw new Error('未找到可编辑的候选检查方案');
+      renderMergeTemplates();
+      applyMergeTemplate(definitionMergeState.definitions[0]);
+    } catch (error) {
+      mergeSetError(error.message);
+    }
+  }
+  function searchDefinitionMergeStandards() {
+    window.clearTimeout(definitionMergeState.searchTimer);
+    const query = mergeField('definitionMergeStandardSearch').value.trim();
+    const results = mergeField('definitionMergeStandardResults');
+    if (!query) {
+      results.classList.add('d-none');
+      results.replaceChildren();
+      return;
+    }
+    definitionMergeState.searchTimer = window.setTimeout(async () => {
+      results.classList.remove('d-none');
+      results.replaceChildren(Object.assign(document.createElement('div'), {
+        className: 'list-group-item text-secondary',
+        textContent: '正在搜索...',
+      }));
+      try {
+        const response = await fetch('/api/supervision-definition-options/standard-items?q=' + encodeURIComponent(query));
+        if (!response.ok) throw new Error('标准项搜索失败');
+        const body = await response.json();
+        if (mergeField('definitionMergeStandardSearch').value.trim() !== query) return;
+        const items = body.data || [];
+        if (!items.length) {
+          results.replaceChildren(Object.assign(document.createElement('div'), {
+            className: 'list-group-item text-secondary',
+            textContent: '没有匹配的标准项',
+          }));
+          return;
+        }
+        results.replaceChildren(...items.map(item => {
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'list-group-item list-group-item-action';
+          option.textContent = [ item.standardNumber || item.code, item.title ].filter(Boolean).join(' · ');
+          option.addEventListener('mousedown', event => event.preventDefault());
+          option.addEventListener('click', () => {
+            definitionMergeState.standards.set(String(item.id), item);
+            mergeField('definitionMergeStandardSearch').value = '';
+            results.classList.add('d-none');
+            renderMergeStandardChips();
+          });
+          return option;
+        }));
+      } catch (error) {
+        results.replaceChildren(Object.assign(document.createElement('div'), {
+          className: 'list-group-item text-danger',
+          textContent: error.message,
+        }));
+      }
+    }, 220);
+  }
+  mergeField('definitionMergeStandardSearch').addEventListener('input', searchDefinitionMergeStandards);
+  mergeField('definitionMergeStandardSearch').addEventListener('blur', () => {
+    window.setTimeout(() => mergeField('definitionMergeStandardResults').classList.add('d-none'), 160);
+  });
+  mergeField('definitionMergeForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    mergeSetError('');
+    const template = mergeTemplateDefinition();
+    if (!template) return mergeSetError('请先选择 A 或 B 作为模板');
+    const centerValues = [ ...document.querySelectorAll('#definitionMergeCenters input:checked') ].map(input => input.value);
+    const methods = [
+      ...[ ...document.querySelectorAll('#definitionMergeMethods input:checked') ].map(input => input.value),
+      mergeField('definitionMergeAdditionalMethods').value,
+    ];
+    const standardItemIds = [ ...definitionMergeState.standards.keys() ];
+    if (!centerValues.length) return mergeSetError('请至少选择一个适用机构');
+    if (!standardItemIds.length) return mergeSetError('请至少关联一个标准项');
+    const submit = mergeField('definitionMergeSubmit');
+    submit.disabled = true;
+    try {
+      await dedupeSend('/api/dedupe/reviews', {
+        leftId: definitionMergeState.leftId,
+        rightId: definitionMergeState.rightId,
+        decision: 'duplicate',
+        canonicalId: template.id,
+        confirmConflicts: true,
+        editedDefinition: {
+          objectName: mergeField('definitionMergeObjectName').value,
+          objectCategory: mergeField('definitionMergeObjectCategory').value,
+          checkLayer: mergeField('definitionMergeCheckLayer').value,
+          frequency: mergeField('definitionMergeFrequency').value,
+          accessMode: mergeField('definitionMergeAccessMode').value,
+          recognizedObject: mergeField('definitionMergeRecognizedObject').value,
+          priority: mergeField('definitionMergePriority').value,
+          scope: mergeField('definitionMergeScope').value,
+          centers: centerValues,
+          checkMethods: methods,
+          description: mergeField('definitionMergeDescription').value,
+          steps: mergeField('definitionMergeSteps').value,
+          referenceResult: mergeField('definitionMergeReferenceResult').value,
+          referenceMaterials: mergeField('definitionMergeReferenceMaterials').value,
+          standardItemIds,
+        },
+      });
+      window.location.assign(dedupeReloadUrl('检查方案已编辑并合并'));
+    } catch (error) {
+      mergeSetError(error.message);
+      submit.disabled = false;
+    }
+  });
   async function definitionReview(leftId, rightId, decision, canonicalId) {
     const labels = {
       duplicate: `确认这两条检查方案重复，并保留${canonicalId === leftId ? '方案 A' : '方案 B'}？`,

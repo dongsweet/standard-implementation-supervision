@@ -4,6 +4,8 @@ const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { definitionConflicts, normalizeDefinition, scoreDefinition, normalizeText } = require('../lib/dedupe');
 const { friendlyAiError } = require('../lib/aiProvider');
+const { DEFAULT_SUPERVISION_METHODS, splitSupervisionMethods } = require('../lib/supervisionMethods');
+const { DEFAULT_SUPERVISION_CENTERS } = require('../lib/supervisionCenters');
 const SupervisionDefinitionRepository = require('../repository/supervisionDefinition');
 
 function definitionPairKey(leftId, rightId) {
@@ -51,6 +53,26 @@ class DedupeService extends Service {
 
   async listReviews() {
     return this.repository.listDefinitionReviews();
+  }
+
+  async mergeEditorOptions(leftId, rightId) {
+    if (!leftId || !rightId || leftId === rightId) this.ctx.throw(400, '请提供两条不同的检查方案');
+    const candidate = await this.ctx.app.db.query(`
+      SELECT 1 FROM supervision_definition_candidates
+      WHERE (id = $1 AND candidate_id = $2) OR (id = $2 AND candidate_id = $1)
+      LIMIT 1`, [ leftId, rightId ]);
+    if (!candidate.rowCount) this.ctx.throw(400, '仅可编辑规则层生成的候选检查方案');
+    const definitions = await this.repository.findMergeEditorOptions([ leftId, rightId ]);
+    if (definitions.length !== 2) this.ctx.throw(409, '候选检查方案已发生变化，请刷新后重试');
+    const methodOptions = new Set(DEFAULT_SUPERVISION_METHODS);
+    definitions.forEach(definition => {
+      splitSupervisionMethods(definition.check_method).forEach(method => methodOptions.add(method));
+    });
+    return {
+      definitions,
+      centerOptions: DEFAULT_SUPERVISION_CENTERS,
+      checkMethodOptions: [ ...methodOptions ].sort((left, right) => left.localeCompare(right, 'zh-CN')),
+    };
   }
 
   async listDefinitionDedupe({ threshold = null, scanned = false, filter = 'all' } = {}) {
@@ -262,13 +284,17 @@ class DedupeService extends Service {
     };
   }
 
-  async review({ leftId, rightId, decision, canonicalId, reviewerId, notes, confirmConflicts = false }) {
+  async review({ leftId, rightId, decision, canonicalId, reviewerId, notes, confirmConflicts = false, editedDefinition = null }) {
     if (!leftId || !rightId || leftId === rightId) this.ctx.throw(400, '请提供两条不同的监督定义');
     const candidate = await this.ctx.app.db.query(`
       SELECT 1 FROM supervision_definition_candidates
       WHERE (id = $1 AND candidate_id = $2) OR (id = $2 AND candidate_id = $1)
       LIMIT 1`, [ leftId, rightId ]);
     if (!candidate.rowCount) this.ctx.throw(400, '仅可复核规则层生成的候选定义');
+    const edited = editedDefinition
+      ? this.ctx.service.supervisionDefinition.normalize(editedDefinition)
+      : null;
+    if (editedDefinition && decision !== 'duplicate') this.ctx.throw(400, '仅合并时可提交编辑后的检查方案');
     const client = await this.ctx.app.db.connect();
     try {
       await client.query('BEGIN');
@@ -289,30 +315,82 @@ class DedupeService extends Service {
         if (locked.rows.length !== 2 || locked.rows.some(item => item.status !== 'active')) this.ctx.throw(409, '候选定义已发生变化，请刷新后再复核');
         const loser = locked.rows.find(item => item.id === mergedId);
         const winner = locked.rows.find(item => item.id === canonicalId);
-        const conflicts = definitionConflicts(loser, winner);
+        const conflicts = edited ? [] : definitionConflicts(loser, winner);
         if (conflicts.length && !confirmConflicts) {
           this.ctx.throw(409, `归并存在字段冲突（${conflicts.map(([, label ]) => label).join('、')}），需明确确认后重试`);
+        }
+        if (edited) {
+          const availableItems = await client.query(
+            'SELECT id FROM standard_items WHERE id = ANY($1::uuid[])',
+            [ edited.standardItemIds ]
+          );
+          if (availableItems.rowCount !== edited.standardItemIds.length) {
+            this.ctx.throw(400, '所选标准项不存在或已删除');
+          }
+          const canonicalObjectId = await this.repository.ensureCanonicalObject(
+            client,
+            edited.fields.objectName,
+            edited.fields.objectCategory
+          );
+          await client.query(`
+            UPDATE supervision_definitions
+            SET object_name = $2, scope = $3, recognized_object = $4, object_category = $5,
+                check_layer = $6, check_method = $7, description = $8, steps = $9,
+                frequency = $10, access_mode = $11, priority = $12, reference_result = $13,
+                reference_materials = $14, normalized_hash = $15, canonical_object_id = $16,
+                updated_at = now()
+            WHERE id = $1 AND status = 'active'`, [
+            canonicalId, edited.fields.objectName, edited.fields.scope || null,
+            edited.fields.recognizedObject, edited.fields.objectCategory || null,
+            edited.fields.checkLayer || null, edited.fields.checkMethod, edited.fields.description,
+            edited.fields.steps || null, edited.fields.frequency || null,
+            edited.fields.accessMode || null, edited.fields.priority || null,
+            edited.fields.referenceResult || null, edited.fields.referenceMaterials || null,
+            edited.fields.normalizedHash, canonicalObjectId,
+          ]);
+          await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ canonicalId ]);
+          for (const standardItemId of edited.standardItemIds) {
+            await client.query(`
+              INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
+              SELECT $1, id FROM standard_items WHERE id = $2`, [ canonicalId, standardItemId ]);
+          }
+          await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ canonicalId ]);
+          for (const centerName of edited.fields.centers || []) {
+            await client.query(`
+              INSERT INTO supervision_definition_centers (definition_id, center_name)
+              VALUES ($1, $2)`, [ canonicalId, centerName ]);
+          }
         }
         const updated = await client.query(`
           UPDATE supervision_definitions
           SET status = 'merged', merged_into_id = $1, updated_at = now()
           WHERE id = $2 AND status = 'active' RETURNING id`, [ canonicalId, mergedId ]);
         if (!updated.rowCount) this.ctx.throw(409, '待归并定义已被其他操作更新');
-        await client.query(`
-          INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
-          SELECT $1, standard_item_id
-          FROM supervision_definition_standard_items
-          WHERE definition_id = $2
-          ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
+        if (!edited) {
+          await client.query(`
+            INSERT INTO supervision_definition_standard_items (definition_id, standard_item_id)
+            SELECT $1, standard_item_id
+            FROM supervision_definition_standard_items
+            WHERE definition_id = $2
+            ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
+          await client.query(`
+            INSERT INTO supervision_definition_centers (definition_id, center_name)
+            SELECT $1, center_name FROM supervision_definition_centers WHERE definition_id = $2
+            ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
+        }
         await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ mergedId ]);
-        await client.query(`
-          INSERT INTO supervision_definition_centers (definition_id, center_name)
-          SELECT $1, center_name FROM supervision_definition_centers WHERE definition_id = $2
-          ON CONFLICT DO NOTHING`, [ canonicalId, mergedId ]);
         await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ mergedId ]);
         await client.query(`
           INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
-          VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [ reviewerId, canonicalId, JSON.stringify({ mergedId, reviewId: review.rows[0].id, conflicts: conflicts.map(([ field ]) => field) }) ]);
+          VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [
+          reviewerId, canonicalId, JSON.stringify({
+            mergedId,
+            reviewId: review.rows[0].id,
+            conflicts: conflicts.map(([ field ]) => field),
+            edited: Boolean(edited),
+            standardItemIds: edited?.standardItemIds || null,
+          }),
+        ]);
       }
       await client.query('COMMIT');
       return review.rows[0];

@@ -347,6 +347,22 @@ test('marks definition field differences and expands hidden differences', { skip
   assert.match(html, /\.definition-diff-value \{ color: #b42318 !important; background: #fff1f0;/);
 });
 
+test('provides a template-based merge editor for plan candidates', () => {
+  const html = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
+  assert.match(html, /id="definitionMergeModal"/);
+  assert.match(html, /id="definitionMergeTemplates"/);
+  assert.match(html, /合并并编辑/);
+  assert.match(html, /openDefinitionMergeEditor\(this\)/);
+  assert.match(html, /以哪个方案为模板/);
+  assert.match(html, /id="definitionMergeObjectName"/);
+  assert.match(html, /id="definitionMergeCenters"/);
+  assert.match(html, /id="definitionMergeMethods"/);
+  assert.match(html, /id="definitionMergeStandardSearch"/);
+  assert.match(html, /id="definitionMergeSubmit"/);
+  assert.match(html, /editedDefinition:/);
+  assert.match(html, /method !== 'GET'/);
+});
+
 test('links the center object page to manual object deduplication', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
   assert.match(html, /\/supervision-center-objects\/dedupe/);

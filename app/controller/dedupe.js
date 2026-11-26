@@ -77,6 +77,16 @@ class DedupeController extends Controller {
     };
   }
 
+  async mergeOptions() {
+    requireGlobalRead(this.ctx);
+    this.ctx.body = {
+      data: await this.ctx.service.dedupe.mergeEditorOptions(
+        this.ctx.query.leftId,
+        this.ctx.query.rightId
+      ),
+    };
+  }
+
   async review() {
     requireGlobalWrite(this.ctx);
     const payload = this.ctx.request.body || {};

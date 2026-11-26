@@ -91,6 +91,7 @@ module.exports = app => {
   router.post('/users/:userId/password', controller.user.resetPassword);
   router.post('/users/:userId/roles', controller.user.replaceRoles);
   router.get('/api/dedupe/candidates', controller.dedupe.candidates);
+  router.get('/api/dedupe/merge-options', controller.dedupe.mergeOptions);
   router.post('/api/dedupe/ai-review', controller.dedupe.aiReview);
   router.post('/api/dedupe/ai-screen', controller.dedupe.aiScreen);
   router.post('/api/dedupe/reviews', controller.dedupe.review);
