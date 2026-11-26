@@ -294,6 +294,14 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /拆出 \$\{plans\.size\} 个 · 保留在来源对象 \$\{remain\} 个/);
   assert.match(html, /split-group-all/);
   assert.match(html, /split-group-none/);
+  assert.match(html, /id="splitFilterCenter"/);
+  assert.match(html, /id="splitFilterLayer"/);
+  assert.match(html, /id="splitFilterSelectAll"/);
+  assert.match(html, /id="splitFilterSelectNone"/);
+  assert.match(html, /function populateSplitFilters/);
+  assert.match(html, /function applySplitFilters/);
+  assert.match(html, /data-centers="\$\{escapeHtml\(centers\.join\('\|'\)\)\}"/);
+  assert.match(html, /当前显示 \$\{visible\} \/ \$\{options\.length\} 个方案/);
   assert.match(html, /\.split-plan-option \{ display: flex;/);
   assert.match(html, /\.split-plan-center \{ display: inline-flex;/);
   assert.match(html, /class="split-plan-number"/);
