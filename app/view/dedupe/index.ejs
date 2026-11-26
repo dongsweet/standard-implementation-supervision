@@ -10,11 +10,39 @@
   };
   const filterUrl = value => `/dedupe?run=1&threshold=${encodeURIComponent(thresholdValue)}&filter=${value}`;
   const numberLabel = value => value ? String(value).padStart(3, '0') : '未编号';
+  const booleanLabel = value => value === true ? '是' : value === false ? '否' : '未指定';
+  const comparisonValue = value => {
+    if (Array.isArray(value)) return value.map(item => String(item || '').normalize('NFKC').trim()).sort().join('|');
+    if (typeof value === 'boolean') return value ? 'yes' : 'no';
+    return String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+  };
+  const definitionComparisonFields = item => [
+    { key: 'object_name', label: '检查对象', left: item.object_name, right: item.candidate_object_name },
+    { key: 'object_category', label: '对象分类', left: item.object_category, right: item.candidate_object_category },
+    { key: 'check_layer', label: '检查层面', left: item.check_layer, right: item.candidate_check_layer },
+    { key: 'centers', label: '适用机构', left: item.centers, right: item.candidate_centers },
+    { key: 'check_method', label: '检查方法', left: item.check_method, right: item.candidate_check_method },
+    { key: 'description', label: '检查描述', left: item.description, right: item.candidate_description },
+    { key: 'scope', label: '检查范围', left: item.scope, right: item.candidate_scope },
+    { key: 'recognized_object', label: '是否公认对象', left: item.recognized_object, right: item.candidate_recognized_object },
+    { key: 'priority', label: '重点项', left: item.priority, right: item.candidate_priority },
+    { key: 'steps', label: '检查步骤', left: item.steps, right: item.candidate_steps },
+    { key: 'frequency', label: '执行频率', left: item.frequency, right: item.candidate_frequency },
+    { key: 'access_mode', label: '执行方式', left: item.access_mode, right: item.candidate_access_mode },
+    { key: 'standard_items', label: '关联标准项', left: item.standard_item_codes, right: item.candidate_standard_item_codes },
+    { key: 'reference_result', label: '参考判定描述', left: item.reference_result, right: item.candidate_reference_result },
+    { key: 'reference_materials', label: '参考材料', left: item.reference_materials, right: item.candidate_reference_materials },
+  ];
+  const definitionDifferences = item => definitionComparisonFields(item)
+    .filter(field => comparisonValue(field.left) !== comparisonValue(field.right));
 %>
 <style>
   .definition-filter-cards a.card { transition: border-color 120ms ease, box-shadow 120ms ease; }
   .definition-filter-cards a.card:hover { border-color: var(--bs-primary); box-shadow: 0 .25rem .75rem rgba(13, 110, 253, .12); }
   .definition-filter-cards a.card:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+  .definition-diff-value { color: #b42318 !important; background: #fff1f0; border-radius: .2rem; box-shadow: 0 0 0 2px #fff1f0; font-weight: 600; }
+  .definition-diff-summary { line-height: 1.7; }
+  details.definition-details-different { border-left: 3px solid #dc3545; padding-left: .5rem; }
 </style>
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -65,27 +93,40 @@
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
     <thead><tr><th style="width:10rem">方案编号</th><th>检查内容 A</th><th>检查内容 B</th><th style="width:14rem">筛选结论</th><th style="width:25rem">人工复核</th></tr></thead>
     <tbody>
-      <% candidates.forEach(item => { %>
+      <% candidates.forEach(item => {
+        const differences = definitionDifferences(item);
+        const differentKeys = new Set(differences.map(field => field.key));
+        const diffClass = key => differentKeys.has(key) ? 'definition-diff-value' : '';
+        const hiddenDifference = [ 'scope', 'recognized_object', 'priority', 'steps', 'frequency', 'access_mode', 'standard_items', 'reference_result', 'reference_materials' ].some(key => differentKeys.has(key));
+      %>
         <tr>
           <td>
             <div class="d-flex align-items-center gap-2 mb-1"><span class="badge text-bg-light border">A · <%= numberLabel(item.plan_number) %></span><span class="small text-secondary">执行 <%= item.execution_count || 0 %> 次</span></div>
             <div class="d-flex align-items-center gap-2"><span class="badge text-bg-light border">B · <%= numberLabel(item.candidate_plan_number) %></span><span class="small text-secondary">执行 <%= item.candidate_execution_count || 0 %> 次</span></div>
           </td>
           <td>
-            <strong><%= item.object_name %></strong>
-            <div class="small text-secondary mt-1"><%= item.object_category || '-' %> · <%= item.check_layer || '-' %> · 适用机构：<%= (item.centers || []).join('、') || '未指定' %></div>
-            <div class="small mt-1"><b>方法：</b><%= item.check_method %></div>
-            <div class="small"><b>描述：</b><%= item.description %></div>
-            <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.steps || '-' %></div><div><b>频率/方式：</b><%= item.frequency || '-' %> / <%= item.access_mode || '-' %></div><div><b>标准项：</b><%= (item.standard_item_codes || []).join('、') || '无' %></div><% if (item.reference_result || item.reference_materials) { %><div><b>参考判定：</b><%= item.reference_result || '-' %></div><div><b>参考材料：</b><%= item.reference_materials || '-' %></div><% } %></details>
+            <strong class="<%= diffClass('object_name') %>"><%= item.object_name %></strong>
+            <div class="small text-secondary mt-1"><span class="<%= diffClass('object_category') %>"><%= item.object_category || '-' %></span> · <span class="<%= diffClass('check_layer') %>"><%= item.check_layer || '-' %></span> · 适用机构：<span class="<%= diffClass('centers') %>"><%= (item.centers || []).join('、') || '未指定' %></span></div>
+            <div class="small mt-1"><b>方法：</b><span class="<%= diffClass('check_method') %>"><%= item.check_method %></span></div>
+            <div class="small"><b>描述：</b><span class="<%= diffClass('description') %>"><%= item.description %></span></div>
+            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><span class="<%= diffClass('steps') %>"><%= item.steps || '-' %></span></div><div><b>频率/方式：</b><span class="<%= diffClass('frequency') %>"><%= item.frequency || '-' %></span> / <span class="<%= diffClass('access_mode') %>"><%= item.access_mode || '-' %></span></div><div><b>标准项：</b><span class="<%= diffClass('standard_items') %>"><%= (item.standard_item_codes || []).join('、') || '无' %></span></div><div><b>检查范围：</b><span class="<%= diffClass('scope') %>"><%= item.scope || '-' %></span></div><div><b>方案属性：</b>公认对象：<span class="<%= diffClass('recognized_object') %>"><%= booleanLabel(item.recognized_object) %></span> · 重点项：<span class="<%= diffClass('priority') %>"><%= item.priority || '未指定' %></span></div><div><b>参考判定：</b><span class="<%= diffClass('reference_result') %>"><%= item.reference_result || '-' %></span></div><div><b>参考材料：</b><span class="<%= diffClass('reference_materials') %>"><%= item.reference_materials || '-' %></span></div></details>
           </td>
           <td>
-            <strong><%= item.candidate_object_name %></strong>
-            <div class="small text-secondary mt-1"><%= item.candidate_object_category || '-' %> · <%= item.candidate_check_layer || '-' %> · 适用机构：<%= (item.candidate_centers || []).join('、') || '未指定' %></div>
-            <div class="small mt-1"><b>方法：</b><%= item.candidate_check_method %></div>
-            <div class="small"><b>描述：</b><%= item.candidate_description %></div>
-            <details class="small mt-1"><summary>查看步骤、频率和标准项</summary><div class="mt-1"><b>步骤：</b><%= item.candidate_steps || '-' %></div><div><b>频率/方式：</b><%= item.candidate_frequency || '-' %> / <%= item.candidate_access_mode || '-' %></div><div><b>标准项：</b><%= (item.candidate_standard_item_codes || []).join('、') || '无' %></div><% if (item.candidate_reference_result || item.candidate_reference_materials) { %><div><b>参考判定：</b><%= item.candidate_reference_result || '-' %></div><div><b>参考材料：</b><%= item.candidate_reference_materials || '-' %></div><% } %></details>
+            <strong class="<%= diffClass('object_name') %>"><%= item.candidate_object_name %></strong>
+            <div class="small text-secondary mt-1"><span class="<%= diffClass('object_category') %>"><%= item.candidate_object_category || '-' %></span> · <span class="<%= diffClass('check_layer') %>"><%= item.candidate_check_layer || '-' %></span> · 适用机构：<span class="<%= diffClass('centers') %>"><%= (item.candidate_centers || []).join('、') || '未指定' %></span></div>
+            <div class="small mt-1"><b>方法：</b><span class="<%= diffClass('check_method') %>"><%= item.candidate_check_method %></span></div>
+            <div class="small"><b>描述：</b><span class="<%= diffClass('description') %>"><%= item.candidate_description %></span></div>
+            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><span class="<%= diffClass('steps') %>"><%= item.candidate_steps || '-' %></span></div><div><b>频率/方式：</b><span class="<%= diffClass('frequency') %>"><%= item.candidate_frequency || '-' %></span> / <span class="<%= diffClass('access_mode') %>"><%= item.candidate_access_mode || '-' %></span></div><div><b>标准项：</b><span class="<%= diffClass('standard_items') %>"><%= (item.candidate_standard_item_codes || []).join('、') || '无' %></span></div><div><b>检查范围：</b><span class="<%= diffClass('scope') %>"><%= item.candidate_scope || '-' %></span></div><div><b>方案属性：</b>公认对象：<span class="<%= diffClass('recognized_object') %>"><%= booleanLabel(item.candidate_recognized_object) %></span> · 重点项：<span class="<%= diffClass('priority') %>"><%= item.candidate_priority || '未指定' %></span></div><div><b>参考判定：</b><span class="<%= diffClass('reference_result') %>"><%= item.candidate_reference_result || '-' %></span></div><div><b>参考材料：</b><span class="<%= diffClass('reference_materials') %>"><%= item.candidate_reference_materials || '-' %></span></div></details>
           </td>
           <td>
+            <div class="definition-diff-summary mb-2">
+              <% if (differences.length) { %>
+                <div class="small text-danger fw-semibold mb-1">发现 <%= differences.length %> 项差异</div>
+                <div class="d-flex flex-wrap gap-1"><% differences.forEach(field => { %><span class="badge text-bg-danger"><%= field.label %></span><% }) %></div>
+              <% } else { %>
+                <span class="badge text-bg-success">比对字段一致</span>
+              <% } %>
+            </div>
             <span class="badge <%= item.candidate_type === 'exact_duplicate_candidate' ? 'text-bg-danger' : 'text-bg-warning' %>"><%= item.candidate_type === 'exact_duplicate_candidate' ? '规范化内容相同' : '内容相似' %></span>
             <div class="small mt-1">相似度 <%= Number(item.similarity_score || 0).toFixed(3) %></div>
             <% if (item.ai) { %><div class="mt-1"><span class="badge <%= item.ai.relation === 'duplicate' ? 'text-bg-danger' : 'text-bg-success' %>"><%= item.ai.relation === 'duplicate' ? 'AI 判重' : item.ai.relation === 'unrelated' ? 'AI 判无关' : item.ai.relation === 'similar_but_distinct' ? 'AI 判不同' : 'AI 不确定' %></span></div><div class="small text-secondary mt-1">置信度 <%= Number(item.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary"><%= item.ai.reason || '-' %></div><% } %><% if (item.ai_status === 'failed') { %><div class="small text-danger mt-1">上次 AI 分析失败，不影响人工判断</div><% } %>

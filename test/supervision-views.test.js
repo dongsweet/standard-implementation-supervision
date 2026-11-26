@@ -280,6 +280,73 @@ test('labels both plan numbers and execution counts consistently in dedupe resul
   assert.doesNotMatch(html, /执行 A：|执行 B：/);
 });
 
+test('marks definition field differences and expands hidden differences', { skip: !ejs }, async () => {
+  const candidate = {
+    id: 'definition-a',
+    plan_number: 646,
+    candidate_id: 'definition-b',
+    candidate_plan_number: 663,
+    execution_count: 0,
+    candidate_execution_count: 0,
+    object_name: '服务器',
+    candidate_object_name: '服务器',
+    object_category: '运维管理区',
+    candidate_object_category: '运维管理区',
+    check_layer: '技术层面',
+    candidate_check_layer: '技术层面',
+    centers: [ '云中心' ],
+    candidate_centers: [ '云中心', '统一运维中心' ],
+    check_method: '证据材料核查,上机查看',
+    candidate_check_method: '证据材料核查,上机查看',
+    description: '检查服务器无线网络模块',
+    candidate_description: '检查服务器无线网络模块',
+    steps: '检查无线模块；查看审计记录',
+    candidate_steps: '检查无线模块；查看审计记录',
+    frequency: '每季度',
+    candidate_frequency: '每年',
+    access_mode: '现场',
+    candidate_access_mode: '现场',
+    standard_item_codes: [ '8.18.1' ],
+    candidate_standard_item_codes: [ '8.18.1' ],
+    scope: null,
+    candidate_scope: null,
+    recognized_object: true,
+    candidate_recognized_object: true,
+    priority: '重点项',
+    candidate_priority: '重点项',
+    reference_result: null,
+    candidate_reference_result: null,
+    reference_materials: null,
+    candidate_reference_materials: null,
+    candidate_type: 'similar_candidate',
+    similarity_score: 1,
+    ai: null,
+    ai_status: 'pending',
+  };
+  const html = await ejs.renderFile(path.join(viewRoot, 'dedupe/index.ejs'), {
+    queryThreshold: 0.6,
+    scanned: true,
+    filter: 'all',
+    candidates: [ candidate ],
+    summary: {
+      candidateCount: 1,
+      aiDuplicateCount: 0,
+      aiExcludedCount: 0,
+      aiPendingCount: 0,
+    },
+    csrf: 'test-token',
+  });
+  assert.match(html, /发现 2 项差异/);
+  assert.match(html, /text-bg-danger">适用机构<\/span>/);
+  assert.match(html, /text-bg-danger">执行频率<\/span>/);
+  assert.match(html, /<span class="definition-diff-value">云中心、统一运维中心<\/span>/);
+  assert.match(html, /<span class="definition-diff-value">每季度<\/span>/);
+  assert.match(html, /<span class="definition-diff-value">每年<\/span>/);
+  assert.match(html, /差异已展开/);
+  assert.match(html, /<details class="small mt-1 definition-details-different" open>/);
+  assert.match(html, /\.definition-diff-value \{ color: #b42318 !important; background: #fff1f0;/);
+});
+
 test('links the center object page to manual object deduplication', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'supervision-center-objects/index.ejs'), 'utf8');
   assert.match(html, /\/supervision-center-objects\/dedupe/);
