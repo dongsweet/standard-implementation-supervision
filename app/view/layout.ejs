@@ -137,21 +137,25 @@
       window.confirmAppAction = (message, title = '请确认') => new Promise(resolve => {
         document.getElementById('appConfirmModalTitle').textContent = title;
         document.getElementById('appConfirmModalMessage').textContent = String(message || '');
+        let accepted = false;
         let settled = false;
-        const finish = value => {
-          if (settled) return;
-          settled = true;
+        const cleanup = () => {
           confirmButton.removeEventListener('click', onConfirm);
-          confirmElement.removeEventListener('hidden.bs.modal', onCancel);
-          resolve(value);
+          confirmElement.removeEventListener('hidden.bs.modal', onHidden);
         };
         const onConfirm = () => {
-          finish(true);
+          if (settled) return;
+          accepted = true;
           confirmModal.hide();
         };
-        const onCancel = () => finish(false);
+        const onHidden = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(accepted);
+        };
         confirmButton.addEventListener('click', onConfirm);
-        confirmElement.addEventListener('hidden.bs.modal', onCancel, { once: true });
+        confirmElement.addEventListener('hidden.bs.modal', onHidden);
         confirmModal.show();
       });
 

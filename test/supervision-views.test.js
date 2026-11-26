@@ -13,6 +13,15 @@ try {
 
 const viewRoot = path.join(__dirname, '../app/view');
 
+test('waits for the shared confirmation modal to close before resolving', () => {
+  const layout = fs.readFileSync(path.join(viewRoot, 'layout.ejs'), 'utf8');
+  assert.match(layout, /window\.confirmAppAction = \(message, title = '请确认'\) => new Promise\(resolve =>/);
+  assert.match(layout, /const onConfirm = \(\) => \{[\s\S]*accepted = true;[\s\S]*confirmModal\.hide\(\);/);
+  assert.match(layout, /const onHidden = \(\) => \{[\s\S]*resolve\(accepted\);[\s\S]*\};/);
+  assert.match(layout, /confirmElement\.addEventListener\('hidden\.bs\.modal', onHidden\)/);
+  assert.doesNotMatch(layout, /const onConfirm = \(\) => \{[\s\S]*resolve\(true\);/);
+});
+
 test('does not expose the dedupe workbench in the main navigation', () => {
   const layout = fs.readFileSync(path.join(viewRoot, 'layout.ejs'), 'utf8');
   assert.doesNotMatch(layout, /href="\/dedupe"/);
