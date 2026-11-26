@@ -364,6 +364,9 @@ test('provides a template-based merge editor for plan candidates', () => {
   assert.match(html, /id="definitionMergeSubmit"/);
   assert.match(html, /editedDefinition:/);
   assert.match(html, /method !== 'GET'/);
+  assert.match(html, /const mergeNumberLabel = value => value \? String\(value\)\.padStart\(3, '0'\) : '未编号';/);
+  assert.match(html, /\$\{mergeNumberLabel\(definition\.plan_number\)\}/);
+  assert.doesNotMatch(html, /\$\{numberLabel\(definition\.plan_number\)\}/);
 });
 
 test('links the center object page to manual object deduplication', () => {

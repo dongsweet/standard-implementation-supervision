@@ -257,6 +257,7 @@
 <script>
   const dedupeCsrfToken = '<%= csrf %>';
   const currentDefinitionFilter = '<%= activeFilter %>';
+  const mergeNumberLabel = value => value ? String(value).padStart(3, '0') : '未编号';
   const currentDefinitionThreshold = () => {
     const threshold = Number(document.getElementById('definitionThreshold').value);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
@@ -481,7 +482,7 @@
       const label = document.createElement('label');
       label.className = 'btn btn-outline-primary';
       label.htmlFor = input.id;
-      label.textContent = `${index === 0 ? 'A' : 'B'} · ${numberLabel(definition.plan_number)} · ${definition.object_name}`;
+      label.textContent = `${index === 0 ? 'A' : 'B'} · ${mergeNumberLabel(definition.plan_number)} · ${definition.object_name}`;
       wrapper.append(input, label);
       return wrapper;
     }));
