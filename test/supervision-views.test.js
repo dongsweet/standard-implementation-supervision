@@ -298,6 +298,12 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="splitFilterLayer"/);
   assert.match(html, /id="splitFilterSelectAll"/);
   assert.match(html, /id="splitFilterSelectNone"/);
+  assert.match(html, /const splitCategoryCatalog =/);
+  assert.match(html, /id="splitGroupCategoryCombobox-\$\{index\}"/);
+  assert.match(html, /placeholder="选择现有分类或输入新分类"/);
+  assert.match(html, /可输入新分类，最终提交时自动创建/);
+  assert.match(html, /function initializeSplitCategoryPicker/);
+  assert.doesNotMatch(html, /<input class="form-control split-group-category"/);
   assert.match(html, /function populateSplitFilters/);
   assert.match(html, /function applySplitFilters/);
   assert.match(html, /data-centers="\$\{escapeHtml\(centers\.join\('\|'\)\)\}"/);

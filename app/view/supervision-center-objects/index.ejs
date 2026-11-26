@@ -356,6 +356,7 @@
 
 <% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="card border-0 bg-body-tertiary mb-3"><div class="card-body py-2"><div class="row g-2 align-items-end"><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterCenter">按分支机构筛选</label><select class="form-select form-select-sm" id="splitFilterCenter"><option value="">全部机构</option></select></div><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterLayer">按检查层面筛选</label><select class="form-select form-select-sm" id="splitFilterLayer"><option value="">全部层面</option></select></div><div class="col-12 col-md-6 d-flex flex-wrap align-items-center gap-2"><button class="btn btn-outline-primary btn-sm" type="button" id="splitFilterSelectAll">按条件选中</button><button class="btn btn-outline-secondary btn-sm" type="button" id="splitFilterSelectNone">按条件取消</button><span class="small text-secondary ms-md-auto" id="splitFilterCount">当前显示全部方案</span></div></div></div></div><div class="d-flex flex-wrap align-items-center gap-2 mb-2"><div><strong>拆分目标</strong><div class="small text-secondary">只勾选本次要拆出的检查方案；未勾选的方案会继续保留在来源对象。</div></div><span class="badge text-bg-secondary ms-auto" id="objectSplitCounts">待计算</span></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div><div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="objectSplitConfirmation"><label class="form-check-label" for="objectSplitConfirmation">我已核对分组和方案归属；本版仅生成拆分草案，不修改业务数据。</label></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
   let splitObjectState = null;
+  const splitCategoryCatalog = <%- JSON.stringify(objectCategoriesValue.map(item => ({ id: item.id, name: item.name }))).replace(/</g, '\\u003c') %>;
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -367,7 +368,7 @@
     return `<label class="split-plan-option" data-centers="${escapeHtml(centers.join('|'))}" data-layer="${escapeHtml(plan.check_layer || '未指定层面')}"><input class="form-check-input split-plan-check" type="checkbox" value="${escapeHtml(plan.id)}" checked><span class="split-plan-copy"><span class="split-plan-heading"><strong class="split-plan-number">${String(plan.plan_number).padStart(3, '0')}</strong>${centerBadges}<span class="split-plan-category">${escapeHtml(plan.object_category || '未分类')}</span></span><span class="split-plan-description">${escapeHtml(plan.description || '')}</span></span></label>`;
   }
   function splitGroupHtml(group, index) {
-    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex flex-wrap align-items-center gap-2"><span class="badge text-bg-primary split-group-badge">${escapeHtml(group.category)} · 已选 ${group.planNumbers.length} / ${group.planNumbers.length}</span><div class="ms-auto btn-group btn-group-sm" role="group" aria-label="批量选择检查方案"><button class="btn btn-outline-secondary split-group-all" type="button">全选</button><button class="btn btn-outline-secondary split-group-none" type="button">清空</button></div></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label">新规范对象名称</label><input class="form-control split-group-name" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label">对象分类</label><input class="form-control split-group-category" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}"></div><div class="col-md-3"><label class="form-label">本次拆出</label><div class="form-control bg-body-tertiary split-group-count">${group.planNumbers.length} 个</div></div></div><details><summary>选择要拆到该对象的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
+    return `<section class="card object-split-group" data-group-index="${index}"><div class="card-header d-flex flex-wrap align-items-center gap-2"><span class="badge text-bg-primary split-group-badge">${escapeHtml(group.category)} · 已选 ${group.planNumbers.length} / ${group.planNumbers.length}</span><div class="ms-auto btn-group btn-group-sm" role="group" aria-label="批量选择检查方案"><button class="btn btn-outline-secondary split-group-all" type="button">全选</button><button class="btn btn-outline-secondary split-group-none" type="button">清空</button></div></div><div class="card-body"><div class="row g-2 mb-2"><div class="col-md-5"><label class="form-label" for="splitGroupName-${index}">新规范对象名称</label><input class="form-control split-group-name" id="splitGroupName-${index}" maxlength="500" value="${escapeHtml(group.suggestedName || group.category)}"></div><div class="col-md-4"><label class="form-label" for="splitGroupCategory-${index}">对象分类</label><div class="object-category-combobox" id="splitGroupCategoryCombobox-${index}"><input class="form-control object-category-combobox-input split-group-category" id="splitGroupCategory-${index}" type="search" autocomplete="off" maxlength="200" value="${escapeHtml(group.category === '未分类' ? '' : group.category)}" placeholder="选择现有分类或输入新分类" role="combobox" aria-expanded="false" aria-controls="splitGroupCategoryMenu-${index}" aria-autocomplete="list"><button class="object-category-combobox-toggle" type="button" aria-label="展开对象分类候选">&#9662;</button><div class="object-category-combobox-menu d-none" id="splitGroupCategoryMenu-${index}" role="listbox"></div></div><div class="small text-secondary mt-1">可输入新分类，最终提交时自动创建</div></div><div class="col-md-3"><label class="form-label">本次拆出</label><div class="form-control bg-body-tertiary split-group-count">${group.planNumbers.length} 个</div></div></div><details><summary>选择要拆到该对象的检查方案</summary><div class="mt-2 split-plan-list">${splitObjectState.plans.filter(plan => group.planIds.includes(plan.id)).map(splitGroupPlan).join('')}</div></details></div></section>`;
   }
   async function openSplitObject(button) {
     const modalElement = document.getElementById('objectSplitModal');
@@ -386,8 +387,116 @@
     splitObjectState = payload.data;
     document.getElementById('objectSplitSummary').textContent = `来源对象“${splitObjectState.object.canonical_name}”当前关联 ${splitObjectState.plans.length} 个方案，按历史分类预览出 ${splitObjectState.groups.length} 组。`;
     body.innerHTML = splitObjectState.groups.map(splitGroupHtml).join('');
+    splitObjectState.groups.forEach((group, index) => initializeSplitCategoryPicker(index, group.category));
     populateSplitFilters();
     refreshSplitDraft();
+  }
+  function initializeSplitCategoryPicker(index, initialValue) {
+    const root = document.getElementById(`splitGroupCategoryCombobox-${index}`);
+    const input = document.getElementById(`splitGroupCategory-${index}`);
+    const toggle = root?.querySelector('.object-category-combobox-toggle');
+    const menu = document.getElementById(`splitGroupCategoryMenu-${index}`);
+    if (!root || !input || !toggle || !menu) return;
+    let visible = [];
+    let activeIndex = -1;
+    let open = false;
+    const normalize = value => String(value || '').normalize('NFKC').trim().toLowerCase();
+    const close = () => {
+      open = false;
+      activeIndex = -1;
+      menu.classList.add('d-none');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const show = () => {
+      open = true;
+      menu.classList.remove('d-none');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const paint = items => {
+      visible = items;
+      activeIndex = items.length ? 0 : -1;
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'object-category-combobox-empty';
+        empty.textContent = input.value.trim() ? '无匹配分类，可直接使用输入的新分类' : '暂无对象分类';
+        menu.replaceChildren(empty);
+        return;
+      }
+      menu.replaceChildren(...items.map((item, optionIndex) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'object-category-combobox-option' + (optionIndex === activeIndex ? ' is-active' : '');
+        button.setAttribute('role', 'option');
+        button.dataset.index = String(optionIndex);
+        const label = document.createElement('span');
+        label.textContent = item.name;
+        const subtitle = document.createElement('span');
+        subtitle.className = 'option-subtitle';
+        subtitle.textContent = normalize(item.name) === normalize(initialValue) ? '当前分类 · 现有分类' : '现有分类';
+        button.append(label, subtitle);
+        return button;
+      }));
+    };
+    const updateActive = next => {
+      if (!visible.length) return;
+      activeIndex = (next + visible.length) % visible.length;
+      menu.querySelectorAll('.object-category-combobox-option').forEach((item, optionIndex) => {
+        item.classList.toggle('is-active', optionIndex === activeIndex);
+        if (optionIndex === activeIndex) item.scrollIntoView({ block: 'nearest' });
+      });
+    };
+    const select = item => {
+      if (!item) return;
+      input.value = item.name;
+      close();
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const render = () => {
+      const keyword = normalize(input.value);
+      const items = keyword
+        ? splitCategoryCatalog.filter(item => normalize(item.name).includes(keyword))
+        : splitCategoryCatalog;
+      paint(items);
+      show();
+    };
+    input.addEventListener('focus', render);
+    input.addEventListener('input', render);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (!open) render();
+        updateActive(activeIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (!open) render();
+        updateActive(activeIndex - 1);
+      } else if (event.key === 'Enter' && open && visible[activeIndex]) {
+        event.preventDefault();
+        select(visible[activeIndex]);
+      } else if (event.key === 'Escape') {
+        close();
+      }
+    });
+    toggle.addEventListener('mousedown', event => event.preventDefault());
+    toggle.addEventListener('click', () => {
+      if (open) close();
+      else {
+        input.focus();
+        render();
+      }
+    });
+    menu.addEventListener('mousedown', event => event.preventDefault());
+    menu.addEventListener('click', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) select(visible[Number(option.dataset.index)]);
+    });
+    menu.addEventListener('mouseover', event => {
+      const option = event.target.closest('.object-category-combobox-option');
+      if (option) updateActive(Number(option.dataset.index));
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!root.contains(event.target)) close();
+    }, true);
   }
   function populateSplitFilters() {
     const plans = splitObjectState?.plans || [];
