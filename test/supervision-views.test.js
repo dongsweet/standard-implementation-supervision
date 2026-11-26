@@ -13,6 +13,12 @@ try {
 
 const viewRoot = path.join(__dirname, '../app/view');
 
+test('does not expose the dedupe workbench in the main navigation', () => {
+  const layout = fs.readFileSync(path.join(viewRoot, 'layout.ejs'), 'utf8');
+  assert.doesNotMatch(layout, /href="\/dedupe"/);
+  assert.doesNotMatch(layout, /<p>去重复核<\/p>/);
+});
+
 test('keeps the plan list project-neutral, compact, and filterable', () => {
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   const executionView = fs.readFileSync(path.join(viewRoot, 'supervision-executions/index.ejs'), 'utf8');
