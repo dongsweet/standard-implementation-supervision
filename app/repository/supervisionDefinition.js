@@ -906,6 +906,10 @@ class SupervisionDefinitionRepository {
         error.code = 'CATEGORY_IN_USE';
         throw error;
       }
+      const detached = await client.query(`
+        UPDATE supervision_objects
+        SET category_id = NULL, updated_at = now()
+        WHERE category_id = $1 AND status <> 'active'`, [ id ]);
       const result = await client.query(`
         DELETE FROM supervision_object_categories
         WHERE id = $1 AND status = 'active'
@@ -913,7 +917,10 @@ class SupervisionDefinitionRepository {
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
         VALUES ($1, 'delete_supervision_object_category', 'supervision_object_category', $2, $3)`, [
-        actorId || null, id, JSON.stringify({ name: category.rows[0].name }),
+        actorId || null, id, JSON.stringify({
+          name: category.rows[0].name,
+          detachedObjectCount: detached.rowCount,
+        }),
       ]);
       await client.query('COMMIT');
       return result.rows[0] || null;

@@ -226,6 +226,7 @@ test('deletes an unused object category and records the action', async () => {
       if (statement === 'BEGIN' || statement === 'COMMIT' || statement === 'ROLLBACK') return { rows: [], rowCount: 0 };
       if (statement.startsWith('SELECT id, name FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '业务平台' } ], rowCount: 1 };
       if (statement.startsWith('SELECT count(*)::integer AS object_count')) return { rows: [ { object_count: 0 } ], rowCount: 1 };
+      if (statement.startsWith('UPDATE supervision_objects')) return { rows: [], rowCount: 0 };
       if (statement.startsWith('DELETE FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '业务平台' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
@@ -240,15 +241,16 @@ test('deletes an unused object category and records the action', async () => {
   assert.ok(calls.some(call => call.statement.startsWith('INSERT INTO audit_logs')));
 });
 
-test('deletes a category whose only remaining objects are already merged', async () => {
+test('detaches merged objects before deleting their otherwise unused category', async () => {
   const calls = [];
   const client = {
-    async query(sql) {
+    async query(sql, values = []) {
       const statement = sql.replace(/\s+/g, ' ').trim();
-      calls.push(statement);
+      calls.push({ statement, values });
       if ([ 'BEGIN', 'COMMIT', 'ROLLBACK' ].includes(statement)) return { rows: [], rowCount: 0 };
       if (statement.startsWith('SELECT id, name FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '统一运维中心' } ], rowCount: 1 };
       if (statement.startsWith('SELECT count(*)::integer AS object_count')) return { rows: [ { object_count: 0 } ], rowCount: 1 };
+      if (statement.startsWith('UPDATE supervision_objects')) return { rows: [], rowCount: 1 };
       if (statement.startsWith('DELETE FROM supervision_object_categories')) return { rows: [ { id: 'category-1', name: '统一运维中心' } ], rowCount: 1 };
       if (statement.startsWith('INSERT INTO audit_logs')) return { rows: [], rowCount: 1 };
       throw new Error('Unexpected query: ' + statement);
@@ -257,7 +259,13 @@ test('deletes a category whose only remaining objects are already merged', async
   };
   const result = await new Repository({ connect: async () => client }).deleteObjectCategory('category-1', 'user-1');
   assert.equal(result.name, '统一运维中心');
-  assert.ok(calls.includes('COMMIT'));
+  const detach = calls.find(call => call.statement.startsWith('UPDATE supervision_objects'));
+  assert.ok(detach);
+  assert.match(detach.statement, /SET category_id = NULL/);
+  assert.match(detach.statement, /status <> 'active'/);
+  assert.ok(calls.some(call => call.statement === 'COMMIT'));
+  const audit = calls.find(call => call.statement.startsWith('INSERT INTO audit_logs'));
+  assert.match(audit.values[2], /"detachedObjectCount":1/);
 });
 
 test('refuses to delete an object category that is still assigned', async () => {
