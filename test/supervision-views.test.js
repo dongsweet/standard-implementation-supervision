@@ -270,7 +270,9 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /<%= option %>/);
   assert.match(html, /id="createCategoryModal"/);
   assert.match(html, /id="mergeCategoryModal"/);
+  assert.match(html, /if \(canWrite && Number\(item\.object_count\) > 0\)/);
   assert.match(html, /onclick="openMergeCategory\(this\)"/);
+  assert.match(html, /else if \(canWrite\) \{ %><button class="btn btn-sm btn-outline-danger"/);
   assert.match(html, /相关检查方案分类也会同步更新/);
   assert.match(html, /categories\/' \+ encodeURIComponent\(mergeCategorySource\.id\) \+ '\/merge'/);
   assert.match(html, /mergeCategoryCatalog/);
@@ -386,7 +388,8 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /请从分类候选中选择一个对象分类/);
   assert.doesNotMatch(html, /list="objectCategoryOptions"/);
   assert.doesNotMatch(html, /name="category"><option value="">全部分类/);
-  assert.match(html, /Number\(item\.object_count\) === 0/);
+  assert.match(html, /if \(canWrite && Number\(item\.object_count\) > 0\)/);
+  assert.match(html, /else if \(canWrite\) \{ %><button class="btn btn-sm btn-outline-danger"/);
   assert.match(html, /categories\/.*\/delete/);
   assert.match(html, /规范对象名称/);
   assert.match(html, /对象分类/);
