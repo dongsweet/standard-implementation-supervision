@@ -357,6 +357,7 @@
 <% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="card border-0 bg-body-tertiary mb-3"><div class="card-body py-2"><div class="row g-2 align-items-end"><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterCenter">按分支机构筛选</label><select class="form-select form-select-sm" id="splitFilterCenter"><option value="">全部机构</option></select></div><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterLayer">按检查层面筛选</label><select class="form-select form-select-sm" id="splitFilterLayer"><option value="">全部层面</option></select></div><div class="col-12 col-md-6 d-flex flex-wrap align-items-center gap-2"><button class="btn btn-outline-primary btn-sm" type="button" id="splitFilterSelectAll">按条件选中</button><button class="btn btn-outline-secondary btn-sm" type="button" id="splitFilterSelectNone">按条件取消</button><span class="small text-secondary ms-md-auto" id="splitFilterCount">当前显示全部方案</span></div></div></div></div><div class="d-flex flex-wrap align-items-center gap-2 mb-2"><div><strong>拆分目标</strong><div class="small text-secondary">只勾选本次要拆出的检查方案；未勾选的方案会继续保留在来源对象。</div></div><span class="badge text-bg-secondary ms-auto" id="objectSplitCounts">待计算</span></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
   let splitObjectState = null;
   const splitCategoryCatalog = <%- JSON.stringify(objectCategoriesValue.map(item => ({ id: item.id, name: item.name }))).replace(/</g, '\\u003c') %>;
+  const splitTargetCatalog = <%- JSON.stringify(objectOptionsValue.map(item => ({ id: item.id, names: [ item.canonical_name, ...(item.aliases || []) ].filter(Boolean) }))).replace(/</g, '\\u003c') %>;
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -538,6 +539,17 @@
     }
     document.getElementById('splitFilterCount').textContent = `当前显示 ${visible} / ${options.length} 个方案`;
   }
+  function normalizedTargetName(value) {
+    return String(value || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  }
+  function splitTargetConflict(name) {
+    const normalized = normalizedTargetName(name);
+    if (!normalized) return null;
+    const sourceId = splitObjectState?.object?.id;
+    return splitTargetCatalog.find(object =>
+      object.id !== sourceId && object.names.some(item => normalizedTargetName(item) === normalized)
+    ) || null;
+  }
   function readSplitDraft() {
     return Array.from(document.querySelectorAll('.object-split-group'))
       .map(group => ({
@@ -558,6 +570,9 @@
       if (!group.category) errors.push('每个有检查方案的拆分目标都需要填写对象分类。');
       if (names.has(group.name)) errors.push(`新对象名称重复：${group.name}`);
       names.add(group.name);
+      if (group.name && splitTargetConflict(group.name)) {
+        errors.push(`拆分目标“${group.name}”已存在，不能重复创建；请选择现有对象进行合并，或填写新的对象名称。`);
+      }
       for (const planId of group.planIds) {
         if (plans.has(planId)) errors.push('同一个检查方案不能出现在多个拆分目标。');
         plans.add(planId);
@@ -619,7 +634,14 @@
         headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' },
         body: JSON.stringify({ groups }),
       });
-      const payload = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let payload = {};
+      if (contentType.includes('application/json')) {
+        payload = await response.json();
+      } else {
+        await response.text();
+        payload.message = `请求失败（HTTP ${response.status}），请刷新页面后重试`;
+      }
       if (!response.ok) throw new Error(payload.message || '拆分草案保存失败');
       window.location.assign('/supervision-center-objects/split-drafts/' + encodeURIComponent(payload.data.id));
     } catch (error) {

@@ -17,7 +17,7 @@ module.exports = appInfo => {
   // Egg checks CSRF before multipart parsing, so file uploads use the same-origin
   // referer check while regular forms continue to use the token.
   config.security = { csrf: { enable: true, type: 'any' } };
-  config.middleware = [ 'auth' ];
+  config.middleware = [ 'apiError', 'auth' ];
   config.static = { prefix: '/public/', dir: path.join(appInfo.baseDir, 'app/public') };
   config.session = { key: 'security_supervision.sid', maxAge: 8 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' };
   config.database = {

@@ -301,6 +301,10 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="splitFilterSelectAll"/);
   assert.match(html, /id="splitFilterSelectNone"/);
   assert.match(html, /const splitCategoryCatalog =/);
+  assert.match(html, /const splitTargetCatalog =/);
+  assert.match(html, /拆分目标“\$\{group\.name\}”已存在，不能重复创建/);
+  assert.match(html, /contentType\.includes\('application\/json'\)/);
+  assert.match(html, /请求失败（HTTP \$\{response\.status\}），请刷新页面后重试/);
   assert.match(html, /id="splitGroupCategoryCombobox-\$\{index\}"/);
   assert.match(html, /placeholder="选择现有分类或输入新分类"/);
   assert.match(html, /可输入新分类，最终提交时自动创建/);
