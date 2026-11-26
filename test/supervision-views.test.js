@@ -270,6 +270,12 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /<%= option %>/);
   assert.match(html, /id="createCategoryModal"/);
   assert.match(html, /id="mergeCategoryModal"/);
+  assert.match(html, /id="mergeCategoryCombobox"/);
+  assert.match(html, /id="mergeCategoryMenu"/);
+  assert.match(html, /placeholder="输入分类名称搜索或选择"/);
+  assert.match(html, /const mergeCategoryPicker =/);
+  assert.match(html, /请从现有分类候选中选择保留分类/);
+  assert.doesNotMatch(html, /<select class="form-select" id="mergeCategoryTarget"/);
   assert.match(html, /if \(canWrite && Number\(item\.object_count\) > 0\)/);
   assert.match(html, /onclick="openMergeCategory\(this\)"/);
   assert.match(html, /else if \(canWrite\) \{ %><button class="btn btn-sm btn-outline-danger"/);
