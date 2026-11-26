@@ -372,7 +372,10 @@ class SupervisionDefinitionService extends Service {
       this.ctx.throw(409, '拆分草案包含不属于该对象的检查方案');
     }
     const assigned = new Set(groups.flatMap(group => group.planIds));
-    if (assigned.size !== sourcePlanIds.size) this.ctx.throw(400, '每个来源检查方案必须且只能分配到一个拆分分组');
+    if (!assigned.size) this.ctx.throw(400, '至少需要选择一个要拆分的检查方案');
+    if (assigned.size !== groups.flatMap(group => group.planIds).length) {
+      this.ctx.throw(400, '同一个检查方案不能分配到多个拆分目标');
+    }
     for (const group of groups) {
       const conflict = await this.repository.findActiveObjectNameConflict(group.name);
       if (conflict) this.ctx.throw(409, `拆分目标名称已对应现有规范对象：${conflict.canonical_name}`);

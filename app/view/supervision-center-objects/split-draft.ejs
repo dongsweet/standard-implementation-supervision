@@ -4,12 +4,13 @@
   const planById = new Map([ ...(preview.plans || []), ...snapshotPlans ].map(plan => [ plan.id, plan ]));
   const sourcePlanCount = draft.status === 'draft' ? (preview.plans || []).length : snapshotPlans.length;
   const assignedPlanCount = groups.reduce((count, group) => count + (group.planIds || []).length, 0);
+  const remainingPlanCount = Math.max(0, sourcePlanCount - assignedPlanCount);
   const submitted = draft.status === 'submitted';
 %>
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
   <div>
     <h2 class="h4 mb-1"><%= submitted ? '拆分结果' : '核对拆分草案' %></h2>
-    <p class="text-secondary mb-0"><%= submitted ? '该草案已经提交，检查方案和规范对象已按下列分组更新。' : '请核对目标名称、分类和方案归属。提交后才会真正拆分对象并迁移检查方案。' %></p>
+    <p class="text-secondary mb-0"><%= submitted ? '该草案已经提交，选中的检查方案和规范对象已按下列分组更新；未选中的方案仍保留在来源对象。' : '请核对目标名称、分类和方案归属。只迁移已选中的方案，未选中的方案继续保留在来源对象。' %></p>
   </div>
   <a class="btn btn-outline-secondary ms-auto" href="/supervision-center-objects/split-drafts">返回拆分草案</a>
 </div>
@@ -23,7 +24,9 @@
       <div class="col-6 col-md-2"><div class="small text-secondary">拆分目标</div><div><%= groups.length %> 个对象</div></div>
       <div class="col-6 col-md-2"><div class="small text-secondary">状态</div><span class="badge <%= submitted ? 'text-bg-success' : 'text-bg-warning' %>"><%= submitted ? '已提交' : '待提交' %></span></div>
     </div>
-    <% if (assignedPlanCount !== sourcePlanCount) { %><div class="alert alert-danger mt-3 mb-0">方案归属不完整：来源有 <%= sourcePlanCount %> 个方案，草案仅分配 <%= assignedPlanCount %> 个。该草案不能提交。</div><% } %>
+    <div class="alert <%= remainingPlanCount ? 'alert-info' : 'alert-secondary' %> mt-3 mb-0">
+      本次拆出 <strong><%= assignedPlanCount %></strong> 个方案；<strong><%= remainingPlanCount %></strong> 个方案继续保留在来源对象“<%= draft.source_object_name %>”。
+    </div>
   </div>
 </div>
 
@@ -63,7 +66,7 @@
   const splitSubmitConfirmation = document.getElementById('splitSubmitConfirmation');
   const splitSubmitButton = document.getElementById('submitSplitDraft');
   splitSubmitConfirmation.addEventListener('change', () => {
-    splitSubmitButton.disabled = !splitSubmitConfirmation.checked || <%= assignedPlanCount !== sourcePlanCount ? 'true' : 'false' %>;
+    splitSubmitButton.disabled = !splitSubmitConfirmation.checked;
   });
   splitSubmitButton.addEventListener('click', async () => {
     if (!await window.confirmAppAction('最终提交后将创建新的规范对象并把来源检查方案迁移过去。是否继续？', '确认提交对象拆分')) return;

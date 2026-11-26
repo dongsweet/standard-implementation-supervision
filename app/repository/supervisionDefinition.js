@@ -468,8 +468,8 @@ class SupervisionDefinitionRepository {
         RETURNING *`, [ sourceObjectId, JSON.stringify(groups), userId || null ]);
       const source = await client.query(`
         UPDATE supervision_objects
-        SET split_into_draft_id = $2, updated_at = now()
-        WHERE id = $1 AND status = 'active'`, [ sourceObjectId, result.rows[0].id ]);
+        SET split_into_draft_id = NULL, updated_at = now()
+        WHERE id = $1 AND status = 'active'`, [ sourceObjectId ]);
       if (!source.rowCount) {
         const error = new Error('来源规范对象已发生变化，请重新生成草案');
         error.code = 'SPLIT_SOURCE_CHANGED';
@@ -565,11 +565,6 @@ class SupervisionDefinitionRepository {
           assigned.add(planId);
         }
       }
-      if (assigned.size !== activePlanIds.size) {
-        const error = new Error('来源对象新增了未分配到草案的检查方案，请重新生成草案');
-        error.code = 'SPLIT_SOURCE_CHANGED';
-        throw error;
-      }
       const created = [];
       for (const group of groups) {
         const conflict = await client.query(`
@@ -634,11 +629,22 @@ class SupervisionDefinitionRepository {
           ON CONFLICT DO NOTHING`, [ objectId, draft.source_object_name ]);
         created.push({ objectId, name: group.name, category: categoryName, planIds: group.planIds || [] });
       }
+      const remainingPlanCount = activePlanIds.size - assigned.size;
       await client.query(`
         UPDATE supervision_objects
-        SET status = 'split', split_into_draft_id = $2, updated_at = now()
-        WHERE id = $1`, [ draft.source_object_id, id ]);
-      const result = { sourceObjectId: draft.source_object_id, created };
+        SET status = $2, split_into_draft_id = $3, updated_at = now()
+        WHERE id = $1`, [
+        draft.source_object_id,
+        remainingPlanCount === 0 ? 'split' : 'active',
+        remainingPlanCount === 0 ? id : null,
+      ]);
+      const result = {
+        sourceObjectId: draft.source_object_id,
+        sourceStatus: remainingPlanCount === 0 ? 'split' : 'active',
+        movedPlanCount: assigned.size,
+        remainingPlanCount,
+        created,
+      };
       const updated = await client.query(`
         UPDATE supervision_object_split_drafts
         SET status = 'submitted', submitted_by = $2, submitted_at = now(),

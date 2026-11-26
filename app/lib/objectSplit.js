@@ -52,7 +52,7 @@ function validateSplitDraft({ sourceName, groups }) {
     }
     validGroups.push({ name, category, planIds });
   }
-  if (validGroups.length < 2) errors.push('拆分至少需要两个目标对象');
+  if (validGroups.length < 1) errors.push('至少需要一个拆分目标对象');
   return {
     errors: Array.from(new Set(errors)),
     groups: validGroups,

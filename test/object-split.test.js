@@ -42,3 +42,15 @@ test('validates editable split names, categories, and plan assignment', () => {
   assert.match(invalid.errors.join('；'), /缺少分类/);
   assert.match(invalid.errors.join('；'), /被分配到多个分组/);
 });
+
+test('allows splitting selected plans into a single target', () => {
+  const result = validateSplitDraft({
+    sourceName: '零信任',
+    groups: [
+      { name: '运维零信任', category: '运维管理区', planIds: [ 'a', 'b' ] },
+    ],
+  });
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.groups.length, 1);
+  assert.equal(result.assignedPlanCount, 2);
+});
