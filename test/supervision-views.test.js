@@ -300,8 +300,8 @@ test('marks definition field differences and expands hidden differences', { skip
     candidate_check_method: '证据材料核查,上机查看',
     description: '检查服务器无线网络模块',
     candidate_description: '检查服务器无线网络模块',
-    steps: '检查无线模块；查看审计记录',
-    candidate_steps: '检查无线模块；查看审计记录',
+    steps: '1、查看巡检记录是否完备（详细记录处置方式等）；2、巡检间隔不得大于7天',
+    candidate_steps: '1、查看巡检记录是否完备（详细记录用户、处置方式等）；2、巡检间隔不得大于7天',
     frequency: '每季度',
     candidate_frequency: '每年',
     access_mode: '现场',
@@ -336,15 +336,18 @@ test('marks definition field differences and expands hidden differences', { skip
     },
     csrf: 'test-token',
   });
-  assert.match(html, /发现 2 项差异/);
+  assert.match(html, /发现 3 项差异/);
   assert.match(html, /text-bg-danger">适用机构<\/span>/);
   assert.match(html, /text-bg-danger">执行频率<\/span>/);
-  assert.match(html, /<span class="definition-diff-value">云中心、统一运维中心<\/span>/);
-  assert.match(html, /<span class="definition-diff-value">每季度<\/span>/);
-  assert.match(html, /<span class="definition-diff-value">每年<\/span>/);
+  assert.match(html, /text-bg-danger">检查步骤<\/span>/);
+  assert.match(html, /云中心<mark class="definition-diff-fragment">、统一运维中心<\/mark>/);
+  assert.match(html, /每<mark class="definition-diff-fragment">季度<\/mark>/);
+  assert.match(html, /每<mark class="definition-diff-fragment">年<\/mark>/);
+  assert.match(html, /详细记录<mark class="definition-diff-fragment">用户、<\/mark>处置方式等/);
+  assert.doesNotMatch(html, /<mark class="definition-diff-fragment">[^<]*查看巡检记录是否完备/);
   assert.match(html, /差异已展开/);
   assert.match(html, /<details class="small mt-1 definition-details-different" open>/);
-  assert.match(html, /\.definition-diff-value \{ color: #b42318 !important; background: #fff1f0;/);
+  assert.match(html, /\.definition-diff-fragment \{ color: #b42318 !important; background: #fff1f0;/);
 });
 
 test('provides a template-based merge editor for plan candidates', () => {
