@@ -5,6 +5,7 @@
   const categoryInputValue = typeof categoryInput === 'undefined' ? categoryValue : (categoryInput || categoryValue);
   const viewValue = [ 'overview', 'pending', 'categories' ].includes(typeof view === 'undefined' ? '' : view) ? view : 'overview';
   const objectCategoriesValue = Array.isArray(typeof objectCategories === 'undefined' ? null : objectCategories) ? objectCategories : [];
+  const objectOptionsValue = Array.isArray(typeof objectOptions === 'undefined' ? null : objectOptions) ? objectOptions : [];
   const centerObjectsValue = Array.isArray(typeof centerObjects === 'undefined' ? null : centerObjects) ? centerObjects : [];
   const totalValue = typeof total === 'undefined' ? centerObjectsValue.length : total;
   const pageValue = typeof page === 'undefined' ? 1 : (page || 1);

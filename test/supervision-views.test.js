@@ -301,6 +301,7 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /id="splitFilterSelectAll"/);
   assert.match(html, /id="splitFilterSelectNone"/);
   assert.match(html, /const splitCategoryCatalog =/);
+  assert.match(html, /const objectOptionsValue = Array\.isArray\(typeof objectOptions/);
   assert.match(html, /const splitTargetCatalog =/);
   assert.match(html, /拆分目标“\$\{group\.name\}”已存在，不能重复创建/);
   assert.match(html, /contentType\.includes\('application\/json'\)/);
