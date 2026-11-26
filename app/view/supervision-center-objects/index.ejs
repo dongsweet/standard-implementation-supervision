@@ -61,7 +61,7 @@
     <% if (canWrite) { %><button class="btn btn-primary btn-sm ms-auto" type="button" data-bs-toggle="modal" data-bs-target="#createCategoryModal">新增分类</button><% } %>
   </div>
   <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:14rem">分类</th><th>包含规范对象</th><th style="width:7rem">对象数量</th><th style="width:9rem">说明</th><th class="text-end" style="width:7rem">操作</th></tr></thead>
+    <thead><tr><th style="width:14rem">分类</th><th>包含规范对象</th><th style="width:7rem">对象数量</th><th style="width:9rem">说明</th><th class="text-end" style="width:11rem">操作</th></tr></thead>
     <tbody>
       <% objectCategoriesValue.forEach(item => { const categoryObjects = Array.isArray(item.objects) ? item.objects : []; const visibleObjects = categoryObjects.slice(0, 8); const hiddenCount = Math.max(0, categoryObjects.length - visibleObjects.length); %>
         <tr>
@@ -77,13 +77,14 @@
           </td>
           <td><span class="badge text-bg-light border"><%= item.object_count %> 个</span></td>
           <td class="small text-secondary"><%= item.description || '-' %></td>
-          <td class="text-end"><% if (canWrite && Number(item.object_count) === 0) { %><button class="btn btn-sm btn-outline-danger" type="button" data-category-id="<%= item.id %>" data-category-name="<%= item.name %>" onclick="deleteObjectCategory(this)">删除</button><% } else if (canWrite) { %><span class="small text-secondary">使用中</span><% } %></td>
+          <td class="text-end text-nowrap"><% if (canWrite) { %><button class="btn btn-sm btn-outline-primary" type="button" data-category-id="<%= item.id %>" data-category-name="<%= item.name %>" data-object-count="<%= item.object_count %>" onclick="openMergeCategory(this)">合并到</button><% } %><% if (canWrite && Number(item.object_count) === 0) { %> <button class="btn btn-sm btn-outline-danger" type="button" data-category-id="<%= item.id %>" data-category-name="<%= item.name %>" onclick="deleteObjectCategory(this)">删除</button><% } else if (canWrite) { %> <span class="small text-secondary">使用中</span><% } %></td>
         </tr>
       <% }) %>
       <% if (!objectCategoriesValue.length) { %><tr><td colspan="5" class="text-center text-secondary py-5">尚未建立对象分类。</td></tr><% } %>
     </tbody>
   </table></div>
 </div>
+<% if (canWrite) { %><div class="modal fade" id="mergeCategoryModal" tabindex="-1" aria-labelledby="mergeCategoryTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form id="mergeCategoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="mergeCategoryTitle">合并对象分类</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="mergeCategorySummary"></div><div class="mb-3"><label class="form-label" for="mergeCategoryTarget">保留分类</label><select class="form-select" id="mergeCategoryTarget" required><option value="">请选择保留分类</option></select></div><div class="small text-secondary">来源分类下的全部规范对象会改到保留分类，相关检查方案的对象分类也会同步更新；来源分类随后删除。</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" type="submit">确认合并分类</button></div></form></div></div></div><% } %>
 <% if (canWrite) { %><div class="modal fade" id="createCategoryModal" tabindex="-1" aria-labelledby="createCategoryTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form method="post" action="/api/supervision-center-objects/categories" id="categoryForm"><input type="hidden" name="_csrf" value="<%= csrf %>"><div class="modal-header"><h2 class="modal-title fs-5" id="createCategoryTitle">新增对象分类</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label" for="categoryName">分类名称</label><input class="form-control" id="categoryName" name="name" maxlength="200" required placeholder="例如：管理制度、业务平台"></div><div><label class="form-label" for="categoryDescription">分类说明</label><textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" type="submit">保存分类</button></div></form></div></div></div><% } %>
 <% } else { %>
 <style>
@@ -339,6 +340,50 @@
 <% } %>
 
 <% if (canWrite && viewValue === 'categories') { %><script>
+  const mergeCategoryCatalog = <%- JSON.stringify(objectCategoriesValue.map(item => ({ id: item.id, name: item.name, objectCount: Number(item.object_count) || 0 }))).replace(/</g, '\\u003c') %>;
+  let mergeCategorySource = null;
+  function openMergeCategory(button) {
+    mergeCategorySource = {
+      id: button.dataset.categoryId,
+      name: button.dataset.categoryName,
+      objectCount: Number(button.dataset.objectCount) || 0,
+    };
+    const select = document.getElementById('mergeCategoryTarget');
+    select.replaceChildren(
+      new Option('请选择保留分类', ''),
+      ...mergeCategoryCatalog
+        .filter(item => item.id !== mergeCategorySource.id)
+        .map(item => new Option(`${item.name}（${item.objectCount} 个对象）`, item.id))
+    );
+    document.getElementById('mergeCategorySummary').textContent =
+      `将来源分类“${mergeCategorySource.name}”下的 ${mergeCategorySource.objectCount} 个规范对象迁移到保留分类。`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mergeCategoryModal')).show();
+  }
+  document.getElementById('mergeCategoryForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!mergeCategorySource) return;
+    const form = event.currentTarget;
+    const targetId = form.mergeCategoryTarget.value;
+    const targetName = form.mergeCategoryTarget.selectedOptions[0]?.textContent || '';
+    if (!targetId) return;
+    const confirmed = await window.confirmAppAction(
+      `确认把“${mergeCategorySource.name}”下的 ${mergeCategorySource.objectCount} 个对象合并到“${targetName}”？相关检查方案分类也会同步更新。`,
+      '合并对象分类'
+    );
+    if (!confirmed) return;
+    const response = await fetch('/api/supervision-center-objects/categories/' + encodeURIComponent(mergeCategorySource.id) + '/merge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': '<%= csrf %>' },
+      body: JSON.stringify({ targetId }),
+    });
+    const contentType = response.headers.get('content-type') || '';
+    const data = contentType.includes('application/json') ? await response.json() : {};
+    if (!response.ok) {
+      window.showAppNotice(data.message || `合并失败（HTTP ${response.status}）`, '分类合并失败');
+      return;
+    }
+    window.location.reload();
+  });
   async function deleteObjectCategory(button) {
     if (!await window.confirmAppAction(`确认删除对象分类“${button.dataset.categoryName}”吗？该分类当前没有规范对象使用。`, '删除对象分类')) return;
     const response = await fetch('/api/supervision-center-objects/categories/' + button.dataset.categoryId + '/delete', {

@@ -269,6 +269,11 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /适用机构/);
   assert.match(html, /<%= option %>/);
   assert.match(html, /id="createCategoryModal"/);
+  assert.match(html, /id="mergeCategoryModal"/);
+  assert.match(html, /onclick="openMergeCategory\(this\)"/);
+  assert.match(html, /相关检查方案分类也会同步更新/);
+  assert.match(html, /categories\/' \+ encodeURIComponent\(mergeCategorySource\.id\) \+ '\/merge'/);
+  assert.match(html, /mergeCategoryCatalog/);
   assert.match(html, /data-bs-target="#createCategoryModal"/);
   assert.match(html, /包含规范对象/);
   assert.match(html, /category-object-list/);

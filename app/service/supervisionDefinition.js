@@ -445,6 +445,18 @@ class SupervisionDefinitionService extends Service {
     }
   }
 
+  async mergeCenterObjectCategory(id, payload, actorId) {
+    if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '分类编号格式无效');
+    const targetId = String(payload.targetId || '').trim();
+    if (!UUID_RE.test(targetId)) this.ctx.throw(400, '请选择要保留的分类');
+    try {
+      return await this.repository.mergeObjectCategory(id, targetId, actorId);
+    } catch (error) {
+      if (error.code === 'INVALID_CATEGORY_MERGE') this.ctx.throw(400, error.message);
+      throw error;
+    }
+  }
+
   async deleteCenterObjectCategory(id, actorId) {
     if (!UUID_RE.test(String(id || ''))) this.ctx.throw(400, '分类编号格式无效');
     try {
