@@ -362,6 +362,11 @@ test('provides a template-based merge editor for plan candidates', () => {
   assert.match(html, /id="definitionMergeMethods"/);
   assert.match(html, /id="definitionMergeStandardSearch"/);
   assert.match(html, /id="definitionMergeSubmit"/);
+  assert.match(html, /<form id="definitionMergeForm" class="definition-merge-form">/);
+  assert.match(html, /#definitionMergeForm \{ display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; max-height: 100%; \}/);
+  assert.match(html, /#definitionMergeForm > \.modal-body \{ min-height: 0; overflow-y: auto; \}/);
+  assert.match(html, /#definitionMergeForm > \.modal-footer \{ flex: 0 0 auto; background: #fff; \}/);
+  assert.match(html, /<\/div>\s*<div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消<\/button><button class="btn btn-primary" type="submit" id="definitionMergeSubmit">保存编辑并合并<\/button><\/div>\s*<\/form>/);
   assert.match(html, /editedDefinition:/);
   assert.match(html, /method !== 'GET'/);
   assert.match(html, /const mergeNumberLabel = value => value \? String\(value\)\.padStart\(3, '0'\) : '未编号';/);
