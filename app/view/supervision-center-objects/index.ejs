@@ -354,7 +354,7 @@
   });
 </script><% } %>
 
-<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="card border-0 bg-body-tertiary mb-3"><div class="card-body py-2"><div class="row g-2 align-items-end"><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterCenter">按分支机构筛选</label><select class="form-select form-select-sm" id="splitFilterCenter"><option value="">全部机构</option></select></div><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterLayer">按检查层面筛选</label><select class="form-select form-select-sm" id="splitFilterLayer"><option value="">全部层面</option></select></div><div class="col-12 col-md-6 d-flex flex-wrap align-items-center gap-2"><button class="btn btn-outline-primary btn-sm" type="button" id="splitFilterSelectAll">按条件选中</button><button class="btn btn-outline-secondary btn-sm" type="button" id="splitFilterSelectNone">按条件取消</button><span class="small text-secondary ms-md-auto" id="splitFilterCount">当前显示全部方案</span></div></div></div></div><div class="d-flex flex-wrap align-items-center gap-2 mb-2"><div><strong>拆分目标</strong><div class="small text-secondary">只勾选本次要拆出的检查方案；未勾选的方案会继续保留在来源对象。</div></div><span class="badge text-bg-secondary ms-auto" id="objectSplitCounts">待计算</span></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div><div class="form-check mt-3"><input class="form-check-input" type="checkbox" id="objectSplitConfirmation"><label class="form-check-label" for="objectSplitConfirmation">我已核对分组和方案归属；本版仅生成拆分草案，不修改业务数据。</label></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
+<% if (canWrite && viewValue !== 'categories') { %><div class="modal fade" id="objectSplitModal" tabindex="-1" aria-labelledby="objectSplitTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h2 class="modal-title fs-5" id="objectSplitTitle">拆分规范对象</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button></div><div class="modal-body"><div class="alert alert-warning py-2" id="objectSplitSummary"></div><div class="card border-0 bg-body-tertiary mb-3"><div class="card-body py-2"><div class="row g-2 align-items-end"><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterCenter">按分支机构筛选</label><select class="form-select form-select-sm" id="splitFilterCenter"><option value="">全部机构</option></select></div><div class="col-12 col-md-3"><label class="form-label mb-1" for="splitFilterLayer">按检查层面筛选</label><select class="form-select form-select-sm" id="splitFilterLayer"><option value="">全部层面</option></select></div><div class="col-12 col-md-6 d-flex flex-wrap align-items-center gap-2"><button class="btn btn-outline-primary btn-sm" type="button" id="splitFilterSelectAll">按条件选中</button><button class="btn btn-outline-secondary btn-sm" type="button" id="splitFilterSelectNone">按条件取消</button><span class="small text-secondary ms-md-auto" id="splitFilterCount">当前显示全部方案</span></div></div></div></div><div class="d-flex flex-wrap align-items-center gap-2 mb-2"><div><strong>拆分目标</strong><div class="small text-secondary">只勾选本次要拆出的检查方案；未勾选的方案会继续保留在来源对象。</div></div><span class="badge text-bg-secondary ms-auto" id="objectSplitCounts">待计算</span></div><div class="object-split-groups" id="objectSplitGroups"></div><div class="alert alert-danger py-2 mt-3 mb-0 d-none" id="objectSplitErrors"></div></div><div class="modal-footer d-flex flex-wrap gap-2"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-warning ms-auto" type="button" id="saveSplitDraft" disabled>保存拆分草案</button></div></div></div></div><script>
   let splitObjectState = null;
   const splitCategoryCatalog = <%- JSON.stringify(objectCategoriesValue.map(item => ({ id: item.id, name: item.name }))).replace(/</g, '\\u003c') %>;
   function escapeHtml(value) {
@@ -375,7 +375,6 @@
     const body = document.getElementById('objectSplitGroups');
     body.innerHTML = '<div class="text-secondary py-4 text-center">正在生成拆分预览...</div>';
     document.getElementById('objectSplitErrors').classList.add('d-none');
-    document.getElementById('objectSplitConfirmation').checked = false;
     document.getElementById('saveSplitDraft').disabled = true;
     bootstrap.Modal.getOrCreateInstance(modalElement).show();
     const response = await fetch('/api/supervision-center-objects/objects/' + encodeURIComponent(button.dataset.objectId) + '/split-preview');
@@ -580,7 +579,7 @@
     });
     errorBox.textContent = errors.join('；');
     errorBox.classList.toggle('d-none', !errors.length);
-    document.getElementById('saveSplitDraft').disabled = errors.length > 0 || !document.getElementById('objectSplitConfirmation').checked;
+    document.getElementById('saveSplitDraft').disabled = errors.length > 0;
   }
   document.getElementById('objectSplitModal').addEventListener('input', refreshSplitDraft);
   document.getElementById('objectSplitModal').addEventListener('change', refreshSplitDraft);
@@ -608,6 +607,11 @@
     const button = event.currentTarget;
     const groups = readSplitDraft();
     if (!splitObjectState?.object?.id || !groups.length) return;
+    const confirmed = await window.confirmAppAction(
+      '保存后只会生成拆分草案，不会修改对象和检查方案。是否继续？',
+      '保存拆分草案'
+    );
+    if (!confirmed) return;
     button.disabled = true;
     try {
       const response = await fetch('/api/supervision-center-objects/objects/' + encodeURIComponent(splitObjectState.object.id) + '/split-drafts', {

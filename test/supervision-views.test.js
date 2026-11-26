@@ -285,7 +285,9 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.match(html, /supervision-center-objects\/split-drafts\/' \+ encodeURIComponent\(payload\.data\.id\)/);
   assert.match(html, /id="objectSplitModal"/);
   assert.match(html, /split-drafts\/' \+ encodeURIComponent\(payload\.data\.id\)/);
-  assert.match(html, /本版仅生成拆分草案，不修改业务数据/);
+  assert.doesNotMatch(html, /id="objectSplitConfirmation"/);
+  assert.match(html, /保存后只会生成拆分草案，不会修改对象和检查方案。是否继续？/);
+  assert.match(html, /'保存拆分草案'/);
   assert.match(html, /onclick="openSplitObject\(this\)"/);
   assert.match(html, /拆分草案/);
   assert.match(html, /只勾选本次要拆出的检查方案/);
@@ -319,7 +321,6 @@ test('organizes canonical objects, pending classification, and category maintena
   assert.doesNotMatch(html, /split-group-select/);
   assert.doesNotMatch(html, /split-group-include/);
   assert.doesNotMatch(html, /合并选中的分组/);
-  assert.match(html, /本版仅生成拆分草案，不修改业务数据/);
   assert.match(html, /id="mergeTargetObject"/);
   assert.match(html, /id="mergeTargetObjectMenu"/);
   assert.match(html, /mergeObjectPicker/);
