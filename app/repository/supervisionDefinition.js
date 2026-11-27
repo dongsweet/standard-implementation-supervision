@@ -54,6 +54,24 @@ class SupervisionDefinitionRepository {
              v.candidate_object_name, v.candidate_object_category, v.candidate_check_layer,
              v.candidate_check_method, v.candidate_description, v.candidate_steps, v.candidate_frequency, v.candidate_access_mode,
              v.standard_item_codes, v.candidate_standard_item_codes, v.execution_count, v.candidate_execution_count, v.created_at,
+             COALESCE((
+               SELECT json_agg(json_build_object(
+                 'id', si.id, 'standardNumber', si.standard_number, 'itemCode', si.item_code,
+                 'title', si.title, 'content', left(si.content, 1000)
+               ) ORDER BY si.standard_number NULLS LAST, si.item_code)
+               FROM supervision_definition_standard_items dsi
+               JOIN standard_items si ON si.id = dsi.standard_item_id
+               WHERE dsi.definition_id = v.id
+             ), '[]'::json) AS standard_item_details,
+             COALESCE((
+               SELECT json_agg(json_build_object(
+                 'id', si.id, 'standardNumber', si.standard_number, 'itemCode', si.item_code,
+                 'title', si.title, 'content', left(si.content, 1000)
+               ) ORDER BY si.standard_number NULLS LAST, si.item_code)
+               FROM supervision_definition_standard_items csi
+               JOIN standard_items si ON si.id = csi.standard_item_id
+               WHERE csi.definition_id = v.candidate_id
+             ), '[]'::json) AS candidate_standard_item_details,
              d.scope, d.recognized_object, d.priority, d.reference_result, d.reference_materials,
              v.centers, c.scope AS candidate_scope, c.recognized_object AS candidate_recognized_object,
              v.candidate_centers,
@@ -174,7 +192,7 @@ class SupervisionDefinitionRepository {
              d.merged_into_id, d.created_at, d.updated_at,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'code', si.item_code, 'standardNumber', si.standard_number,
-               'title', si.title, 'chapterCode', sc.code, 'chapterName', sc.name,
+               'title', si.title, 'content', left(si.content, 1000), 'chapterCode', sc.code, 'chapterName', sc.name,
                'standardCode', s.code, 'version', sv.version
              ) ORDER BY s.code, sv.version, si.item_code)
              FILTER (WHERE si.id IS NOT NULL), '[]'::json) AS standard_items,
@@ -1174,7 +1192,7 @@ class SupervisionDefinitionRepository {
     const result = await this.pool.query(`
       SELECT si.id, si.item_code AS code, si.standard_number AS "standardNumber", si.title,
              sc.code AS "chapterCode", sc.name AS "chapterName",
-             s.code AS "standardCode", sv.version,
+             s.code AS "standardCode", sv.version, left(si.content, 1000) AS content,
              left(si.content, 260) AS preview
       FROM standard_items si
       JOIN standard_versions sv ON sv.id = si.standard_version_id
@@ -1336,7 +1354,7 @@ class SupervisionDefinitionRepository {
              COALESCE((
                SELECT json_agg(json_build_object(
                  'id', si.id, 'code', si.item_code, 'standardNumber', si.standard_number,
-                 'title', si.title, 'chapterCode', sc.code, 'chapterName', sc.name,
+                 'title', si.title, 'content', left(si.content, 1000), 'chapterCode', sc.code, 'chapterName', sc.name,
                  'standardCode', s.code, 'version', sv.version
                ) ORDER BY s.code, sv.version, si.item_code)
                FROM supervision_definition_standard_items dsi

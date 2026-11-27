@@ -43,6 +43,20 @@
   const escapeDiffHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character]);
+  const dedupeStandardItemLabel = item => item?.standardNumber || item?.itemCode || item?.code || '未编号';
+  const dedupeStandardItemTitle = item => [
+    `原文编号：${item?.itemCode || item?.code || '-'}`,
+    `标准项内容：${item?.content || item?.title || '无标准项内容'}`,
+  ].join('\n');
+  const renderStandardItemBadges = (details, fallbackCodes = [], emphasize = false) => {
+    const items = Array.isArray(details) && details.length
+      ? details
+      : (Array.isArray(fallbackCodes) ? fallbackCodes : []).map(code => ({ code }));
+    if (!items.length) return '<span class="text-secondary">无</span>';
+    return `<div class="definition-standard-item-list">${items.map(item =>
+      `<span class="badge text-bg-light border definition-standard-item-badge${emphasize ? ' border-danger' : ''}" title="${escapeDiffHtml(dedupeStandardItemTitle(item))}">${escapeDiffHtml(dedupeStandardItemLabel(item))}</span>`
+    ).join('')}</div>`;
+  };
   const renderComparisonMarkup = (left, right, side, key) => {
     const leftText = comparisonDisplay(left, key);
     const rightText = comparisonDisplay(right, key);
@@ -79,6 +93,8 @@
   .definition-filter-cards a.card:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
   .definition-diff-fragment { color: #b42318 !important; background: #fff1f0; border-radius: .15rem; padding: 0 .08rem; box-decoration-break: clone; -webkit-box-decoration-break: clone; font-weight: 600; }
   .definition-diff-summary { line-height: 1.7; }
+  .definition-standard-item-list { display: flex; flex-wrap: wrap; gap: .25rem; }
+  .definition-standard-item-badge { max-width: 100%; overflow-wrap: anywhere; white-space: normal; cursor: help; }
   details.definition-details-different { border-left: 3px solid #dc3545; padding-left: .5rem; }
   .definition-merge-template .btn-check:checked + .btn { color: #fff; background: #0d6efd; border-color: #0d6efd; }
   .definition-merge-picker { position: relative; }
@@ -156,14 +172,14 @@
             <div class="small text-secondary mt-1"><%- diffValue('object_category', 'left') %> · <%- diffValue('check_layer', 'left') %> · 适用机构：<%- diffValue('centers', 'left') %></div>
             <div class="small mt-1"><b>方法：</b><%- diffValue('check_method', 'left') %></div>
             <div class="small"><b>描述：</b><%- diffValue('description', 'left') %></div>
-            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><%- diffValue('steps', 'left') %></div><div><b>频率/方式：</b><%- diffValue('frequency', 'left') %> / <%- diffValue('access_mode', 'left') %></div><div><b>标准项：</b><%- diffValue('standard_items', 'left') %></div><div><b>检查范围：</b><%- diffValue('scope', 'left') %></div><div><b>方案属性：</b>公认对象：<%- diffValue('recognized_object', 'left') %> · 重点项：<%- diffValue('priority', 'left') %></div><div><b>参考判定：</b><%- diffValue('reference_result', 'left') %></div><div><b>参考材料：</b><%- diffValue('reference_materials', 'left') %></div></details>
+            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><%- diffValue('steps', 'left') %></div><div><b>频率/方式：</b><%- diffValue('frequency', 'left') %> / <%- diffValue('access_mode', 'left') %></div><div><b>标准项：</b><%- renderStandardItemBadges(item.standard_item_details, item.standard_item_codes, differences.some(field => field.key === 'standard_items')) %></div><div><b>检查范围：</b><%- diffValue('scope', 'left') %></div><div><b>方案属性：</b>公认对象：<%- diffValue('recognized_object', 'left') %> · 重点项：<%- diffValue('priority', 'left') %></div><div><b>参考判定：</b><%- diffValue('reference_result', 'left') %></div><div><b>参考材料：</b><%- diffValue('reference_materials', 'left') %></div></details>
           </td>
           <td>
             <strong><%- diffValue('object_name', 'right') %></strong>
             <div class="small text-secondary mt-1"><%- diffValue('object_category', 'right') %> · <%- diffValue('check_layer', 'right') %> · 适用机构：<%- diffValue('centers', 'right') %></div>
             <div class="small mt-1"><b>方法：</b><%- diffValue('check_method', 'right') %></div>
             <div class="small"><b>描述：</b><%- diffValue('description', 'right') %></div>
-            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><%- diffValue('steps', 'right') %></div><div><b>频率/方式：</b><%- diffValue('frequency', 'right') %> / <%- diffValue('access_mode', 'right') %></div><div><b>标准项：</b><%- diffValue('standard_items', 'right') %></div><div><b>检查范围：</b><%- diffValue('scope', 'right') %></div><div><b>方案属性：</b>公认对象：<%- diffValue('recognized_object', 'right') %> · 重点项：<%- diffValue('priority', 'right') %></div><div><b>参考判定：</b><%- diffValue('reference_result', 'right') %></div><div><b>参考材料：</b><%- diffValue('reference_materials', 'right') %></div></details>
+            <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><%- diffValue('steps', 'right') %></div><div><b>频率/方式：</b><%- diffValue('frequency', 'right') %> / <%- diffValue('access_mode', 'right') %></div><div><b>标准项：</b><%- renderStandardItemBadges(item.candidate_standard_item_details, item.candidate_standard_item_codes, differences.some(field => field.key === 'standard_items')) %></div><div><b>检查范围：</b><%- diffValue('scope', 'right') %></div><div><b>方案属性：</b>公认对象：<%- diffValue('recognized_object', 'right') %> · 重点项：<%- diffValue('priority', 'right') %></div><div><b>参考判定：</b><%- diffValue('reference_result', 'right') %></div><div><b>参考材料：</b><%- diffValue('reference_materials', 'right') %></div></details>
           </td>
           <td>
             <div class="definition-diff-summary mb-2">
@@ -380,6 +396,11 @@
   };
   const mergeField = id => document.getElementById(id);
   const mergeNormalize = value => String(value || '').normalize('NFKC').trim().toLowerCase();
+  const mergeStandardItemLabel = item => item?.standardNumber || item?.itemCode || item?.code || '未编号';
+  const mergeStandardItemTitle = item => [
+    `原文编号：${item?.itemCode || item?.code || '-'}`,
+    `标准项内容：${item?.content || item?.preview || item?.title || '无标准项内容'}`,
+  ].join('\n');
   function mergeSetError(message = '') {
     const box = mergeField('definitionMergeError');
     box.textContent = message;
@@ -392,8 +413,9 @@
     const chips = [ ...definitionMergeState.standards.values() ].map(item => {
       const chip = document.createElement('span');
       chip.className = 'badge text-bg-light border d-inline-flex align-items-start gap-2 definition-merge-chip';
+      chip.title = mergeStandardItemTitle(item);
       const text = document.createElement('span');
-      text.textContent = [ item.standardNumber || item.code, item.title || '' ].filter(Boolean).join(' · ');
+      text.textContent = mergeStandardItemLabel(item);
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'btn-close btn-close-sm';
@@ -545,7 +567,8 @@
           const option = document.createElement('button');
           option.type = 'button';
           option.className = 'list-group-item list-group-item-action';
-          option.textContent = [ item.standardNumber || item.code, item.title ].filter(Boolean).join(' · ');
+          option.textContent = mergeStandardItemLabel(item);
+          option.title = mergeStandardItemTitle(item);
           option.addEventListener('mousedown', event => event.preventDefault());
           option.addEventListener('click', () => {
             definitionMergeState.standards.set(String(item.id), item);

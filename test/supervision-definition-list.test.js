@@ -40,6 +40,8 @@ test('filters and paginates supervision definitions with stable readable-number 
   assert.match(calls[0].statement, /d\.priority = \$3/);
   assert.match(calls[0].statement, /d\.check_method ILIKE \$4/);
   assert.match(calls[0].statement, /filter_si\.standard_number ILIKE \$1/);
+  assert.match(calls[1].statement, /'standardNumber', si\.standard_number/);
+  assert.match(calls[1].statement, /'content', left\(si\.content, 1000\)/);
   assert.match(calls[1].statement, /ORDER BY d\.status, d\.plan_number/);
   assert.match(calls[1].statement, /d\.canonical_object_id/);
   assert.match(calls[0].statement, /dc\.center_name = \$5/);
