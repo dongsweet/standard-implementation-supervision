@@ -3,6 +3,7 @@
 const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { normalizeDefinition } = require('../lib/dedupe');
+const { buildPaginationItems } = require('../lib/pagination');
 const { friendlyAiError } = require('../lib/aiProvider');
 const { buildSplitGroups, validateSplitDraft } = require('../lib/objectSplit');
 const {
@@ -64,6 +65,7 @@ class SupervisionDefinitionService extends Service {
       page: definitionResult.page,
       pageSize,
       pageCount: definitionResult.pageCount,
+      paginationItems: buildPaginationItems(definitionResult.page, definitionResult.pageCount),
       search,
       status,
       priority,

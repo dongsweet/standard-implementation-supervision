@@ -47,6 +47,9 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   assert.match(planView, /<%= centerOption %>/);
   assert.match(planView, /name="status"/);
   assert.match(planView, /buildPageUrl\(pageValue - 1\)/);
+  assert.match(planView, /paginationItemsValue\.forEach/);
+  assert.match(planView, /class="page-link">…<\/span>/);
+  assert.match(planView, /pagination pagination-sm mb-0 flex-nowrap/);
   assert.match(planView, /definitionDetailModal/);
   assert.match(planView, /padStart\(3, '0'\)/);
   assert.match(planView, /<td><strong><%= definition\.object_name %><\/strong><\/td>/);
