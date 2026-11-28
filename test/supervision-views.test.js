@@ -271,7 +271,14 @@ test('links the plan page to manual threshold and optional AI deduplication', ()
 
 test('labels both plan numbers and execution counts consistently in dedupe results', () => {
   const html = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
-  assert.match(html, /<th style="width:10rem">方案编号<\/th>/);
+  assert.match(html, /\.definition-dedupe-table \{ width: 100%; min-width: 86rem; table-layout: fixed; \}/);
+  assert.match(html, /<colgroup><col style="width:9rem"><col><col><col style="width:13rem"><col style="width:18rem"><\/colgroup>/);
+  assert.match(html, /class="table table-hover align-middle mb-0 definition-dedupe-table"/);
+  assert.match(html, /class="definition-comparison-cell"/);
+  assert.match(html, /onchange="definitionReviewFromSelect\(this\)"/);
+  assert.match(html, /<option value="merge-a">保留 A 并合并<\/option>/);
+  assert.match(html, /<option value="merge-b">保留 B 并合并<\/option>/);
+  assert.doesNotMatch(html, /<th style="width:25rem">人工复核<\/th>/);
   assert.match(html, /A · <%= numberLabel\(item\.plan_number\) %>/);
   assert.match(html, /B · <%= numberLabel\(item\.candidate_plan_number\) %>/);
   assert.match(html, /执行 <%= item\.execution_count \|\| 0 %> 次/);

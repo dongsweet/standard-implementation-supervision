@@ -93,6 +93,10 @@
   .definition-diff-summary { line-height: 1.7; }
   .definition-standard-item-list { display: flex; flex-wrap: wrap; gap: .25rem; }
   .definition-standard-item-badge { max-width: 100%; overflow-wrap: anywhere; white-space: normal; cursor: help; }
+  .definition-dedupe-table { width: 100%; min-width: 86rem; table-layout: fixed; }
+  .definition-comparison-cell { min-width: 0; overflow-wrap: anywhere; }
+  .definition-review-cell { min-width: 0; }
+  .definition-review-cell .form-select { min-width: 0; }
   details.definition-details-different { border-left: 3px solid #dc3545; padding-left: .5rem; }
   .definition-merge-template .btn-check:checked + .btn { color: #fff; background: #0d6efd; border-color: #0d6efd; }
   .definition-merge-picker { position: relative; }
@@ -148,8 +152,9 @@
 
 <section class="card mb-3">
   <div class="card-header d-flex align-items-center gap-2"><h3 class="card-title">检查方案筛选结果</h3><span class="badge text-bg-primary">当前：<%= filterLabels[activeFilter] %></span><span class="badge text-bg-secondary ms-auto"><%= candidates.length %> 组</span></div>
-  <div class="table-responsive"><table class="table table-hover align-middle mb-0">
-    <thead><tr><th style="width:10rem">方案编号</th><th>检查内容 A</th><th>检查内容 B</th><th style="width:14rem">筛选结论</th><th style="width:25rem">人工复核</th></tr></thead>
+  <div class="table-responsive"><table class="table table-hover align-middle mb-0 definition-dedupe-table">
+    <colgroup><col style="width:9rem"><col><col><col style="width:13rem"><col style="width:18rem"></colgroup>
+    <thead><tr><th>方案编号</th><th>检查内容 A</th><th>检查内容 B</th><th>筛选结论</th><th>人工复核</th></tr></thead>
     <tbody>
       <% candidates.forEach(item => {
         const differences = definitionDifferences(item);
@@ -165,14 +170,14 @@
             <div class="d-flex align-items-center gap-2 mb-1"><span class="badge text-bg-light border">A · <%= numberLabel(item.plan_number) %></span><span class="small text-secondary">执行 <%= item.execution_count || 0 %> 次</span></div>
             <div class="d-flex align-items-center gap-2"><span class="badge text-bg-light border">B · <%= numberLabel(item.candidate_plan_number) %></span><span class="small text-secondary">执行 <%= item.candidate_execution_count || 0 %> 次</span></div>
           </td>
-          <td>
+          <td class="definition-comparison-cell">
             <strong><%- diffValue('object_name', 'left') %></strong>
             <div class="small text-secondary mt-1"><%- diffValue('object_category', 'left') %> · <%- diffValue('check_layer', 'left') %> · 适用机构：<%- diffValue('centers', 'left') %></div>
             <div class="small mt-1"><b>方法：</b><%- diffValue('check_method', 'left') %></div>
             <div class="small"><b>描述：</b><%- diffValue('description', 'left') %></div>
             <details class="small mt-1 <%= hiddenDifference ? 'definition-details-different' : '' %>" <%= hiddenDifference ? 'open' : '' %>><summary>查看步骤、频率和标准项<%= hiddenDifference ? '（差异已展开）' : '' %></summary><div class="mt-1"><b>步骤：</b><%- diffValue('steps', 'left') %></div><div><b>频率/方式：</b><%- diffValue('frequency', 'left') %> / <%- diffValue('access_mode', 'left') %></div><div><b>标准项：</b><%- renderStandardItemBadges(item.standard_item_details, item.standard_item_codes, differences.some(field => field.key === 'standard_items')) %></div><div><b>检查范围：</b><%- diffValue('scope', 'left') %></div><div><b>方案属性：</b>公认对象：<%- diffValue('recognized_object', 'left') %> · 重点项：<%- diffValue('priority', 'left') %></div><div><b>参考判定：</b><%- diffValue('reference_result', 'left') %></div><div><b>参考材料：</b><%- diffValue('reference_materials', 'left') %></div></details>
           </td>
-          <td>
+          <td class="definition-comparison-cell">
             <strong><%- diffValue('object_name', 'right') %></strong>
             <div class="small text-secondary mt-1"><%- diffValue('object_category', 'right') %> · <%- diffValue('check_layer', 'right') %> · 适用机构：<%- diffValue('centers', 'right') %></div>
             <div class="small mt-1"><b>方法：</b><%- diffValue('check_method', 'right') %></div>
@@ -192,21 +197,18 @@
             <div class="small mt-1">相似度 <%= Number(item.similarity_score || 0).toFixed(3) %></div>
             <% if (item.ai) { %><div class="mt-1"><span class="badge <%= item.ai.relation === 'duplicate' ? 'text-bg-danger' : 'text-bg-success' %>"><%= item.ai.relation === 'duplicate' ? 'AI 判重' : item.ai.relation === 'unrelated' ? 'AI 判无关' : item.ai.relation === 'similar_but_distinct' ? 'AI 判不同' : 'AI 不确定' %></span></div><div class="small text-secondary mt-1">置信度 <%= Number(item.ai.confidence || 0).toFixed(3) %></div><div class="small text-secondary"><%= item.ai.reason || '-' %></div><% } %><% if (item.ai_status === 'failed') { %><div class="small text-danger mt-1">上次 AI 分析失败，不影响人工判断</div><% } %>
           </td>
-          <td>
-            <div class="d-flex flex-column align-items-start gap-1">
-              <button class="btn btn-sm btn-primary text-nowrap" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="openDefinitionMergeEditor(this)">合并并编辑</button>
-              <div class="d-flex flex-nowrap gap-1">
-                <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.id %>')">保留 A 并合并</button>
-                <button class="btn btn-sm btn-danger text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','duplicate','<%= item.candidate_id %>')">保留 B 并合并</button>
-              </div>
-              <div class="d-flex flex-nowrap gap-1">
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','similar_but_distinct')">相似但不归并</button>
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','unrelated')">判定无关</button>
-              </div>
-              <div class="d-flex flex-nowrap gap-1">
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="button" onclick="definitionReview('<%= item.id %>','<%= item.candidate_id %>','uncertain')">待进一步确认</button>
-                <button class="btn btn-sm btn-outline-primary text-nowrap" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="definitionAiReview(this)">可选 AI 分析</button>
-              </div>
+          <td class="definition-review-cell">
+            <div class="d-flex flex-column align-items-stretch gap-2">
+              <button class="btn btn-sm btn-primary" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="openDefinitionMergeEditor(this)">合并并编辑</button>
+              <select class="form-select form-select-sm" aria-label="选择人工复核结论" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onchange="definitionReviewFromSelect(this)">
+                <option value="" selected>选择人工结论</option>
+                <option value="merge-a">保留 A 并合并</option>
+                <option value="merge-b">保留 B 并合并</option>
+                <option value="similar_but_distinct">相似但不归并</option>
+                <option value="unrelated">判定无关</option>
+                <option value="uncertain">待进一步确认</option>
+              </select>
+              <button class="btn btn-sm btn-outline-primary" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="definitionAiReview(this)">可选 AI 分析</button>
             </div>
           </td>
         </tr>
@@ -637,6 +639,20 @@
       submit.disabled = false;
     }
   });
+  async function definitionReviewFromSelect(select) {
+    const action = select.value;
+    if (!action) return;
+    const leftId = select.dataset.left;
+    const rightId = select.dataset.right;
+    try {
+      if (action === 'merge-a') await definitionReview(leftId, rightId, 'duplicate', leftId);
+      else if (action === 'merge-b') await definitionReview(leftId, rightId, 'duplicate', rightId);
+      else if (action) await definitionReview(leftId, rightId, action);
+    } finally {
+      select.value = '';
+    }
+  }
+
   async function definitionReview(leftId, rightId, decision, canonicalId) {
     const labels = {
       duplicate: `确认这两条检查方案重复，并保留${canonicalId === leftId ? '方案 A' : '方案 B'}？`,
