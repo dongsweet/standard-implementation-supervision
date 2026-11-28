@@ -55,8 +55,18 @@ function standardItemIds(plan) {
   return new Set((plan.standard_items || []).map(item => String(item.id || '')).filter(Boolean));
 }
 
-function chapterIds(plan) {
-  return new Set((plan.standard_items || []).map(item => String(item.chapter_id || '')).filter(Boolean));
+function chaptersFor(plan) {
+  const chapters = new Map();
+  for (const item of plan.standard_items || []) {
+    const id = String(item.chapter_id || '');
+    if (!id || chapters.has(id)) continue;
+    chapters.set(id, {
+      id,
+      code: item.chapter_code || '',
+      name: item.chapter_name || '',
+    });
+  }
+  return chapters;
 }
 
 function candidateScore(left, right) {
@@ -125,22 +135,19 @@ function buildSemanticPairs(plans, { minimumScore = 0.35, limit = 80 } = {}) {
       const right = plans[rightIndex];
       const pairKey = [ left.id, right.id ].sort().join(':');
       if (seenPairs.has(pairKey)) continue;
-      const leftChapters = chapterIds(left);
-      const rightChapters = chapterIds(right);
-      const sharedChapters = [ ...leftChapters ].filter(id => rightChapters.has(id));
-      if (!sharedChapters.length) continue;
+      const chapters = new Map([ ...chaptersFor(left), ...chaptersFor(right) ]);
+      const chapterIds = [ ...chapters.keys() ];
       const scored = candidateScore(left, right);
       if (scored.score < minimumScore) continue;
       seenPairs.add(pairKey);
-      const sharedChapter = (left.standard_items || []).find(item => sharedChapters.includes(String(item.chapter_id))) || {};
       pairs.push({
-        fingerprintSeed: pairKey + ':' + sharedChapters.sort().join(','),
+        fingerprintSeed: pairKey,
         score: scored.score,
         recallReasons: scored.reasons,
         sharedStandardIds: scored.sharedStandardIds,
-        chapterId: sharedChapters[0],
-        chapterCode: sharedChapter.chapter_code || '',
-        chapterName: sharedChapter.chapter_name || '',
+        chapterId: chapterIds[0] || '',
+        chapterIds,
+        chapters: [ ...chapters.values() ],
         left: compactPlan(left),
         right: compactPlan(right),
       });

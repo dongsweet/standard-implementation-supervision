@@ -11,7 +11,8 @@ test('exposes semantic review controls and chapter-level pending prompts', () =>
   const joint = fs.readFileSync(path.join(viewRoot, 'joint-reviews/index.ejs'), 'utf8');
   const answers = fs.readFileSync(path.join(viewRoot, 'projects/answer-standard.ejs'), 'utf8');
   assert.match(joint, /semantic_duplicate: '检查项语义判同'/);
-  assert.match(joint, /运行模型语义判同/);
+  assert.match(joint, /运行全项目语义判同/);
+  assert.match(joint, /跨章节比较/);
   assert.match(joint, /canSubmitSemantic/);
   assert.match(joint, /EDR 与终端杀毒/);
   assert.match(joint, /same_check/);
@@ -24,6 +25,7 @@ test('exposes semantic review controls and chapter-level pending prompts', () =>
   assert.match(answers, /project\.project_id/);
   assert.match(answers, /chapter\.semantic_pending_count && chapter\.chapter_id/);
   assert.match(answers, /条语义判同待复核/);
-  assert.match(answers, /模型语义判同/);
+  assert.match(answers, /全项目语义判同/);
+  assert.match(answers, /扫描整个项目，不限制在当前章节/);
   assert.match(answers, /reviewType=semantic_duplicate/);
 });

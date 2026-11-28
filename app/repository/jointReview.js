@@ -239,10 +239,10 @@ class JointReviewRepository {
         const result = await client.query(`
           INSERT INTO supervision_joint_reviews
             (review_type, severity, fingerprint, context_hash, standard_item_id, project_id,
-             definition_id, object_id, chapter_id, title, summary, rule_reason, context,
+             definition_id, object_id, chapter_id, chapter_ids, title, summary, rule_reason, context,
              ai_status, ai_result, ai_model, prompt_version, ai_input_hash, ai_error, ai_reviewed_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                  $14, $15, $16, $17, $18, $19, $20)
+                  $14, $15, $16, $17, $18, $19, $20, $21)
           ON CONFLICT (fingerprint) DO UPDATE SET
             severity = EXCLUDED.severity,
             context_hash = EXCLUDED.context_hash,
@@ -251,6 +251,7 @@ class JointReviewRepository {
             definition_id = EXCLUDED.definition_id,
             object_id = EXCLUDED.object_id,
             chapter_id = EXCLUDED.chapter_id,
+            chapter_ids = EXCLUDED.chapter_ids,
             title = EXCLUDED.title,
             summary = EXCLUDED.summary,
             rule_reason = EXCLUDED.rule_reason,
@@ -266,7 +267,8 @@ class JointReviewRepository {
           RETURNING (xmax = 0) AS inserted`, [
           candidate.reviewType, candidate.severity, candidate.fingerprint, candidate.contextHash,
           candidate.standardItemId || null, candidate.projectId || null, candidate.definitionId || null,
-          candidate.objectId || null, candidate.chapterId || null, candidate.title, candidate.summary,
+          candidate.objectId || null, candidate.chapterId || null, candidate.chapterIds || [],
+          candidate.title, candidate.summary,
           candidate.ruleReason || null, JSON.stringify(candidate.context || {}),
           candidate.aiStatus || 'pending', candidate.aiResult ? JSON.stringify(candidate.aiResult) : null,
           candidate.aiModel || null, candidate.promptVersion || null, candidate.aiInputHash || null,
@@ -289,15 +291,16 @@ class JointReviewRepository {
   async listChapterReviewSummaries({ projectId, chapterIds = [] }) {
     if (!projectId || !chapterIds.length) return [];
     const result = await this.pool.query(`
-      SELECT r.chapter_id,
+      SELECT linked_chapter.chapter_id,
              count(*)::integer AS pending_count,
              count(*) FILTER (WHERE r.ai_result->>'semanticRelation' = 'same_check')::integer AS same_check_count,
              max(r.updated_at) AS latest_at
       FROM supervision_joint_reviews r
-      WHERE r.project_id = $1 AND r.chapter_id = ANY($2::uuid[])
+      CROSS JOIN LATERAL unnest(r.chapter_ids) AS linked_chapter(chapter_id)
+      WHERE r.project_id = $1 AND linked_chapter.chapter_id = ANY($2::uuid[])
         AND r.review_type = 'semantic_duplicate'
         AND r.human_decision IS NULL
-      GROUP BY r.chapter_id`, [ projectId, chapterIds ]);
+      GROUP BY linked_chapter.chapter_id`, [ projectId, chapterIds ]);
     return result.rows;
   }
 
@@ -316,12 +319,16 @@ class JointReviewRepository {
     }
     for (const [ field, value ] of [
       [ 'definition_id', definitionId ], [ 'object_id', objectId ], [ 'standard_item_id', standardItemId ],
-      [ 'project_id', projectId ], [ 'chapter_id', chapterId ],
+      [ 'project_id', projectId ],
     ]) {
       if (value) {
         values.push(value);
         conditions.push(`r.${field} = $${values.length}`);
       }
+    }
+    if (chapterId) {
+      values.push(chapterId);
+      conditions.push(`r.chapter_ids @> ARRAY[$${values.length}]::uuid[]`);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const result = await this.pool.query(`
@@ -357,12 +364,13 @@ class JointReviewRepository {
     return result.rows[0] || null;
   }
 
-  async isChapterResponsible({ projectId, chapterId, userId }) {
-    if (!projectId || !chapterId || !userId) return false;
+  async isChapterResponsible({ projectId, chapterId = null, chapterIds = [], userId }) {
+    const linkedChapterIds = chapterIds.length ? chapterIds : (chapterId ? [ chapterId ] : []);
+    if (!projectId || !linkedChapterIds.length || !userId) return false;
     const result = await this.pool.query(`
       SELECT 1 FROM chapter_responsibilities
-      WHERE project_id = $1 AND chapter_id = $2 AND user_id = $3
-      LIMIT 1`, [ projectId, chapterId, userId ]);
+      WHERE project_id = $1 AND chapter_id = ANY($2::uuid[]) AND user_id = $3
+      LIMIT 1`, [ projectId, linkedChapterIds, userId ]);
     return result.rowCount > 0;
   }
 
@@ -417,6 +425,7 @@ class JointReviewRepository {
           reviewType: review.review_type,
           projectId: review.project_id,
           chapterId: review.chapter_id,
+          chapterIds: review.chapter_ids || [],
           definitionId: review.definition_id,
           standardItemId: review.standard_item_id,
           objectId: review.object_id,

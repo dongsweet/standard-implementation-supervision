@@ -38,8 +38,8 @@ test('allows chapter owners to decide only reviews from their chapters', { skip:
             projectId,
             chapterId: 'chapter-1',
             reviews: [
-              { id: 'review-own', chapter_id: 'chapter-1', review_type: 'semantic_duplicate', title: '自己的复核' },
-              { id: 'review-other', chapter_id: 'chapter-2', review_type: 'semantic_duplicate', title: '其他章节复核' },
+              { id: 'review-own', chapter_id: 'chapter-1', chapter_ids: [ 'chapter-1', 'chapter-2' ], review_type: 'semantic_duplicate', title: '自己的复核' },
+              { id: 'review-other', chapter_id: 'chapter-2', chapter_ids: [ 'chapter-2', 'chapter-3' ], review_type: 'semantic_duplicate', title: '其他章节复核' },
             ],
             summary: { total: 2 },
           };

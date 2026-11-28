@@ -31,7 +31,10 @@ class JointReviewController extends Controller {
       : []);
     data.reviews = data.reviews.map(review => ({
       ...review,
-      can_review: globalReviewer || projectReviewer || reviewableChapters.has(String(review.chapter_id || '')),
+      can_review: globalReviewer || projectReviewer
+        || (review.chapter_ids || [ review.chapter_id ])
+          .filter(Boolean)
+          .some(chapterId => reviewableChapters.has(String(chapterId))),
     }));
     await this.ctx.render('joint-reviews/index', {
       title: '联合复核',
@@ -63,7 +66,6 @@ class JointReviewController extends Controller {
     }
     const result = await this.ctx.service.jointReview.scanSemantic(payload, this.ctx.session.userId);
     const query = new URLSearchParams({ projectId });
-    if (payload.chapterId) query.set('chapterId', String(payload.chapterId));
     query.set('reviewType', 'semantic_duplicate');
     query.set('humanDecision', 'pending');
     query.set('notice', `语义判同完成：生成 ${result.candidateCount} 组候选，模型失败 ${result.failed || 0} 组`);

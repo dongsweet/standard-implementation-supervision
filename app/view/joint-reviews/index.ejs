@@ -56,7 +56,7 @@
       </div>
       <div class="col-12 col-lg-3 text-lg-end"><button class="btn btn-primary" type="submit">重新生成规则候选</button></div>
     </form>
-    <% if (projectId && (typeof canSubmitSemantic === 'undefined' ? reviewWriteAllowed : canSubmitSemantic)) { %><form method="post" action="/joint-reviews/semantic-scan" class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="projectId" value="<%= projectId %>"><input type="hidden" name="chapterId" value="<%= chapterId || '' %>"><div class="small text-secondary">模型会识别字面不同但检查目的和动作相同的检查项，例如 EDR 与终端杀毒；结果只作为人工复核候选。</div><button class="btn btn-outline-primary ms-auto" type="submit">运行模型语义判同</button></form><% } %>
+    <% if (projectId && (typeof canSubmitSemantic === 'undefined' ? reviewWriteAllowed : canSubmitSemantic)) { %><form method="post" action="/joint-reviews/semantic-scan" class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top"><input type="hidden" name="_csrf" value="<%= csrf %>"><input type="hidden" name="projectId" value="<%= projectId %>"><div class="small text-secondary">模型会在整个项目内识别字面不同但检查目的和动作相同的检查项，例如 EDR 与终端杀毒；跨章节比较，结果只作为人工复核候选。</div><button class="btn btn-outline-primary ms-auto" type="submit">运行全项目语义判同</button></form><% } %>
   </div>
 </div>
 
@@ -108,7 +108,7 @@
           </td>
           <td class="small">
             <% if (review.review_type === 'semantic_duplicate' && review.context?.left && review.context?.right) { %>
-              <div>章节：<%= review.chapter_code || review.context.chapterCode || '-' %> · <%= review.chapter_name || review.context.chapterName || '-' %></div>
+              <div>关联章节：<% (review.context?.chapters || []).forEach((chapter, index) => { %><%= index ? '、' : '' %><%= chapter.code %> · <%= chapter.name %><% }) %><% if (!(review.context?.chapters || []).length) { %><%= review.chapter_code || '-' %> · <%= review.chapter_name || '-' %><% } %></div>
               <div class="mt-1"><strong>A · <%= String(review.context.left.planNumber || '').padStart(3, '0') %> · <%= review.context.left.objectName %></strong></div>
               <div><strong>B · <%= String(review.context.right.planNumber || '').padStart(3, '0') %> · <%= review.context.right.objectName %></strong></div>
             <% } else { %>

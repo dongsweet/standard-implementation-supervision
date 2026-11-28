@@ -64,19 +64,25 @@ test('recognizes EDR and antivirus as retrieval terms, not automatic identity', 
   assert.equal(pairs[0].right.id, 'plan-b');
 });
 
-test('does not generate semantic candidates across different chapters', () => {
+test('generates semantic candidates across chapters in the same project', () => {
   const pairs = buildSemanticPairs([
     plan(),
     plan({
       id: 'plan-c',
+      object_name: '杀毒软件',
+      master_object_name: '杀毒软件',
+      description: '检查终端杀毒软件和特征库更新',
       standard_items: [{
         id: 'standard-c',
         chapter_id: 'chapter-2',
         chapter_code: '9',
         chapter_name: '访问控制',
-        content: 'EDR 终端检测与响应',
+        title: '恶意代码防护',
+        content: 'EDR 终端检测与响应软件和病毒库应保持运行更新',
       }],
     }),
   ], { minimumScore: 0.1 });
-  assert.deepEqual(pairs, []);
+  assert.equal(pairs.length, 1);
+  assert.deepEqual(pairs[0].chapterIds.sort(), [ 'chapter-1', 'chapter-2' ]);
+  assert.deepEqual(pairs[0].chapters.map(item => item.code).sort(), [ '8', '9' ]);
 });

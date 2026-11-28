@@ -171,9 +171,9 @@ class JointReviewService extends Service {
   async scanSemantic(query = {}, actorId = null) {
     const scope = this.normalizeScope(query);
     if (!scope.projectId) this.ctx.throw(400, '语义判同必须限定到项目');
-    const plans = await this.repository.listSemanticContexts(scope);
+    const plans = await this.repository.listSemanticContexts({ projectId: scope.projectId });
     const pairs = buildSemanticPairs(plans, { minimumScore: 0.35, limit: 80 });
-    if (!pairs.length) return { projectId: scope.projectId, chapterId: scope.chapterId || '', candidateCount: 0, inserted: 0, updated: 0, failed: 0 };
+    if (!pairs.length) return { projectId: scope.projectId, chapterId: '', candidateCount: 0, inserted: 0, updated: 0, failed: 0 };
     const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
     const items = pairs.map((pair, index) => ({ id: `semantic-${index}-${pair.fingerprintSeed}`, ...pair }));
     const resultsById = new Map();
@@ -228,15 +228,17 @@ class JointReviewService extends Service {
         recallReasons: item.recallReasons,
       };
       const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
-        reviewType, scope.projectId, item.chapterId,
+        reviewType, scope.projectId,
         ...[ item.left.id, item.right.id ].sort(),
       ])).digest('hex');
       const context = {
         issueType: reviewType,
         projectId: scope.projectId,
         chapterId: item.chapterId,
-        chapterCode: item.chapterCode,
-        chapterName: item.chapterName,
+        chapterIds: item.chapterIds,
+        chapters: item.chapters,
+        chapterCode: item.chapters?.[0]?.code || '',
+        chapterName: item.chapters?.[0]?.name || '',
         recallReasons: item.recallReasons,
         left: item.left,
         right: item.right,
@@ -248,7 +250,8 @@ class JointReviewService extends Service {
         fingerprint,
         contextHash: crypto.createHash('sha256').update(JSON.stringify(context)).digest('hex'),
         projectId: scope.projectId,
-        chapterId: item.chapterId,
+        chapterId: item.chapterId || null,
+        chapterIds: item.chapterIds || [],
         definitionId: item.left.id,
         objectId: item.left.objectId || null,
         standardItemId: item.sharedStandardIds[0] || item.left.standardItems[0]?.id || null,
@@ -272,7 +275,7 @@ class JointReviewService extends Service {
       scope.projectId,
       JSON.stringify({
         projectId: scope.projectId,
-        chapterId: scope.chapterId || null,
+        scope: 'project',
         candidateCount: candidates.length,
         inserted: saved.inserted,
         updated: saved.updated,
@@ -283,7 +286,7 @@ class JointReviewService extends Service {
     ]);
     return {
       projectId: scope.projectId,
-      chapterId: scope.chapterId || '',
+      chapterId: '',
       candidateCount: candidates.length,
       ...saved,
     };
@@ -371,6 +374,7 @@ class JointReviewService extends Service {
     return this.repository.isChapterResponsible({
       projectId: review.project_id,
       chapterId: review.chapter_id,
+      chapterIds: review.chapter_ids || [],
       userId,
     });
   }
@@ -381,6 +385,7 @@ class JointReviewService extends Service {
     return this.repository.isChapterResponsible({
       projectId: review.project_id,
       chapterId: review.chapter_id,
+      chapterIds: review.chapter_ids || [],
       userId,
     });
   }
