@@ -244,7 +244,7 @@ class ProjectRepository {
   async getProjectStandardAnswers({ projectId, standardVersionId, search = '', chapterCode = '', status = '', sortBy = 'standardNumber', sortDirection = 'asc', chapterPage = 1, chapterPageSize = '1' }) {
     const versionResult = await this.pool.query(`
       SELECT sv.id AS standard_version_id, sv.version, s.code AS standard_code,
-             s.name AS standard_name, s.standard_type, p.name AS project_name
+             s.name AS standard_name, s.standard_type, p.id AS project_id, p.name AS project_name
       FROM project_standard_versions psv
       JOIN standard_versions sv ON sv.id = psv.standard_version_id
       JOIN standards s ON s.id = sv.standard_id
@@ -291,7 +291,7 @@ class ProjectRepository {
     }
     const where = predicates.join(' AND ');
     const chapterResult = await this.pool.query(`
-      SELECT psi.chapter_code_snapshot AS code,
+      SELECT psi.chapter_code_snapshot AS code, sc.id AS chapter_id,
              COALESCE(sc.name, psi.chapter_code_snapshot) AS name,
              COALESCE(sc.sort_order, 0) AS sort_order,
              count(*)::integer AS item_count
@@ -301,7 +301,7 @@ class ProjectRepository {
       LEFT JOIN project_standard_answers psa ON psa.project_id = psi.project_id
         AND psa.standard_item_id = psi.standard_item_id AND psa.cloud_center_id IS NULL
       WHERE ${where}
-      GROUP BY psi.chapter_code_snapshot, sc.name, sc.sort_order
+      GROUP BY psi.chapter_code_snapshot, sc.id, sc.name, sc.sort_order
       ORDER BY COALESCE(sc.sort_order, 0), psi.chapter_code_snapshot`, params);
     const filteredChapters = chapterResult.rows;
     const totalItems = filteredChapters.reduce((sum, chapter) => sum + chapter.item_count, 0);
@@ -339,9 +339,24 @@ class ProjectRepository {
       WHERE ${where} AND psi.chapter_code_snapshot = ANY($${dataParams.length}::text[])
       ORDER BY COALESCE(sc.sort_order, 0), psi.chapter_code_snapshot, ${orderBy} ${direction}, psi.standard_number_snapshot ASC`, dataParams);
     }
+    const chapterIds = chapters.map(chapter => chapter.chapter_id).filter(Boolean);
+    const semanticSummaryRows = chapterIds.length ? (await this.pool.query(`
+      SELECT chapter_id, count(*)::integer AS pending_count,
+             count(*) FILTER (WHERE ai_result->>'semanticRelation' = 'same_check')::integer AS same_check_count
+      FROM supervision_joint_reviews
+      WHERE project_id = $1 AND chapter_id = ANY($2::uuid[])
+        AND review_type = 'semantic_duplicate'
+        AND human_decision IS NULL
+      GROUP BY chapter_id`, [ projectId, chapterIds ])).rows : [];
+    const semanticByChapter = new Map(semanticSummaryRows.map(row => [ String(row.chapter_id), row ]));
+    const chaptersWithReviews = chapters.map(chapter => ({
+      ...chapter,
+      semantic_pending_count: Number(semanticByChapter.get(String(chapter.chapter_id))?.pending_count || 0),
+      semantic_same_check_count: Number(semanticByChapter.get(String(chapter.chapter_id))?.same_check_count || 0),
+    }));
     return {
       project: versionResult.rows[0],
-      chapters,
+      chapters: chaptersWithReviews,
       chapterOptions: chapterOptionsResult.rows,
       items: items.rows,
       pagination: {

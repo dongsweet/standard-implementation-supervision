@@ -10,6 +10,7 @@ module.exports = app => {
   router.get('/health', controller.home.health);
   router.get('/joint-reviews', controller.jointReview.index);
   router.post('/joint-reviews/scan', controller.jointReview.scan);
+  router.post('/joint-reviews/semantic-scan', controller.jointReview.semanticScan);
   router.post('/api/joint-reviews/:reviewId/ai', controller.jointReview.aiReview);
   router.post('/api/joint-reviews/:reviewId/human', controller.jointReview.saveHumanDecision);
   router.get('/dedupe', controller.dedupe.index);

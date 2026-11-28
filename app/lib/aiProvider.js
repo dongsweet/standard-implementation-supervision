@@ -198,6 +198,44 @@ class AiProvider {
     return { results, providerStatus: response.providerStatus, durationMs: response.durationMs };
   }
 
+  async classifySemanticInspectionPairs(items) {
+    if (!this.enabled) {
+      return {
+        results: items.map(item => ({
+          id: item.id,
+          semanticRelation: 'uncertain',
+          confidence: 0,
+          samePoints: [],
+          differences: [],
+          reason: 'AI 服务未配置',
+          recommendedKeepId: null,
+        })),
+        providerStatus: null,
+        durationMs: 0,
+      };
+    }
+    if (!Array.isArray(items) || !items.length) return { results: [], providerStatus: null, durationMs: 0 };
+    const response = await this.request([
+      {
+        role: 'system',
+        content: [
+          '你是监督检查项的语义判同助手，只提供复核建议，不修改任何业务数据。',
+          '判断两条检查方案是否实际指向同一个检查要求。不能只靠字面相似，也不能因为名称同义就自动判为相同。',
+          '必须综合检查对象、检查目的、检查动作、检查层面、检查方法、步骤、频率以及关联标准项。',
+          '例如“EDR”“终端检测与响应”“杀毒软件”“防病毒软件”可能指向同一类终端防护对象，但只有控制目的和检查动作实质一致时才可判为 same_check。',
+          '如果对象相近但检查目的、方向、范围或动作明显不同，应判 related_but_distinct；没有实质关系时判 unrelated。',
+          'semanticRelation 只能是 same_check、related_but_distinct、unrelated、uncertain。',
+          'recommendedKeepId 必须是该对 left.id 或 right.id；不确定时为 null。',
+          '必须为每个输入 id 返回一条结果，不得遗漏或新增 id。',
+          '只返回 JSON：{"results":[{"id":"输入id","semanticRelation":"same_check|related_but_distinct|unrelated|uncertain","confidence":0到1,"samePoints":["..."],"differences":["..."],"reason":"不超过160字","recommendedKeepId":"left.id或right.id或null"}]}。',
+        ].join('\n'),
+      },
+      { role: 'user', content: JSON.stringify({ items }) },
+    ]);
+    const results = parseSemanticInspectionResults(response.content, items);
+    return { results, providerStatus: response.providerStatus, durationMs: response.durationMs };
+  }
+
   async classifyCenterObjectPairs(items) {
     if (!this.enabled) {
       return {
@@ -406,6 +444,39 @@ function parseDefinitionAiResults(content, items) {
   return results;
 }
 
+function parseSemanticInspectionResults(content, items) {
+  if (!content) throw new Error('AI 返回内容为空');
+  const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
+  const rawResults = Array.isArray(json) ? json : json.results;
+  if (!Array.isArray(rawResults)) throw new Error('AI 批量结果缺少 results 数组');
+  const itemById = new Map(items.map(item => [ String(item.id), item ]));
+  const relations = new Set([ 'same_check', 'related_but_distinct', 'unrelated', 'uncertain' ]);
+  const seen = new Set();
+  const results = [];
+  for (const raw of rawResults) {
+    const id = String(raw?.id || '');
+    const item = itemById.get(id);
+    if (!item || seen.has(id) || !relations.has(raw.semanticRelation)) continue;
+    const confidence = Number(raw.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) continue;
+    const recommendedKeepId = raw.recommendedKeepId ? String(raw.recommendedKeepId) : null;
+    results.push({
+      id,
+      semanticRelation: raw.semanticRelation,
+      confidence,
+      samePoints: Array.isArray(raw.samePoints) ? raw.samePoints.map(String).slice(0, 20) : [],
+      differences: Array.isArray(raw.differences) ? raw.differences.map(String).slice(0, 20) : [],
+      reason: String(raw.reason || '').slice(0, 800),
+      recommendedKeepId: [ item.left?.id, item.right?.id ].includes(recommendedKeepId)
+        ? recommendedKeepId
+        : null,
+    });
+    seen.add(id);
+  }
+  if (!results.length) throw new Error('AI 批量结果没有有效检查项语义判断');
+  return results;
+}
+
 function parseObjectAiResults(content, items) {
   if (!content) throw new Error('AI 返回内容为空');
   const json = JSON.parse(String(content).replace(/^```json\s*/i, '').replace(/\s*```$/, ''));
@@ -484,5 +555,6 @@ module.exports = {
   parseJointReviewResult,
   parseObjectAiResult,
   parseObjectAiResults,
+  parseSemanticInspectionResults,
   parseStandardReviewSuggestions,
 };

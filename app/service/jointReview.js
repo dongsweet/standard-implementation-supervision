@@ -4,10 +4,17 @@ const Service = require('egg').Service;
 const crypto = require('node:crypto');
 const { friendlyAiError } = require('../lib/aiProvider');
 const { coverageIssue, definitionIssues, issueContextHash, objectCategoryIssue } = require('../lib/jointReviewRules');
+const { buildSemanticPairs } = require('../lib/semanticDuplicates');
 const Repository = require('../repository/jointReview');
 
-const REVIEW_TYPES = new Set([ 'object_content', 'plan_standard', 'frequency_answer', 'coverage', 'category_consistency' ]);
-const HUMAN_DECISIONS = new Set([ 'no_issue', 'mismatch_confirmed', 'corrected', 'insufficient_information' ]);
+const REVIEW_TYPES = new Set([
+  'object_content', 'plan_standard', 'frequency_answer', 'coverage', 'category_consistency',
+  'semantic_duplicate',
+]);
+const HUMAN_DECISIONS = new Set([
+  'no_issue', 'mismatch_confirmed', 'corrected', 'insufficient_information',
+  'confirmed_same_check', 'confirmed_distinct_check',
+]);
 
 function compactDefinition(definition) {
   return {
@@ -46,7 +53,7 @@ class JointReviewService extends Service {
   normalizeScope(query = {}) {
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const scope = {};
-    for (const field of [ 'definitionId', 'objectId', 'standardItemId', 'projectId' ]) {
+    for (const field of [ 'definitionId', 'objectId', 'standardItemId', 'projectId', 'chapterId' ]) {
       const value = String(query[field] || '').trim();
       if (value && uuid.test(value)) scope[field] = value;
     }
@@ -161,6 +168,111 @@ class JointReviewService extends Service {
     return { scope, candidateCount: candidates.length, ...saved };
   }
 
+  async scanSemantic(query = {}) {
+    const scope = this.normalizeScope(query);
+    if (!scope.projectId) this.ctx.throw(400, '语义判同必须限定到项目');
+    const plans = await this.repository.listSemanticContexts(scope);
+    const pairs = buildSemanticPairs(plans, { minimumScore: 0.35, limit: 80 });
+    if (!pairs.length) return { projectId: scope.projectId, chapterId: scope.chapterId || '', candidateCount: 0, inserted: 0, updated: 0, failed: 0 };
+    const aiConfig = await this.ctx.service.systemSetting.getAiConfig({ includeKey: false });
+    const items = pairs.map((pair, index) => ({ id: `semantic-${index}-${pair.fingerprintSeed}`, ...pair }));
+    const resultsById = new Map();
+    for (let offset = 0; offset < items.length; offset += 8) {
+      const batch = items.slice(offset, offset + 8);
+      try {
+        const response = await this.ctx.service.aiProvider.classifySemanticInspectionPairs(batch);
+        for (const result of response.results) resultsById.set(result.id, result);
+      } catch (error) {
+        for (const item of batch) {
+          resultsById.set(item.id, {
+            id: item.id,
+            semanticRelation: 'uncertain',
+            confidence: 0,
+            samePoints: [],
+            differences: [],
+            reason: friendlyAiError(error, error.baseUrl),
+            recommendedKeepId: null,
+            failed: true,
+          });
+        }
+      }
+    }
+    const candidates = items.map(item => {
+      const result = resultsById.get(item.id) || {
+        semanticRelation: 'uncertain',
+        confidence: 0,
+        samePoints: [],
+        differences: [],
+        reason: '模型未返回该候选的判断',
+        recommendedKeepId: null,
+        failed: true,
+      };
+      if (result.recommendedKeepId) {
+        result.recommendedKeepSide = result.recommendedKeepId === item.left.id ? 'A' : 'B';
+      }
+      const sameCheck = result.semanticRelation === 'same_check';
+      const reviewType = 'semantic_duplicate';
+      const relationLabel = {
+        same_check: '可能为同一检查项',
+        related_but_distinct: '相关但检查要求不同',
+        unrelated: '语义上无关',
+        uncertain: '需要人工进一步确认',
+      }[result.semanticRelation] || '需要人工确认';
+      const title = `语义判同：${item.left.objectName} ↔ ${item.right.objectName}`;
+      const summary = `${relationLabel}。${result.reason || '请人工核对。'}`;
+      const aiResult = {
+        ...result,
+        relationLabel,
+        left: item.left,
+        right: item.right,
+        recallReasons: item.recallReasons,
+      };
+      const fingerprint = crypto.createHash('sha256').update(JSON.stringify([
+        reviewType, scope.projectId, item.chapterId,
+        ...[ item.left.id, item.right.id ].sort(),
+      ])).digest('hex');
+      const context = {
+        issueType: reviewType,
+        projectId: scope.projectId,
+        chapterId: item.chapterId,
+        chapterCode: item.chapterCode,
+        chapterName: item.chapterName,
+        recallReasons: item.recallReasons,
+        left: item.left,
+        right: item.right,
+        ai: result,
+      };
+      return {
+        reviewType,
+        severity: sameCheck && Number(result.confidence) >= 0.75 ? 'warning' : 'info',
+        fingerprint,
+        contextHash: crypto.createHash('sha256').update(JSON.stringify(context)).digest('hex'),
+        projectId: scope.projectId,
+        chapterId: item.chapterId,
+        definitionId: item.left.id,
+        objectId: item.left.objectId || null,
+        standardItemId: item.sharedStandardIds[0] || item.left.standardItems[0]?.id || null,
+        title,
+        summary,
+        ruleReason: item.recallReasons.join('；'),
+        context,
+        aiStatus: result.failed ? 'failed' : 'completed',
+        aiResult,
+        aiModel: aiConfig.model || null,
+        promptVersion: 'semantic-inspection-v1',
+        aiInputHash: crypto.createHash('sha256').update(JSON.stringify(item)).digest('hex'),
+        aiError: result.failed ? result.reason : null,
+      };
+    });
+    const saved = await this.repository.upsertSemanticCandidates(candidates);
+    return {
+      projectId: scope.projectId,
+      chapterId: scope.chapterId || '',
+      candidateCount: candidates.length,
+      ...saved,
+    };
+  }
+
   async list(query = {}) {
     const scope = this.normalizeScope(query);
     const reviewType = REVIEW_TYPES.has(String(query.reviewType || '')) ? String(query.reviewType) : '';
@@ -173,6 +285,7 @@ class JointReviewService extends Service {
       objectId: scope.objectId || '',
       standardItemId: scope.standardItemId || '',
       projectId: scope.projectId || '',
+      chapterId: scope.chapterId || '',
       reviewType,
       humanDecision,
       reviews,
@@ -221,6 +334,35 @@ class JointReviewService extends Service {
     const notes = String(payload.notes || '').trim().slice(0, 2000);
     if (decision !== 'no_issue' && !notes) this.ctx.throw(400, '确认问题或标记已修正时请填写复核备注');
     return this.repository.saveHumanDecision(id, { decision, notes, reviewerId });
+  }
+
+  async reviewAccess(reviewId) {
+    return this.repository.findById(reviewId);
+  }
+
+  async chapterReviewSummaries({ projectId, chapterIds }) {
+    const rows = await this.repository.listChapterReviewSummaries({ projectId, chapterIds });
+    return new Map(rows.map(row => [ String(row.chapter_id), row ]));
+  }
+
+  async isChapterResponsible(reviewId, userId) {
+    const review = await this.repository.findById(reviewId);
+    if (!review) return false;
+    return this.repository.isChapterResponsible({
+      projectId: review.project_id,
+      chapterId: review.chapter_id,
+      userId,
+    });
+  }
+
+  async canSaveHumanDecision(reviewId, userId) {
+    const review = await this.repository.findById(reviewId);
+    if (!review) return false;
+    return this.repository.isChapterResponsible({
+      projectId: review.project_id,
+      chapterId: review.chapter_id,
+      userId,
+    });
   }
 }
 
