@@ -61,7 +61,7 @@ class JointReviewController extends Controller {
     if (!this.globalWriteAllowed() && !canWriteProject(this.ctx.state.roles || [], projectId)) {
       this.ctx.throw(403, '无权发起项目语义判同');
     }
-    const result = await this.ctx.service.jointReview.scanSemantic(payload);
+    const result = await this.ctx.service.jointReview.scanSemantic(payload, this.ctx.session.userId);
     const query = new URLSearchParams({ projectId });
     if (payload.chapterId) query.set('chapterId', String(payload.chapterId));
     query.set('reviewType', 'semantic_duplicate');

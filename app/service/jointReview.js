@@ -168,7 +168,7 @@ class JointReviewService extends Service {
     return { scope, candidateCount: candidates.length, ...saved };
   }
 
-  async scanSemantic(query = {}) {
+  async scanSemantic(query = {}, actorId = null) {
     const scope = this.normalizeScope(query);
     if (!scope.projectId) this.ctx.throw(400, '语义判同必须限定到项目');
     const plans = await this.repository.listSemanticContexts(scope);
@@ -265,6 +265,22 @@ class JointReviewService extends Service {
       };
     });
     const saved = await this.repository.upsertSemanticCandidates(candidates);
+    await this.ctx.app.db.query(`
+      INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+      VALUES ($1, 'scan_semantic_joint_review', 'project', $2, $3)`, [
+      actorId || null,
+      scope.projectId,
+      JSON.stringify({
+        projectId: scope.projectId,
+        chapterId: scope.chapterId || null,
+        candidateCount: candidates.length,
+        inserted: saved.inserted,
+        updated: saved.updated,
+        failed: saved.failed,
+        model: aiConfig.model || null,
+        promptVersion: 'semantic-inspection-v1',
+      }),
+    ]);
     return {
       projectId: scope.projectId,
       chapterId: scope.chapterId || '',
