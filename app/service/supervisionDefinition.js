@@ -688,6 +688,7 @@ class SupervisionDefinitionService extends Service {
         priority: fields.priority,
         referenceResult: fields.reference_result,
         referenceMaterials: fields.reference_materials,
+        notes: String(payload.notes || '').trim().slice(0, 2000),
         normalizedHash: normalizeDefinition(fields).normalizedHash,
       },
       standardItemIds,

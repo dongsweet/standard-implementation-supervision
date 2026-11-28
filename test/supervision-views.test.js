@@ -33,6 +33,11 @@ test('keeps the plan list project-neutral, compact, and filterable', () => {
   const executionView = fs.readFileSync(path.join(viewRoot, 'supervision-executions/index.ejs'), 'utf8');
   assert.match(planView, /检查方案是系统级可复用定义/);
   assert.match(planView, /name="search"/);
+  assert.match(planView, /id="createNotes"/);
+  assert.match(planView, /id="editNotes"/);
+  assert.match(planView, /\['方案备注', definition\.notes \|\| '未填写'\]/);
+  assert.match(planView, /\['变更记录', \(definition\.change_history \|\| \[\]\)\.map/);
+  assert.match(planView, /修订和归并历史由系统自动追加/);
   assert.match(planView, /id="definitionObjectFilter"/);
   assert.match(planView, /name="objectId"/);
   assert.match(planView, /createPlanObjectFilter/);

@@ -309,7 +309,7 @@ class DedupeService extends Service {
         }
         const mergedId = canonicalId === leftId ? rightId : leftId;
         const locked = await client.query(`
-          SELECT id, frequency, steps, access_mode, status, scope, recognized_object,
+          SELECT id, plan_number, frequency, steps, access_mode, status, scope, recognized_object,
                  priority, reference_result, reference_materials
           FROM supervision_definitions WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`, [ [ leftId, rightId ] ]);
         if (locked.rows.length !== 2 || locked.rows.some(item => item.status !== 'active')) this.ctx.throw(409, '候选定义已发生变化，请刷新后再复核');
@@ -380,6 +380,25 @@ class DedupeService extends Service {
         }
         await client.query('DELETE FROM supervision_definition_standard_items WHERE definition_id = $1', [ mergedId ]);
         await client.query('DELETE FROM supervision_definition_centers WHERE definition_id = $1', [ mergedId ]);
+        const mergedNumber = String(loser.plan_number || '').padStart(3, '0');
+        const winnerNumber = String(winner.plan_number || '').padStart(3, '0');
+        await client.query(`
+          UPDATE supervision_definitions
+          SET change_history = change_history || jsonb_build_array(jsonb_build_object(
+            'at', now(), 'action', 'merge',
+            'summary', $2::text
+          ))
+          WHERE id = $1`, [
+          canonicalId,
+          `方案归并：将方案 ${mergedNumber} 并入本方案${notes ? `；复核备注：${notes}` : ''}`,
+        ]);
+        await client.query(`
+          UPDATE supervision_definitions
+          SET change_history = change_history || jsonb_build_array(jsonb_build_object(
+            'at', now(), 'action', 'merged',
+            'summary', $2::text
+          ))
+          WHERE id = $1`, [ mergedId, `方案归并：本方案已并入方案 ${winnerNumber}` ]);
         await client.query(`
           INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
           VALUES ($1, 'merge', 'supervision_definition', $2, $3)`, [

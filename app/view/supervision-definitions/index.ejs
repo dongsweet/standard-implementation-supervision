@@ -60,7 +60,7 @@
           <td><% (definition.centers || []).forEach(centerName => { %><span class="badge text-bg-light border me-1 mb-1"><%= centerName %></span><% }) %><% if (!(definition.centers || []).length) { %><span class="text-secondary">未指定</span><% } %></td>
           <td><strong><%= definition.object_name %></strong></td>
           <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
-          <td><div title="<%= definition.description %>" style="display:-webkit-box; max-width:32rem; overflow:hidden; white-space:normal; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:4; line-clamp:4; line-height:1.55"><%= definition.description %></div></td>
+          <td><div title="<%= definition.description %>" style="display:-webkit-box; max-width:32rem; overflow:hidden; white-space:normal; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:4; line-clamp:4; line-height:1.55"><%= definition.description %></div><% if (definition.notes) { %><div class="small text-secondary mt-1"><span class="badge text-bg-light border me-1">备注</span><%= definition.notes %></div><% } %></td>
           <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
           <td><span class="badge text-bg-light border"><%= listedStandardItems.length %> 项</span><div class="definition-standard-item-list mt-1"><% listedStandardItems.forEach(item => { %><span class="badge text-bg-light border definition-standard-item-badge" tabindex="0" data-standard-item-detail data-standard-number="<%= standardItemLabel(item) %>" data-original-number="<%= standardItemOriginalNumber(item) %>" data-standard-content="<%= standardItemContent(item) %>"><%= standardItemLabel(item) %></span><% }) %><% if (!listedStandardItems.length) { %><span class="small text-secondary">未关联</span><% } %></div></td>
           <td><span class="badge <%= definition.priority === '重点项' ? 'text-bg-warning' : 'text-bg-light border' %>"><%= definition.priority || '未指定重点级别' %></span><div class="small text-secondary mt-1"><%= definition.recognized_object === true ? '公认对象' : definition.recognized_object === false ? '非公认对象' : '公认对象未指定' %></div><span class="badge mt-1 <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
@@ -118,6 +118,7 @@
             <div class="col-md-3"><label class="form-label" for="createAccessMode">远程/现场查看</label><select class="form-select" id="createAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
             <div class="col-12"><label class="form-label" for="createDescription">检查项描述</label><textarea class="form-control" id="createDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
             <div class="col-12"><label class="form-label" for="createSteps">检查步骤</label><textarea class="form-control" id="createSteps" name="steps" rows="4"></textarea></div>
+            <div class="col-12"><label class="form-label" for="createNotes">方案备注</label><textarea class="form-control" id="createNotes" name="notes" rows="3" maxlength="2000" placeholder="填写业务背景、使用注意事项或人工修订说明"></textarea><div class="form-text">修订和归并历史由系统自动追加，不会覆盖此备注。</div></div>
             <div class="col-12"><details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）</summary><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label" for="createReferenceResult">检查结果参考描述</label><textarea class="form-control" id="createReferenceResult" name="referenceResult" rows="2"></textarea></div><div class="col-md-6"><label class="form-label" for="createReferenceMaterials">参考材料</label><textarea class="form-control" id="createReferenceMaterials" name="referenceMaterials" rows="2"></textarea></div></div></details></div>
           </div>
         </section>
@@ -165,6 +166,7 @@
             <div class="col-md-3"><label class="form-label" for="editAccessMode">远程/现场查看</label><select class="form-select" id="editAccessMode" name="accessMode"><option value="">未指定</option><option value="远程">远程</option><option value="现场">现场</option><option value="远程+现场">远程+现场</option></select></div>
             <div class="col-12"><label class="form-label" for="editDescription">检查项描述</label><textarea class="form-control" id="editDescription" name="description" rows="4" required maxlength="5000"></textarea></div>
             <div class="col-12"><label class="form-label" for="editSteps">检查步骤</label><textarea class="form-control" id="editSteps" name="steps" rows="4"></textarea></div>
+            <div class="col-12"><label class="form-label" for="editNotes">方案备注</label><textarea class="form-control" id="editNotes" name="notes" rows="3" maxlength="2000"></textarea><div class="form-text">修订和归并历史由系统自动追加，不会覆盖此备注。</div></div>
             <div class="col-12"><details class="border-top pt-3"><summary class="text-secondary">其他参考信息（可选）</summary><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label" for="editReferenceResult">检查结果参考描述</label><textarea class="form-control" id="editReferenceResult" name="referenceResult" rows="2"></textarea></div><div class="col-md-6"><label class="form-label" for="editReferenceMaterials">参考材料</label><textarea class="form-control" id="editReferenceMaterials" name="referenceMaterials" rows="2"></textarea></div></div></details></div>
           </div>
         </section>
@@ -725,6 +727,11 @@
       ['参考判定', definition.reference_result || '未填写'],
       ['参考材料', definition.reference_materials || '未填写'],
       ['关联标准项', (definition.standard_items || []).map(item => item.standardNumber || item.code).filter(Boolean).join('、') || '未关联'],
+      ['方案备注', definition.notes || '未填写'],
+      ['变更记录', (definition.change_history || []).map(item => {
+        const at = item.at ? new Date(item.at).toLocaleString('zh-CN') : '';
+        return [ at, item.summary ].filter(Boolean).join(' · ');
+      }).join('\n') || '暂无变更记录'],
     ];
     body.replaceChildren(...rows.map(([label, value]) => {
       const row = document.createElement('div');
@@ -734,6 +741,7 @@
       labelElement.textContent = label;
       const valueElement = document.createElement('div');
       valueElement.className = 'col-sm-9 text-break';
+      if (label === '变更记录') valueElement.style.whiteSpace = 'pre-wrap';
       valueElement.textContent = value || '未填写';
       row.append(labelElement, valueElement);
       return row;
@@ -754,6 +762,7 @@
       editSteps: definition.steps || '',
       editReferenceResult: definition.reference_result || '',
       editReferenceMaterials: definition.reference_materials || '',
+      editNotes: definition.notes || '',
     };
     Object.entries(fields).forEach(([id, value]) => { document.getElementById(id).value = value; });
     populateObjectOptions('edit');

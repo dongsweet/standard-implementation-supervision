@@ -188,7 +188,7 @@ class SupervisionDefinitionRepository {
       SELECT d.id, d.plan_number, d.object_name, d.canonical_object_id, d.scope, d.recognized_object,
              d.object_category, d.check_layer, d.check_method,
              d.description, d.steps, d.frequency, d.access_mode, d.priority,
-             d.reference_result, d.reference_materials, d.status,
+             d.reference_result, d.reference_materials, d.status, d.notes, d.change_history,
              d.merged_into_id, d.created_at, d.updated_at,
              COALESCE(json_agg(json_build_object(
                'id', si.id, 'code', si.item_code, 'standardNumber', si.standard_number,
@@ -638,8 +638,15 @@ class SupervisionDefinitionRepository {
           await client.query(`
             UPDATE supervision_definitions
             SET object_name = $2, canonical_object_id = $3, object_category = $4,
-                normalized_hash = $5, updated_at = now()
-            WHERE id = $1 AND status = 'active'`, [ planId, group.name, objectId, categoryName, normalizedHash ]);
+                normalized_hash = $5,
+                change_history = change_history || jsonb_build_array(jsonb_build_object(
+                  'at', now(), 'action', 'object_split', 'summary', $6::text
+                )),
+                updated_at = now()
+            WHERE id = $1 AND status = 'active'`, [
+            planId, group.name, objectId, categoryName, normalizedHash,
+            `对象拆分：检查对象调整为“${group.name}”，对象分类调整为“${categoryName}”`,
+          ]);
         }
         await client.query(`
           INSERT INTO supervision_object_aliases (object_id, alias_name, normalized_name, source)
@@ -747,8 +754,15 @@ class SupervisionDefinitionRepository {
         }).normalizedHash;
         await client.query(`
           UPDATE supervision_definitions
-          SET object_name = $2, canonical_object_id = $3, normalized_hash = $4, updated_at = now()
-          WHERE id = $1`, [ plan.id, target.canonical_name, targetId, normalizedHash ]);
+          SET object_name = $2, canonical_object_id = $3, normalized_hash = $4,
+              change_history = change_history || jsonb_build_array(jsonb_build_object(
+                'at', now(), 'action', 'object_merge', 'summary', $5::text
+              )),
+              updated_at = now()
+          WHERE id = $1`, [
+          plan.id, target.canonical_name, targetId, normalizedHash,
+          `对象归并：检查对象由“${source.canonical_name}”调整为“${target.canonical_name}”`,
+        ]);
       }
       const aliases = await client.query(`
         SELECT alias_name, normalized_name, center_name
@@ -869,8 +883,15 @@ class SupervisionDefinitionRepository {
           }).normalizedHash;
           await client.query(`
             UPDATE supervision_definitions
-            SET object_category = $2, normalized_hash = $3, updated_at = now()
-            WHERE id = $1`, [ plan.id, target.name, normalizedHash ]);
+            SET object_category = $2, normalized_hash = $3,
+                change_history = change_history || jsonb_build_array(jsonb_build_object(
+                  'at', now(), 'action', 'category_merge', 'summary', $4::text
+                )),
+                updated_at = now()
+            WHERE id = $1`, [
+            plan.id, target.name, normalizedHash,
+            `对象分类归并：对象分类由“${source.name}”调整为“${target.name}”`,
+          ]);
         }
         await client.query(`
           UPDATE supervision_objects
@@ -1137,8 +1158,16 @@ class SupervisionDefinitionRepository {
           const normalizedHash = normalizeDefinition(fields).normalizedHash;
           await db.query(`
             UPDATE supervision_definitions
-            SET object_name = $2, canonical_object_id = $3, normalized_hash = $4, updated_at = now()
-            WHERE id = $1`, [ plan.id, canonicalObjectName, canonicalObjectId, normalizedHash ]);
+            SET object_name = $2, canonical_object_id = $3, normalized_hash = $4,
+                change_history = change_history || jsonb_build_array(jsonb_build_object(
+                  'at', now(), 'action', 'object_dedupe',
+                  'summary', $5::text
+                )),
+                updated_at = now()
+            WHERE id = $1`, [
+            plan.id, canonicalObjectName, canonicalObjectId, normalizedHash,
+            `对象复核归并：检查对象调整为“${canonicalObjectName}”`,
+          ]);
         }
         affectedPlanIds = sourcePlans.map(plan => plan.id);
       }
@@ -1239,12 +1268,14 @@ class SupervisionDefinitionRepository {
       }
       const result = await client.query(`
         INSERT INTO supervision_definitions
-          (object_name, scope, recognized_object, object_category, check_layer, check_method, description, steps, frequency, access_mode, priority, reference_result, reference_materials, normalized_hash)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          (object_name, scope, recognized_object, object_category, check_layer, check_method, description, steps, frequency, access_mode, priority, reference_result, reference_materials, normalized_hash, notes, change_history)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                jsonb_build_array(jsonb_build_object('at', now(), 'action', 'create', 'summary', '创建检查方案')))
         RETURNING *`, [
         fields.objectName, fields.scope || null, fields.recognizedObject, fields.objectCategory || null, fields.checkLayer || null,
         fields.checkMethod, fields.description, fields.steps || null, fields.frequency || null, fields.accessMode || null,
         fields.priority || null, fields.referenceResult || null, fields.referenceMaterials || null, fields.normalizedHash,
+        fields.notes || null,
       ]);
       for (const standardItemId of standardItemIds) {
         await client.query(`
@@ -1279,6 +1310,21 @@ class SupervisionDefinitionRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const oldResult = await client.query(`
+        SELECT object_name, scope, recognized_object, object_category, check_layer, check_method,
+               description, steps, frequency, access_mode, priority, reference_result,
+               reference_materials, notes,
+               COALESCE((SELECT array_agg(center_name ORDER BY center_name)
+                 FROM supervision_definition_centers WHERE definition_id = $1), ARRAY[]::varchar[]) AS centers,
+               COALESCE((SELECT array_agg(standard_item_id::text ORDER BY standard_item_id::text)
+                 FROM supervision_definition_standard_items WHERE definition_id = $1), ARRAY[]::text[]) AS standard_item_ids
+        FROM supervision_definitions
+        WHERE id = $1 AND status = 'active'
+        FOR UPDATE`, [ id ]);
+      if (!oldResult.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
       const availableItems = await client.query('SELECT id FROM standard_items WHERE id = ANY($1::uuid[])', [ standardItemIds ]);
       if (availableItems.rowCount !== standardItemIds.length) {
         const error = new Error('所选标准项不存在或已删除');
@@ -1289,12 +1335,14 @@ class SupervisionDefinitionRepository {
         UPDATE supervision_definitions
         SET object_name = $2, scope = $3, recognized_object = $4, object_category = $5, check_layer = $6,
             check_method = $7, description = $8, steps = $9, frequency = $10, access_mode = $11,
-            priority = $12, reference_result = $13, reference_materials = $14, normalized_hash = $15, updated_at = now()
+            priority = $12, reference_result = $13, reference_materials = $14, normalized_hash = $15,
+            notes = $16, updated_at = now()
         WHERE id = $1 AND status = 'active'
         RETURNING *`, [
         id, fields.objectName, fields.scope || null, fields.recognizedObject, fields.objectCategory || null, fields.checkLayer || null,
         fields.checkMethod, fields.description, fields.steps || null, fields.frequency || null, fields.accessMode || null,
         fields.priority || null, fields.referenceResult || null, fields.referenceMaterials || null, fields.normalizedHash,
+        fields.notes || null,
       ]);
       if (!result.rowCount) {
         await client.query('ROLLBACK');
@@ -1315,11 +1363,46 @@ class SupervisionDefinitionRepository {
       }
       const canonicalObjectId = await this.ensureCanonicalObject(client, fields.objectName, fields.objectCategory);
       await client.query('UPDATE supervision_definitions SET canonical_object_id = $2 WHERE id = $1', [ id, canonicalObjectId ]);
+      const old = oldResult.rows[0];
+      const changedFields = [];
+      const compareField = (label, oldValue, newValue) => {
+        const normalizeValue = value => String(value ?? '').trim();
+        if (normalizeValue(oldValue) !== normalizeValue(newValue)) changedFields.push(label);
+      };
+      compareField('检查对象', old.object_name, fields.objectName);
+      compareField('检查范围', old.scope, fields.scope);
+      compareField('是否公认对象', old.recognized_object, fields.recognizedObject);
+      compareField('对象分类', old.object_category, fields.objectCategory);
+      compareField('检查层面', old.check_layer, fields.checkLayer);
+      compareField('检查方法', old.check_method, fields.checkMethod);
+      compareField('检查描述', old.description, fields.description);
+      compareField('检查步骤', old.steps, fields.steps);
+      compareField('执行频率', old.frequency, fields.frequency);
+      compareField('执行方式', old.access_mode, fields.accessMode);
+      compareField('重点项', old.priority, fields.priority);
+      compareField('参考判定描述', old.reference_result, fields.referenceResult);
+      compareField('参考材料', old.reference_materials, fields.referenceMaterials);
+      compareField('方案备注', old.notes, fields.notes);
+      const oldCenters = [ ...(old.centers || []) ].sort();
+      const newCenters = [ ...(fields.centers || []) ].sort();
+      if (JSON.stringify(oldCenters) !== JSON.stringify(newCenters)) changedFields.push('适用机构');
+      const oldItems = [ ...(old.standard_item_ids || []) ].sort();
+      const newItems = [ ...standardItemIds ].sort();
+      if (JSON.stringify(oldItems) !== JSON.stringify(newItems)) changedFields.push('关联标准项');
+      const changeSummary = changedFields.length
+        ? `修订检查方案：${changedFields.join('、')}`
+        : '保存检查方案（内容无变化）';
+      await client.query(`
+        UPDATE supervision_definitions
+        SET change_history = change_history || jsonb_build_array(jsonb_build_object(
+          'at', now(), 'action', 'revision', 'summary', $2::text
+        ))
+        WHERE id = $1`, [ id, changeSummary ]);
       await client.query(`
         INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
         VALUES ($1, 'update_supervision_definition', 'supervision_definition', $2, $3)`, [
         actorId || null, id,
-        JSON.stringify({ objectName: fields.objectName, standardItemIds }),
+        JSON.stringify({ objectName: fields.objectName, standardItemIds, changedFields }),
       ]);
       await client.query('COMMIT');
       return result.rows[0];
@@ -1335,7 +1418,7 @@ class SupervisionDefinitionRepository {
     const result = await client.query(`
       SELECT id, object_name, scope, recognized_object, object_category, check_layer, check_method,
              description, steps, frequency, access_mode, priority, reference_result,
-             reference_materials, normalized_hash, status,
+             reference_materials, normalized_hash, status, notes, change_history,
              COALESCE((SELECT array_agg(center_name ORDER BY center_name)
                        FROM supervision_definition_centers WHERE definition_id = supervision_definitions.id), ARRAY[]::varchar[]) AS centers
       FROM supervision_definitions WHERE id = $1`, [ id ]);
