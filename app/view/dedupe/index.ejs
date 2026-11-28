@@ -200,14 +200,15 @@
           <td class="definition-review-cell">
             <div class="d-flex flex-column align-items-stretch gap-2">
               <button class="btn btn-sm btn-primary" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="openDefinitionMergeEditor(this)">合并并编辑</button>
-              <select class="form-select form-select-sm" aria-label="选择人工复核结论" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onchange="definitionReviewFromSelect(this)">
+              <select class="form-select form-select-sm" aria-label="选择人工复核结论" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" data-left-number="<%= numberLabel(item.plan_number) %>" data-right-number="<%= numberLabel(item.candidate_plan_number) %>" onchange="definitionReviewFromSelect(this)">
                 <option value="" selected>选择人工结论</option>
-                <option value="merge-a">保留 A 并合并</option>
-                <option value="merge-b">保留 B 并合并</option>
+                <option value="merge-a">保留 A（<%= numberLabel(item.plan_number) %>），将 B 归并到 A</option>
+                <option value="merge-b">保留 B（<%= numberLabel(item.candidate_plan_number) %>），将 A 归并到 B</option>
                 <option value="similar_but_distinct">相似但不归并</option>
                 <option value="unrelated">判定无关</option>
                 <option value="uncertain">待进一步确认</option>
               </select>
+              <div class="small text-secondary">保留方案内容；并入适用机构和标准项</div>
               <button class="btn btn-sm btn-outline-primary" type="button" data-left="<%= item.id %>" data-right="<%= item.candidate_id %>" onclick="definitionAiReview(this)">可选 AI 分析</button>
             </div>
           </td>
@@ -645,17 +646,25 @@
     const leftId = select.dataset.left;
     const rightId = select.dataset.right;
     try {
-      if (action === 'merge-a') await definitionReview(leftId, rightId, 'duplicate', leftId);
-      else if (action === 'merge-b') await definitionReview(leftId, rightId, 'duplicate', rightId);
+      const mergeLabels = {
+        kept: select.dataset[action === 'merge-a' ? 'leftNumber' : 'rightNumber'],
+        merged: select.dataset[action === 'merge-a' ? 'rightNumber' : 'leftNumber'],
+        keptSide: action === 'merge-a' ? 'A' : 'B',
+        mergedSide: action === 'merge-a' ? 'B' : 'A',
+      };
+      if (action === 'merge-a') await definitionReview(leftId, rightId, 'duplicate', leftId, mergeLabels);
+      else if (action === 'merge-b') await definitionReview(leftId, rightId, 'duplicate', rightId, mergeLabels);
       else if (action) await definitionReview(leftId, rightId, action);
     } finally {
       select.value = '';
     }
   }
 
-  async function definitionReview(leftId, rightId, decision, canonicalId) {
+  async function definitionReview(leftId, rightId, decision, canonicalId, mergeLabels = null) {
     const labels = {
-      duplicate: `确认这两条检查方案重复，并保留${canonicalId === leftId ? '方案 A' : '方案 B'}？`,
+      duplicate: mergeLabels
+        ? `确认保留方案 ${mergeLabels.keptSide}（${mergeLabels.kept}），并将方案 ${mergeLabels.mergedSide}（${mergeLabels.merged}）归并到它？保留方案的检查内容不变；被归并方案的适用机构和标准项将并入保留方案，被归并方案随后标记为已归并。`
+        : '确认这两条检查方案重复并执行归并？',
       similar_but_distinct: '标记为相似但不归并？',
       unrelated: '标记为无关？',
       uncertain: '标记为待进一步确认？',

@@ -263,8 +263,8 @@ test('links the plan page to manual threshold and optional AI deduplication', ()
   assert.match(dedupeView, /可选 AI 语义复核/);
   assert.match(dedupeView, /每批最多 4 组/);
   assert.match(dedupeView, /definitionAiProgressModal/);
-  assert.match(dedupeView, /保留 A 并合并/);
-  assert.match(dedupeView, /保留 B 并合并/);
+  assert.match(dedupeView, /保留 A（<%= numberLabel\(item\.plan_number\) %>），将 B 归并到 A/);
+  assert.match(dedupeView, /保留 B（<%= numberLabel\(item\.candidate_plan_number\) %>），将 A 归并到 B/);
   assert.match(dedupeView, /definitions?\/history|\/dedupe\/history/);
   assert.match(historyView, /检查方案去重复核历史/);
 });
@@ -276,8 +276,10 @@ test('labels both plan numbers and execution counts consistently in dedupe resul
   assert.match(html, /class="table table-hover align-middle mb-0 definition-dedupe-table"/);
   assert.match(html, /class="definition-comparison-cell"/);
   assert.match(html, /onchange="definitionReviewFromSelect\(this\)"/);
-  assert.match(html, /<option value="merge-a">保留 A 并合并<\/option>/);
-  assert.match(html, /<option value="merge-b">保留 B 并合并<\/option>/);
+  assert.match(html, /<option value="merge-a">保留 A（<%= numberLabel\(item\.plan_number\) %>），将 B 归并到 A<\/option>/);
+  assert.match(html, /<option value="merge-b">保留 B（<%= numberLabel\(item\.candidate_plan_number\) %>），将 A 归并到 B<\/option>/);
+  assert.match(html, /保留方案内容；并入适用机构和标准项/);
+  assert.match(html, /被归并方案的适用机构和标准项将并入保留方案/);
   assert.doesNotMatch(html, /<th style="width:25rem">人工复核<\/th>/);
   assert.match(html, /A · <%= numberLabel\(item\.plan_number\) %>/);
   assert.match(html, /B · <%= numberLabel\(item\.candidate_plan_number\) %>/);
