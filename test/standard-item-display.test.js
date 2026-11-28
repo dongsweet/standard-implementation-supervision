@@ -23,18 +23,34 @@ test('loads standardized plan numbers with original-number and content details',
   assert.match(captured, /AS candidate_standard_item_details/);
 });
 
-test('uses the same standardized-number rule and hover text in plans and dedupe', () => {
+test('shows standardized-number badges with an immediate global detail tooltip', () => {
+  const layout = fs.readFileSync(path.join(viewRoot, 'layout.ejs'), 'utf8');
   const planView = fs.readFileSync(path.join(viewRoot, 'supervision-definitions/index.ejs'), 'utf8');
   const dedupeView = fs.readFileSync(path.join(viewRoot, 'dedupe/index.ejs'), 'utf8');
 
+  assert.match(layout, /id="standardItemDetailTooltip"/);
+  assert.match(layout, /id="standardItemTooltipOriginal"/);
+  assert.match(layout, /id="standardItemTooltipContent"/);
+  assert.match(layout, /document\.addEventListener\('mouseover'/);
+  assert.match(layout, /document\.addEventListener\('focusin'/);
+  assert.match(layout, /target\.dataset\.originalNumber/);
+  assert.match(layout, /target\.dataset\.standardContent/);
+  assert.match(layout, /#standardItemDetailTooltip\.show \{ visibility:visible; opacity:1; \}/);
+
   assert.match(planView, /const standardItemLabel = item => item\?\.standardNumber \|\| item\?\.code \|\| item\?\.itemCode \|\| '未编号'/);
-  assert.match(planView, /原文编号：\$\{item\?\.code \|\| item\?\.itemCode \|\| '-'\}/);
-  assert.match(planView, /标准项内容：\$\{item\?\.content \|\| item\?\.title \|\| '无标准项内容'\}/);
-  assert.match(planView, /class="badge text-bg-light border definition-standard-item-badge" title="<%= standardItemTooltip\(item\) %>"/);
+  assert.match(planView, /data-standard-item-detail data-standard-number="<%= standardItemLabel\(item\) %>"/);
+  assert.match(planView, /data-original-number="<%= standardItemOriginalNumber\(item\) %>"/);
+  assert.match(planView, /data-standard-content="<%= standardItemContent\(item\) %>"/);
+  assert.match(planView, /function setPlanStandardItemDetail/);
+  assert.match(planView, /element\.dataset\.standardContent/);
+  assert.doesNotMatch(planView, /definition-standard-item-badge" title=/);
 
   assert.match(dedupeView, /const dedupeStandardItemLabel = item => item\?\.standardNumber \|\| item\?\.itemCode \|\| item\?\.code \|\| '未编号'/);
-  assert.match(dedupeView, /const dedupeStandardItemTitle = item =>/);
   assert.match(dedupeView, /renderStandardItemBadges\(item\.standard_item_details/);
   assert.match(dedupeView, /renderStandardItemBadges\(item\.candidate_standard_item_details/);
-  assert.match(dedupeView, /title="\$\{escapeDiffHtml\(dedupeStandardItemTitle\(item\)\)\}"/);
+  assert.match(dedupeView, /data-standard-item-detail data-standard-number="\$\{escapeDiffHtml\(dedupeStandardItemLabel\(item\)\)\}"/);
+  assert.match(dedupeView, /data-original-number="\$\{escapeDiffHtml\(dedupeStandardItemOriginal\(item\)\)\}"/);
+  assert.match(dedupeView, /data-standard-content="\$\{escapeDiffHtml\(dedupeStandardItemContent\(item\)\)\}"/);
+  assert.match(dedupeView, /function setMergeStandardItemDetail|const setMergeStandardItemDetail/);
+  assert.doesNotMatch(dedupeView, /definition-standard-item-badge[^`]*title=/);
 });

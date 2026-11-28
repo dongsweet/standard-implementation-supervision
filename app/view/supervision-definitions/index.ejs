@@ -15,10 +15,8 @@
   const pageValue = typeof page === 'undefined' ? 1 : page;
   const pageCountValue = typeof pageCount === 'undefined' ? 1 : pageCount;
   const standardItemLabel = item => item?.standardNumber || item?.code || item?.itemCode || '未编号';
-  const standardItemTooltip = item => [
-    `原文编号：${item?.code || item?.itemCode || '-'}`,
-    `标准项内容：${item?.content || item?.title || '无标准项内容'}`,
-  ].join('\n');
+  const standardItemOriginalNumber = item => item?.code || item?.itemCode || '-';
+  const standardItemContent = item => item?.content || item?.title || '无标准项内容';
   const buildPageUrl = targetPage => {
     const params = [];
     if (searchValue) params.push('search=' + encodeURIComponent(searchValue));
@@ -63,7 +61,7 @@
           <td><% (definition.check_method || '').split(/[,，、;；\/|\r\n]+/).map(method => method.trim()).filter(Boolean).forEach(method => { %><span class="badge text-bg-light border me-1 mb-1"><%= method %></span><% }) %></td>
           <td><div title="<%= definition.description %>" style="display:-webkit-box; max-width:32rem; overflow:hidden; white-space:normal; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:4; line-clamp:4; line-height:1.55"><%= definition.description %></div></td>
           <td><%= definition.frequency || '-' %><div class="small text-secondary"><%= definition.access_mode || '-' %></div></td>
-          <td><span class="badge text-bg-light border"><%= listedStandardItems.length %> 项</span><div class="definition-standard-item-list mt-1"><% listedStandardItems.forEach(item => { %><span class="badge text-bg-light border definition-standard-item-badge" title="<%= standardItemTooltip(item) %>"><%= standardItemLabel(item) %></span><% }) %><% if (!listedStandardItems.length) { %><span class="small text-secondary">未关联</span><% } %></div></td>
+          <td><span class="badge text-bg-light border"><%= listedStandardItems.length %> 项</span><div class="definition-standard-item-list mt-1"><% listedStandardItems.forEach(item => { %><span class="badge text-bg-light border definition-standard-item-badge" tabindex="0" data-standard-item-detail data-standard-number="<%= standardItemLabel(item) %>" data-original-number="<%= standardItemOriginalNumber(item) %>" data-standard-content="<%= standardItemContent(item) %>"><%= standardItemLabel(item) %></span><% }) %><% if (!listedStandardItems.length) { %><span class="small text-secondary">未关联</span><% } %></div></td>
           <td><span class="badge <%= definition.priority === '重点项' ? 'text-bg-warning' : 'text-bg-light border' %>"><%= definition.priority || '未指定重点级别' %></span><div class="small text-secondary mt-1"><%= definition.recognized_object === true ? '公认对象' : definition.recognized_object === false ? '非公认对象' : '公认对象未指定' %></div><span class="badge mt-1 <%= definition.status === 'active' ? 'text-bg-success' : 'text-bg-secondary' %>"><%= definition.status === 'active' ? '有效' : '已归并' %></span></td>
           <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#definitionDetailModal" data-definition="<%= JSON.stringify(definition) %>">详情</button><% if (definition.status === 'active' && user && (user.roles || []).some(role => !role.projectId && ['system_admin', 'security_admin'].includes(role.code))) { %> <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#editDefinitionModal" data-definition="<%= JSON.stringify(definition) %>">编辑</button><% } %></td>
         </tr>
@@ -252,11 +250,12 @@
   function planStandardItemLabel(item) {
     return item?.standardNumber || item?.code || item?.itemCode || '未编号';
   }
-  function planStandardItemTitle(item) {
-    return [
-      `原文编号：${item?.code || item?.itemCode || '-'}`,
-      `标准项内容：${item?.content || item?.preview || item?.title || '无标准项内容'}`,
-    ].join('\n');
+  function setPlanStandardItemDetail(element, item) {
+    element.tabIndex = 0;
+    element.dataset.standardItemDetail = '';
+    element.dataset.standardNumber = planStandardItemLabel(item);
+    element.dataset.originalNumber = item?.code || item?.itemCode || '-';
+    element.dataset.standardContent = item?.content || item?.preview || item?.title || '无标准项内容';
   }
   function objectInputMatches(inputValue) {
     const term = normalizedPickerText(inputValue);
@@ -602,7 +601,7 @@
       for (const item of this.items.values()) {
         const chip = document.createElement('span');
         chip.className = 'badge text-bg-light border d-inline-flex align-items-start gap-2 standard-chip';
-        chip.title = planStandardItemTitle(item);
+        setPlanStandardItemDetail(chip, item);
         const text = document.createElement('span');
         text.textContent = planStandardItemLabel(item);
         const remove = document.createElement('button');
@@ -670,7 +669,7 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'list-group-item list-group-item-action standard-picker-result';
-        button.title = planStandardItemTitle(item);
+        setPlanStandardItemDetail(button, item);
         if (this.items.has(String(item.id))) {
           button.disabled = true;
           button.textContent = `${planStandardItemLabel(item)} · 已关联`;

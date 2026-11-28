@@ -44,17 +44,15 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character]);
   const dedupeStandardItemLabel = item => item?.standardNumber || item?.itemCode || item?.code || '未编号';
-  const dedupeStandardItemTitle = item => [
-    `原文编号：${item?.itemCode || item?.code || '-'}`,
-    `标准项内容：${item?.content || item?.title || '无标准项内容'}`,
-  ].join('\n');
+  const dedupeStandardItemOriginal = item => item?.itemCode || item?.code || '-';
+  const dedupeStandardItemContent = item => item?.content || item?.title || '无标准项内容';
   const renderStandardItemBadges = (details, fallbackCodes = [], emphasize = false) => {
     const items = Array.isArray(details) && details.length
       ? details
       : (Array.isArray(fallbackCodes) ? fallbackCodes : []).map(code => ({ code }));
     if (!items.length) return '<span class="text-secondary">无</span>';
     return `<div class="definition-standard-item-list">${items.map(item =>
-      `<span class="badge text-bg-light border definition-standard-item-badge${emphasize ? ' border-danger' : ''}" title="${escapeDiffHtml(dedupeStandardItemTitle(item))}">${escapeDiffHtml(dedupeStandardItemLabel(item))}</span>`
+      `<span class="badge text-bg-light border definition-standard-item-badge${emphasize ? ' border-danger' : ''}" tabindex="0" data-standard-item-detail data-standard-number="${escapeDiffHtml(dedupeStandardItemLabel(item))}" data-original-number="${escapeDiffHtml(dedupeStandardItemOriginal(item))}" data-standard-content="${escapeDiffHtml(dedupeStandardItemContent(item))}">${escapeDiffHtml(dedupeStandardItemLabel(item))}</span>`
     ).join('')}</div>`;
   };
   const renderComparisonMarkup = (left, right, side, key) => {
@@ -397,10 +395,13 @@
   const mergeField = id => document.getElementById(id);
   const mergeNormalize = value => String(value || '').normalize('NFKC').trim().toLowerCase();
   const mergeStandardItemLabel = item => item?.standardNumber || item?.itemCode || item?.code || '未编号';
-  const mergeStandardItemTitle = item => [
-    `原文编号：${item?.itemCode || item?.code || '-'}`,
-    `标准项内容：${item?.content || item?.preview || item?.title || '无标准项内容'}`,
-  ].join('\n');
+  const setMergeStandardItemDetail = (element, item) => {
+    element.tabIndex = 0;
+    element.dataset.standardItemDetail = '';
+    element.dataset.standardNumber = mergeStandardItemLabel(item);
+    element.dataset.originalNumber = item?.itemCode || item?.code || '-';
+    element.dataset.standardContent = item?.content || item?.preview || item?.title || '无标准项内容';
+  };
   function mergeSetError(message = '') {
     const box = mergeField('definitionMergeError');
     box.textContent = message;
@@ -413,7 +414,7 @@
     const chips = [ ...definitionMergeState.standards.values() ].map(item => {
       const chip = document.createElement('span');
       chip.className = 'badge text-bg-light border d-inline-flex align-items-start gap-2 definition-merge-chip';
-      chip.title = mergeStandardItemTitle(item);
+      setMergeStandardItemDetail(chip, item);
       const text = document.createElement('span');
       text.textContent = mergeStandardItemLabel(item);
       const remove = document.createElement('button');
@@ -568,7 +569,7 @@
           option.type = 'button';
           option.className = 'list-group-item list-group-item-action';
           option.textContent = mergeStandardItemLabel(item);
-          option.title = mergeStandardItemTitle(item);
+          setMergeStandardItemDetail(option, item);
           option.addEventListener('mousedown', event => event.preventDefault());
           option.addEventListener('click', () => {
             definitionMergeState.standards.set(String(item.id), item);

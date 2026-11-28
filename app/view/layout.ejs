@@ -13,6 +13,14 @@
     .nav-link.disabled-item .badge { font-size:.6rem; font-weight:500; }
     .app-content-header { padding:1rem 1.5rem .25rem; }
     .app-content { padding:1rem 1.5rem 1.5rem; }
+    #standardItemDetailTooltip { position:fixed; z-index:2050; width:min(34rem,calc(100vw - 1.5rem)); max-height:min(24rem,calc(100vh - 1.5rem)); overflow:auto; padding:.75rem .85rem; border:1px solid #cfd6df; border-radius:.4rem; background:#fff; box-shadow:0 .7rem 1.6rem rgba(15,23,42,.2); color:#263238; font-size:.8125rem; line-height:1.55; visibility:hidden; opacity:0; pointer-events:none; }
+    #standardItemDetailTooltip.show { visibility:visible; opacity:1; }
+    .standard-item-tooltip-number { margin-bottom:.35rem; font-size:.875rem; font-weight:700; color:#0d6efd; overflow-wrap:anywhere; }
+    .standard-item-tooltip-row { display:grid; grid-template-columns:4.8rem minmax(0,1fr); gap:.45rem; }
+    .standard-item-tooltip-row + .standard-item-tooltip-row { margin-top:.3rem; padding-top:.3rem; border-top:1px solid #eef1f4; }
+    .standard-item-tooltip-label { color:#6c757d; }
+    .standard-item-tooltip-value { overflow-wrap:anywhere; white-space:pre-wrap; }
+    [data-standard-item-detail] { cursor:help; }
     @media (max-width:575.98px) { .app-content-header,.app-content { padding-left:.75rem; padding-right:.75rem; } }
   </style>
 </head>
@@ -118,6 +126,11 @@
       <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button><button type="button" class="btn btn-danger" id="appConfirmModalSubmit">确认</button></div>
     </div></div>
   </div>
+  <div id="standardItemDetailTooltip" role="tooltip" aria-hidden="true">
+    <div class="standard-item-tooltip-number" id="standardItemTooltipNumber"></div>
+    <div class="standard-item-tooltip-row"><span class="standard-item-tooltip-label">原文编号</span><span class="standard-item-tooltip-value" id="standardItemTooltipOriginal"></span></div>
+    <div class="standard-item-tooltip-row"><span class="standard-item-tooltip-label">标准项内容</span><span class="standard-item-tooltip-value" id="standardItemTooltipContent"></span></div>
+  </div>
   <script src="/public/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/public/vendor/adminlte/js/adminlte.min.js"></script>
   <script>
@@ -133,6 +146,54 @@
         document.getElementById('appNoticeModalMessage').textContent = String(message || '');
         noticeModal.show();
       };
+
+      const standardTooltipElement = document.getElementById('standardItemDetailTooltip');
+      const standardTooltipNumber = document.getElementById('standardItemTooltipNumber');
+      const standardTooltipOriginal = document.getElementById('standardItemTooltipOriginal');
+      const standardTooltipContent = document.getElementById('standardItemTooltipContent');
+      let standardTooltipTarget = null;
+      const hideStandardTooltip = () => {
+        standardTooltipTarget = null;
+        standardTooltipElement.classList.remove('show');
+        standardTooltipElement.setAttribute('aria-hidden', 'true');
+      };
+      const showStandardTooltip = target => {
+        if (!target || target === standardTooltipTarget) return;
+        standardTooltipTarget = target;
+        standardTooltipNumber.textContent = target.dataset.standardNumber || '未编号';
+        standardTooltipOriginal.textContent = target.dataset.originalNumber || '-';
+        standardTooltipContent.textContent = target.dataset.standardContent || '无标准项内容';
+        standardTooltipElement.classList.add('show');
+        standardTooltipElement.setAttribute('aria-hidden', 'false');
+        const anchor = target.getBoundingClientRect();
+        const tooltip = standardTooltipElement.getBoundingClientRect();
+        const margin = 8;
+        let left = Math.min(Math.max(margin, anchor.left), window.innerWidth - tooltip.width - margin);
+        let top = anchor.top - tooltip.height - margin;
+        if (top < margin) top = Math.min(anchor.bottom + margin, window.innerHeight - tooltip.height - margin);
+        standardTooltipElement.style.left = `${Math.max(margin, left)}px`;
+        standardTooltipElement.style.top = `${Math.max(margin, top)}px`;
+      };
+      document.addEventListener('mouseover', event => {
+        const target = event.target.closest('[data-standard-item-detail]');
+        if (target) showStandardTooltip(target);
+      });
+      document.addEventListener('mouseout', event => {
+        const target = event.target.closest('[data-standard-item-detail]');
+        if (target && !target.contains(event.relatedTarget)) hideStandardTooltip();
+      });
+      document.addEventListener('focusin', event => {
+        const target = event.target.closest('[data-standard-item-detail]');
+        if (target) showStandardTooltip(target);
+      });
+      document.addEventListener('focusout', event => {
+        if (event.target.closest('[data-standard-item-detail]')) hideStandardTooltip();
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') hideStandardTooltip();
+      });
+      window.addEventListener('scroll', hideStandardTooltip, true);
+      window.addEventListener('resize', hideStandardTooltip);
 
       window.confirmAppAction = (message, title = '请确认') => new Promise(resolve => {
         document.getElementById('appConfirmModalTitle').textContent = title;
