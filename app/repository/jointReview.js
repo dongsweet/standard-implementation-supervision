@@ -366,6 +366,15 @@ class JointReviewRepository {
     return result.rowCount > 0;
   }
 
+  async listUserResponsibleChapterIds({ projectId, userId }) {
+    if (!projectId || !userId) return [];
+    const result = await this.pool.query(`
+      SELECT chapter_id
+      FROM chapter_responsibilities
+      WHERE project_id = $1 AND user_id = $2`, [ projectId, userId ]);
+    return result.rows.map(row => String(row.chapter_id));
+  }
+
   async saveAiResult(id, { result, model, promptVersion, inputHash }) {
     const query = await this.pool.query(`
       UPDATE supervision_joint_reviews
@@ -384,12 +393,43 @@ class JointReviewRepository {
   }
 
   async saveHumanDecision(id, { decision, notes, reviewerId }) {
-    const query = await this.pool.query(`
-      UPDATE supervision_joint_reviews
-      SET human_decision = $2, human_notes = $3, reviewer_id = $4,
-          reviewed_at = now(), updated_at = now()
-      WHERE id = $1 RETURNING *`, [ id, decision, notes || null, reviewerId || null ]);
-    return query.rows[0] || null;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const query = await client.query(`
+        UPDATE supervision_joint_reviews
+        SET human_decision = $2, human_notes = $3, reviewer_id = $4,
+            reviewed_at = now(), updated_at = now()
+        WHERE id = $1 RETURNING *`, [ id, decision, notes || null, reviewerId || null ]);
+      const review = query.rows[0];
+      if (!review) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query(`
+        INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, metadata)
+        VALUES ($1, 'review_joint_issue', 'supervision_joint_review', $2, $3)`, [
+        reviewerId || null,
+        id,
+        JSON.stringify({
+          decision,
+          notes: notes || null,
+          reviewType: review.review_type,
+          projectId: review.project_id,
+          chapterId: review.chapter_id,
+          definitionId: review.definition_id,
+          standardItemId: review.standard_item_id,
+          objectId: review.object_id,
+        }),
+      ]);
+      await client.query('COMMIT');
+      return review;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

@@ -20,11 +20,24 @@ class JointReviewController extends Controller {
     const projectId = String(this.ctx.query.projectId || '').trim();
     if (projectId) requireProject(this.ctx, projectId);
     else requireGlobalRead(this.ctx);
+    const data = await this.ctx.service.jointReview.list(this.ctx.query);
+    const globalReviewer = this.globalWriteAllowed();
+    const projectReviewer = Boolean(projectId && canWriteProject(this.ctx.state.roles || [], projectId));
+    const reviewableChapters = new Set(projectId
+      ? await this.ctx.service.jointReview.listUserResponsibleChapterIds({
+        projectId,
+        userId: this.ctx.session.userId,
+      })
+      : []);
+    data.reviews = data.reviews.map(review => ({
+      ...review,
+      can_review: globalReviewer || projectReviewer || reviewableChapters.has(String(review.chapter_id || '')),
+    }));
     await this.ctx.render('joint-reviews/index', {
       title: '联合复核',
-      ...await this.ctx.service.jointReview.list(this.ctx.query),
-      canReview: this.globalWriteAllowed() || (projectId && canWriteProject(this.ctx.state.roles || [], projectId)),
-      canSubmitSemantic: this.globalWriteAllowed() || (projectId && canWriteProject(this.ctx.state.roles || [], projectId)),
+      ...data,
+      canReview: globalReviewer || projectReviewer || reviewableChapters.size > 0,
+      canSubmitSemantic: globalReviewer || projectReviewer,
       csrf: this.ctx.csrf,
     });
   }

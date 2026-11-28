@@ -17,6 +17,7 @@ test('exposes semantic review controls and chapter-level pending prompts', () =>
   assert.match(joint, /same_check/);
   assert.match(joint, /confirmed_same_check/);
   assert.match(joint, /confirmed_distinct_check/);
+  assert.match(joint, /if \(review\.can_review\)/);
   assert.match(answers, /project\.project_id/);
   assert.match(answers, /chapter\.semantic_pending_count && chapter\.chapter_id/);
   assert.match(answers, /条语义判同待复核/);

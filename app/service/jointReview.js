@@ -340,6 +340,10 @@ class JointReviewService extends Service {
     return this.repository.findById(reviewId);
   }
 
+  async listUserResponsibleChapterIds({ projectId, userId }) {
+    return this.repository.listUserResponsibleChapterIds({ projectId, userId });
+  }
+
   async chapterReviewSummaries({ projectId, chapterIds }) {
     const rows = await this.repository.listChapterReviewSummaries({ projectId, chapterIds });
     return new Map(rows.map(row => [ String(row.chapter_id), row ]));

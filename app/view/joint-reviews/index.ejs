@@ -134,7 +134,7 @@
           <td>
             <div class="d-flex flex-column gap-1">
               <% if (review.review_type !== 'semantic_duplicate') { %><button class="btn btn-sm btn-outline-primary" type="button" data-review-id="<%= review.id %>" onclick="runJointAiReview(this)">AI 辅助判断</button><% } %>
-              <% if (reviewWriteAllowed) { %><button class="btn btn-sm btn-outline-secondary" type="button" data-review-id="<%= review.id %>" data-review-type="<%= review.review_type %>" data-review-title="<%= review.title %>" onclick="openJointHumanReview(this)">记录人工结论</button><% } %>
+              <% if (review.can_review) { %><button class="btn btn-sm btn-outline-secondary" type="button" data-review-id="<%= review.id %>" data-review-type="<%= review.review_type %>" data-review-title="<%= review.title %>" onclick="openJointHumanReview(this)">记录人工结论</button><% } %>
             </div>
           </td>
         </tr>
